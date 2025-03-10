@@ -21,19 +21,20 @@ def load_data(partition_id: int, num_partitions: int, model_name: str) -> tuple[
 	
 	global fds
 	if fds is None:
-		paritioner = IidPartitioner(num_partitions=num_partitions)
-		fds = FederatedDataset(dataset="tomaarsen/setfit-absa-semeval-restaurants",
-			paritioners={"train": paritioner})
+		partitioner = IidPartitioner(num_partitions=num_partitions)
+		fds = FederatedDataset(
+			dataset="tomaarsen/setfit-absa-semeval-restaurants", partitioners={"train": partitioner}
+		)
 
-	partition = fds.load_parition(partition_id)
+	partition = fds.load_partition(partition_id)
 	partition_train_test = partition.train_test_split(test_size=0.2, seed=42)
 
 	tokenizer = AutoTokenizer.from_pretrained(model_name, model_max_length=512)
 
-	def tokernizer_function(examples):
-		return tokenizer(examples["train"], truncation=True, add_special_tokens=True)
+	def tokenize_function(examples):
+		return tokenizer(examples["text"], truncation=True, add_special_tokens=True)
 
-	partition_train_test = partition_train_test.map(tokernizer_function, batched=True)
+	partition_train_test = partition_train_test.map(tokenize_function, batched=True)
 	partition_train_test = partition_train_test.remove_columns("text")
 	partition_train_test = partition_train_test.rename_column("label", "labels")
 
@@ -89,6 +90,6 @@ def test(net, testloader, device) -> tuple[Any | float, Any]:
 		predictions = torch.argmax(logits, dim=-1)
 		metric.add_batch(predictions=predictions, references=batch["labels"])
 
-	loss /= len(testload.dataset)
+	loss /= len(testloader.dataset)
 	accuracy = metric.compute()["accuracy"]
 	return loss, accuracy

@@ -37,11 +37,11 @@ class RestaurantClient(NumPyClient):
 
 
 def client_fn(context: Context) -> Client:
-	partition_id = context.node_config["partition_id"]
-	num_paritions = context.node_config["num-partitions"]
+	partition_id = context.node_config["partition-id"]
+	num_partitions = context.node_config["num-partitions"]
 
 	model_name = context.run_config["model-name"]
-	trainloader, testloader = load_data(partition_id, num_paritions, model_name)
+	trainloader, testloader = load_data(partition_id, num_partitions, model_name)
 
 	return RestaurantClient(model_name, trainloader, testloader).to_client()
 
