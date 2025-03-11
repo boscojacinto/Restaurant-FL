@@ -26,14 +26,25 @@ def load_data(partition_id: int, num_partitions: int, model_name: str) -> tuple[
 			dataset="tomaarsen/setfit-absa-semeval-restaurants", partitioners={"train": partitioner}
 		)
 
-	partition = fds.load_partition(partition_id)
+	partition = fds.load_partition(partition_id)	
+
+	def replace_label(example):
+		if example["label"] == "positive":
+			example["label"] = 1
+		else:
+			example["label"] = 0
+		return example
+
+	partition = partition.map(replace_label)
 	partition_train_test = partition.train_test_split(test_size=0.2, seed=42)
 
 	tokenizer = AutoTokenizer.from_pretrained(model_name, model_max_length=512)
 
 	def tokenize_function(examples):
-		return tokenizer(examples["text"], truncation=True, add_special_tokens=True)
+		return tokenizer(examples["text"], truncation=True, add_special_tokens=True, padding=True)
 
+	partition_train_test = partition_train_test.remove_columns("span")
+	partition_train_test = partition_train_test.remove_columns("ordinal")
 	partition_train_test = partition_train_test.map(tokenize_function, batched=True)
 	partition_train_test = partition_train_test.remove_columns("text")
 	partition_train_test = partition_train_test.rename_column("label", "labels")
