@@ -31,9 +31,9 @@ serverapp = "restaurant_fl.server_app:app"
 clientapp = "restaurant_fl.client_app:app"
 
 [tool.flwr.app.config]
-num-server-rounds = 3
+num-server-rounds = 1
 model-name = "tomaarsen/setfit-absa-bge-small-en-v1.5-restaurants-aspect"
-fraction-fit = 0.05
+fraction-fit = 0.5
 fraction-evaluate = 0.1
 
 [tool.flwr.federations]
