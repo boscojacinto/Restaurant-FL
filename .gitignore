@@ -2,3 +2,4 @@ venv/
 restaurant_fl/__pycache__/
 raw/
 processed/
+__pycache__/

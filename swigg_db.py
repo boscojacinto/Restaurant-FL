@@ -19,7 +19,7 @@ from torch_geometric.data import (
 
 class SWGDataset(InMemoryDataset):
     
-    url = 'https://www.dropbox.com/scl/fi/fefrnu1bw1exm24crjaxs/SWGD_processed.zip?rlkey=jqueev1q0lsn24ebt272bjgji&st=9u8cxbaw&dl=1'
+    url = 'https://www.dropbox.com/scl/fi/mxpq52u98qfo7ajkdv37h/SWGD_processed.zip?rlkey=j8t29lb7ipwvah0hszs6pgzll&st=6u2j3nbe&dl=1'
 
     def __init__(
         self,
@@ -111,7 +111,16 @@ def main():
 
     # Create dataset instance
     dataset = SWGDataset(path)
-    # dataset.process();
+    dataset.process();
+
+    # Create a simple graph  
+    G = to_networkx(dataset.data, node_attrs=['x'])
+    print(f"Number of nodes: {G.number_of_nodes()}")
+    print(f"Number of edges: {G.number_of_edges()}")
+
+    pos = nx.spring_layout(G)  # Layout for visualization
+    nx.draw(G, pos, with_labels=False, node_color='lightblue', node_size=500, font_size=10)
+    plt.show()
     
 if __name__ == "__main__":
     main()
