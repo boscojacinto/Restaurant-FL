@@ -51,6 +51,7 @@ def load_data(partition_id: int, num_partitions: int, model_name: str) -> tuple[
 	#partition_train_test = partition_train_test.rename_column("label", "labels")
 
 	#data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+	print(f"partition_train_test['train']:{partition_train_test['train'].__class__}")
 	trainloader = DataLoader(
 		partition_train_test["train"],
 		shuffle=True,

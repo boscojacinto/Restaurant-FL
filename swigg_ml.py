@@ -62,6 +62,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.005, weight_decay=0.001)
 
 
 def train():
+    print(f"model.state_dict():{model.state_dict()}")    
     model.train()
     optimizer.zero_grad()
     out = model(data.x_dict, data.edge_index_dict)
@@ -85,7 +86,7 @@ def test():
     return accs
 
 
-for epoch in range(1, 101):
+for epoch in range(1, 2):
     loss = train()
     train_acc, val_acc, test_acc = test()
     print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Train: {train_acc:.4f}, '

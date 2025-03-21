@@ -149,6 +149,7 @@ class DBLP(InMemoryDataset):
         N_p = data['paper'].num_nodes
         N_t = data['term'].num_nodes
         N_c = data['conference'].num_nodes
+        print(f"N_c:{N_c}")
         s['author'] = (0, N_a)
         s['paper'] = (N_a, N_a + N_p)
         s['term'] = (N_a + N_p, N_a + N_p + N_t)
@@ -162,7 +163,7 @@ class DBLP(InMemoryDataset):
             print(f"s[{src}][0]: {s[src][0]} s[{src}][1]: {s[src][1]}")
             print(f"s[{dst}][0]: {s[dst][0]} s[{dst}][0]: {s[dst][1]}")            
             A_sub = A[s[src][0]:s[src][1], s[dst][0]:s[dst][1]].tocoo()
-            print(f"A_sub shape: {A_sub.shape}")
+            print(f"A_sub shape: {A_sub.shape} A_sub.nnz:{A_sub.nnz}")
             if A_sub.nnz > 0:
                 row = torch.from_numpy(A_sub.row).to(torch.long)
                 col = torch.from_numpy(A_sub.col).to(torch.long)
