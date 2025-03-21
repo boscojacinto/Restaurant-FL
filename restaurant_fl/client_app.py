@@ -22,13 +22,13 @@ class RestaurantClient(NumPyClient):
 		self.device = torch.device("cpu")
 		self.trainloader = trainloader
 		self.testloader = testloader
-		self.net = get_model(model_name)
+		self.net = get_model(model_name, metadata=trainloader.metadata())
 		self.net.to(self.device)
 
 	def fit(self, parameters, config) -> tuple[list, int, dict]:
 		set_params(self.net, parameters)
 		train(self.net, self.trainloader, epochs=1, device=self.device)
-		return get_params(self.net), len(self.trainloader), {}
+		return get_params(self.net), 1, {}
 
 	def evaluate(self, parameters, config) -> tuple[float, int, dict[str, float]]:
 		set_params(self.net, parameters)

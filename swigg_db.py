@@ -1,14 +1,14 @@
 import os
 import os.path as osp
-from itertools import product
-from typing import Callable, List, Optional
-import torch_geometric.transforms as T
-from torch_geometric.utils import to_networkx
-import networkx as nx
-import matplotlib.pyplot as plt
-
 import numpy as np
 import torch
+from itertools import product
+from typing import Callable, List, Optional
+import networkx as nx
+import matplotlib.pyplot as plt
+import torch_geometric.transforms as T
+from torch_geometric.utils import to_networkx
+from torch_geometric.transforms import RandomLinkSplit, ToUndirected
 
 from torch_geometric.data import (
     HeteroData,
@@ -44,10 +44,9 @@ class SWGDataset(InMemoryDataset):
         return 'data.pt'
 
     def download(self) -> None:
-        print(f"self.raw_dir:{self.raw_dir}")
         path = download_url(self.url, self.raw_dir)
         extract_zip(path, self.raw_dir)
-        os.remove(path)
+        #os.remove(path)
     
     def process(self) -> None:
         import scipy.sparse as sp
@@ -81,7 +80,7 @@ class SWGDataset(InMemoryDataset):
         s['customer'] = (N_r + N_a, N_r + N_a + N_c)
 
         A = np.load(osp.join(self.raw_dir, 'adjM.npy'))
-        print(f"A.shape:{A.shape}")
+        #print(f"A.shape:{A.shape}")
         i = 0
         for src, dst in product(node_types, node_types):
             print(f"I:{i}")
@@ -95,10 +94,10 @@ class SWGDataset(InMemoryDataset):
                 col = torch.from_numpy(A_sub.col).to(torch.long)
                 data[src, dst].edge_index = torch.stack([row, col], dim=0)
                 if osp.isfile(osp.join(self.raw_dir, f'edge_attrs_{i}.npy')):
-                    print(f"HEREEE")
+                    #print(f"HEREEE")
                     data[src, dst].edge_attr = torch.from_numpy(
                         np.load(osp.join(self.raw_dir, f'edge_attrs_{i}.npy'))).to(torch.float)
-                    print(f"data[{src}, {dst}].edge_attr:{data[src, dst].edge_attr}")
+                    #print(f"data[{src}, {dst}].edge_attr:{data[src, dst].edge_attr}")
             i = i + 1
 
         if self.pre_transform is not None:
@@ -119,7 +118,22 @@ def main():
     print(f"dataset.data['restaurant', 'area']:{dataset.data['restaurant', 'area'].num_edge_features}")
     print(f"dataset.data['area', 'restaurant']:{dataset.data['area', 'restaurant'].num_edge_features}")
 
-    print(f"dataset.data = {dataset.data.__class__}")
+    print(f"dataset.data = {dataset.data}")
+
+    transform = RandomLinkSplit(
+        num_val=0.05,
+        num_test=0.1,
+        neg_sampling_ratio=0.0,
+        edge_types=[('restaurant', 'to', 'restaurant'),
+                    ('restaurant', 'to', 'area'),
+                    ('restaurant', 'to', 'customer'),
+                    ('area', 'to', 'restaurant'),
+                    ('area', 'to', 'customer'),
+                    ('customer', 'to', 'restaurant'),
+                    ('customer', 'to', 'area')]
+    )
+
+    train_data, val_data, test_data = transform(dataset.data)
 
     # Create a simple graph  
     # G = to_networkx(dataset.data, node_attrs=['x'])

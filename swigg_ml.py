@@ -11,25 +11,17 @@ from torch_geometric.utils import to_networkx
 import networkx as nx
 import matplotlib.pyplot as plt
 
-path = osp.join(osp.dirname(osp.realpath(__file__)), '')
-# We initialize conference node features with a single one-vector as feature:
-dataset = SWGDataset(path)
-data = dataset[0]
-
-print(f"SWGD:{data}")
-print(f"data.node_types:{data.node_types}")
-
 class SWG(torch.nn.Module):
-    def __init__(self, hidden_channels, out_channels, num_heads, num_layers):
+    def __init__(self, hidden_channels, out_channels, num_heads, num_layers, node_types, metadata):
         super().__init__()
 
         self.lin_dict = torch.nn.ModuleDict()
-        for node_type in data.node_types:
+        for node_type in node_types:
             self.lin_dict[node_type] = Linear(-1, hidden_channels)
 
         self.convs = torch.nn.ModuleList()
         for _ in range(num_layers):
-            conv = HGTConv(hidden_channels, hidden_channels, data.metadata(),
+            conv = HGTConv(hidden_channels, hidden_channels, metadata,
                            num_heads)
             self.convs.append(conv)
 
@@ -45,49 +37,56 @@ class SWG(torch.nn.Module):
 
         return self.lin(x_dict['restaurant'])
 
+def main():
+    path = osp.join(osp.dirname(osp.realpath(__file__)), '')
+    # We initialize conference node features with a single one-vector as feature:
+    dataset = SWGDataset(path)
+    data = dataset[0]
 
-model = SWG(hidden_channels=64, out_channels=2, num_heads=2, num_layers=1)
-if torch.cuda.is_available():
-    device = torch.device('cuda')
-elif torch_geometric.is_xpu_available():
-    device = torch.device('xpu')
-else:
-    device = torch.device('cpu')
-data, model = data.to(device), model.to(device)
+    model = SWG(hidden_channels=64, out_channels=2, num_heads=2, num_layers=1,
+                node_types=['restaurant', 'area', 'customer'], metadata=data.metadata())
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
+    elif torch_geometric.is_xpu_available():
+        device = torch.device('xpu')
+    else:
+        device = torch.device('cpu')
+    data, model = data.to(device), model.to(device)
 
-with torch.no_grad():  # Initialize lazy modules.
-    out = model(data.x_dict, data.edge_index_dict)
+    with torch.no_grad():  # Initialize lazy modules.
+        out = model(data.x_dict, data.edge_index_dict)
 
-optimizer = torch.optim.Adam(model.parameters(), lr=0.005, weight_decay=0.001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.005, weight_decay=0.001)
+
+    def train():
+        print(f"model.state_dict():{model.state_dict().items()}")    
+        model.train()
+        optimizer.zero_grad()
+        out = model(data.x_dict, data.edge_index_dict)
+        mask = data['restaurant'].train_mask
+        loss = F.cross_entropy(out[mask], data['restaurant'].y[mask])
+        loss.backward()
+        optimizer.step()
+        return float(loss)
+
+    @torch.no_grad()
+    def test():
+        model.eval()
+        pred = model(data.x_dict, data.edge_index_dict).argmax(dim=-1)
+
+        accs = []
+        for split in ['train_mask', 'val_mask', 'test_mask']:
+            mask = data['restaurant'][split]
+            acc = (pred[mask] == data['restaurant'].y[mask]).sum() / mask.sum()
+            accs.append(float(acc))
+        return accs
+
+    for epoch in range(1, 2):
+        loss = train()
+        train_acc, val_acc, test_acc = test()
+        print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Train: {train_acc:.4f}, '
+              f'Val: {val_acc:.4f}, Test: {test_acc:.4f}')
 
 
-def train():
-    print(f"model.state_dict():{model.state_dict()}")    
-    model.train()
-    optimizer.zero_grad()
-    out = model(data.x_dict, data.edge_index_dict)
-    mask = data['restaurant'].train_mask
-    loss = F.cross_entropy(out[mask], data['restaurant'].y[mask])
-    loss.backward()
-    optimizer.step()
-    return float(loss)
-
-
-@torch.no_grad()
-def test():
-    model.eval()
-    pred = model(data.x_dict, data.edge_index_dict).argmax(dim=-1)
-
-    accs = []
-    for split in ['train_mask', 'val_mask', 'test_mask']:
-        mask = data['restaurant'][split]
-        acc = (pred[mask] == data['restaurant'].y[mask]).sum() / mask.sum()
-        accs.append(float(acc))
-    return accs
-
-
-for epoch in range(1, 2):
-    loss = train()
-    train_acc, val_acc, test_acc = test()
-    print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Train: {train_acc:.4f}, '
-          f'Val: {val_acc:.4f}, Test: {test_acc:.4f}')
+if __name__ == "__main__":
+    main()
