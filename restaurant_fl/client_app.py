@@ -32,8 +32,9 @@ class RestaurantClient(NumPyClient):
 
 	def evaluate(self, parameters, config) -> tuple[float, int, dict[str, float]]:
 		set_params(self.net, parameters)
-		loss, accuracy = test(self.net, self.testloader, device=self.device)
-		return float(loss), len(self.testloader), {"accuracy": float(accuracy)}
+		loss, accuracy = test(self.net, self.trainloader, self.testloader, device=self.device)
+		print(f"loss:{loss} accuracy:{accuracy}")
+		return float(loss), 1, {"accuracy": float(accuracy)}
 
 
 def client_fn(context: Context) -> Client:

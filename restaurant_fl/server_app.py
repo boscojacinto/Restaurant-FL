@@ -9,7 +9,6 @@ def server_fn(context: Context) -> ServerAppComponents:
 	config = ServerConfig(num_rounds=num_rounds)
 
 	model_name = context.run_config["model-name"]
-	print(f"\n\n\n {model_name}")
 	# ndarrays = get_params(get_model(model_name))
 	# global_model_init = ndarrays_to_parameters(ndarrays)
 
