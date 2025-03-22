@@ -59,7 +59,9 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=0.005, weight_decay=0.001)
 
     def train():
-        print(f"model.state_dict():{model.state_dict().items()}")    
+        results = [val.cpu().numpy() for _, val in model.state_dict().items()]
+        print(f"\nresults:\n{results}")    
+        
         model.train()
         optimizer.zero_grad()
         out = model(data.x_dict, data.edge_index_dict)

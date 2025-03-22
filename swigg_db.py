@@ -61,13 +61,13 @@ class SWGDataset(InMemoryDataset):
         y = np.load(osp.join(self.raw_dir, 'labels.npy'))
         data['restaurant'].y = torch.from_numpy(y).to(torch.long)
 
-        split = np.load(osp.join(self.raw_dir, 'train_val_test_idx.npz'))
-        for name in ['train', 'val', 'test']:
-            idx = split[f'{name}_idx']
-            idx = torch.from_numpy(idx).to(torch.long)
-            mask = torch.zeros(data['restaurant'].num_nodes, dtype=torch.bool)
-            mask[idx] = True
-            data['restaurant'][f'{name}_mask'] = mask
+        # split = np.load(osp.join(self.raw_dir, 'train_val_test_idx.npz'))
+        # for name in ['train', 'val', 'test']:
+        #     idx = split[f'{name}_idx']
+        #     idx = torch.from_numpy(idx).to(torch.long)
+        #     mask = torch.zeros(data['restaurant'].num_nodes, dtype=torch.bool)
+        #     mask[idx] = True
+        #     data['restaurant'][f'{name}_mask'] = mask
 
         s = {}
         N_r = data['restaurant'].num_nodes
@@ -83,21 +83,14 @@ class SWGDataset(InMemoryDataset):
         #print(f"A.shape:{A.shape}")
         i = 0
         for src, dst in product(node_types, node_types):
-            print(f"I:{i}")
             A_sub = sp.coo_matrix(A[s[src][0]:s[src][1], s[dst][0]:s[dst][1]])
-            #print(f"src:{src} dst:{dst}\n A_sub.nnz:{A_sub.nnz} \nA_sub:{A_sub}")
-            #print(f"s[src][0]:s[src][1]:{s[src][0]}:{s[src][1]} s[dst][0]:s[dst][1]:{s[dst][0]}:{s[dst][1]}")
-            #if src == 'restaurant':
-            #    print(f"AAA:\n\n{A[s[src][0]:s[src][1], s[dst][0]:s[dst][1]]}")
             if A_sub.nnz > 0:
                 row = torch.from_numpy(A_sub.row).to(torch.long)
                 col = torch.from_numpy(A_sub.col).to(torch.long)
                 data[src, dst].edge_index = torch.stack([row, col], dim=0)
                 if osp.isfile(osp.join(self.raw_dir, f'edge_attrs_{i}.npy')):
-                    #print(f"HEREEE")
                     data[src, dst].edge_attr = torch.from_numpy(
                         np.load(osp.join(self.raw_dir, f'edge_attrs_{i}.npy'))).to(torch.float)
-                    #print(f"data[{src}, {dst}].edge_attr:{data[src, dst].edge_attr}")
             i = i + 1
 
         if self.pre_transform is not None:
@@ -114,10 +107,8 @@ def main():
 
     # Create dataset instance
     dataset = SWGDataset(path)
-    #dataset.process();
     print(f"dataset.data['restaurant', 'area']:{dataset.data['restaurant', 'area'].num_edge_features}")
     print(f"dataset.data['area', 'restaurant']:{dataset.data['area', 'restaurant'].num_edge_features}")
-
     print(f"dataset.data = {dataset.data}")
 
     transform = RandomLinkSplit(
@@ -134,6 +125,7 @@ def main():
     )
 
     train_data, val_data, test_data = transform(dataset.data)
+    print(f"test_datalen:{len(test_data['restaurant'].y)}")
 
     # Create a simple graph  
     # G = to_networkx(dataset.data, node_attrs=['x'])

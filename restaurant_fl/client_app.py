@@ -22,7 +22,7 @@ class RestaurantClient(NumPyClient):
 		self.device = torch.device("cpu")
 		self.trainloader = trainloader
 		self.testloader = testloader
-		self.net = get_model(model_name, metadata=trainloader.metadata())
+		self.net = get_model(model_name, trainloader.metadata())
 		self.net.to(self.device)
 
 	def fit(self, parameters, config) -> tuple[list, int, dict]:
@@ -32,8 +32,8 @@ class RestaurantClient(NumPyClient):
 
 	def evaluate(self, parameters, config) -> tuple[float, int, dict[str, float]]:
 		set_params(self.net, parameters)
-		loss, accuracy = test(self.net, self.trainloader, self.testloader, device=self.device)
-		print(f"loss:{loss} accuracy:{accuracy}")
+		loss, accuracy = test(self.net, self.testloader, device=self.device)
+		#print(f"LOSS:{loss} ACCURACY:{accuracy}")
 		return float(loss), 1, {"accuracy": float(accuracy)}
 
 
