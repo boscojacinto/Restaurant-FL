@@ -33,8 +33,8 @@ clientapp = "restaurant_fl.client_app:app"
 [tool.flwr.app.config]
 num-server-rounds = 1
 model-name = "swigg/hgt-small-v1.0-restaurants-pred"
-fraction-fit = 0.5
-fraction-evaluate = 0.1
+fraction-fit = 1.0
+fraction-evaluate = 1.0
 
 [tool.flwr.federations]
 default = "local-simulation"

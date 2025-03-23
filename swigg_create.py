@@ -11,14 +11,16 @@ from scipy.sparse import coo_matrix, issparse, load_npz
 
 # 1. First, create a custom Dataset class
 class SWGDataset(Dataset):
-    def __init__(self, csv_file):
+    def __init__(self, csv_file, city, area):
 
         df = pd.read_csv(csv_file)
 
-        self.data = df.loc[(df['City'].str.contains('Mumbai', case=False)) & 
-            df['Area'].str.contains('Powai', case=False)
+        self.data = df.loc[(df['City'].str.contains(city, case=False)) & 
+            df['Area'].str.contains(area, case=False)
         ]
         self.data = self.data.drop(['ID', 'Price', 'Total ratings', 'Restaurant', 'Avg ratings', 'Avg ratings', 'Delivery time'], axis=1)
+        self.city = city
+        self.area = area
 
     def __len__(self):
         return len(self.data)
@@ -30,32 +32,12 @@ class SWGDataset(Dataset):
     def create_features(self):
 
         self.city_labels = { 'mumbai': 1.0 }
-        self.area_labels = { 'powai': 0.3 }
-        self.food_labels = { 'mughlai': 1.0 }        
-        self.address_labels = { 'andheri east': 0.4, 
-                                'andheri west': 0.4,
-                                'chandivali': 0.8,
-                                'chandivali  andheri east': 0.8,
-                                'chandivali farm road': 0.8,
-                                'guru hargobindji marg  andheri east': 0.7,
-                                'liberty industrial estate': 0.7,
-                                'marol': 0.5,
-                                'marol sakinaka': 0.5,
-                                'nahar shopping complex': 0.6,
-                                'narayan plaza': 0.5,
-                                'near liberty industrial estate': 0.7,
-                                'opp. nirali hospital': 0.6,
-                                'other': 0.2,
-                                'powai': 1.0,
-                                'powai area': 1.0,
-                                'saki naka': 0.5,
-                                'saki vihar road': 0.5,
-                                'sakinaka': 0.5,
-                                'stanny compound': 0.7
-                              } 
+        self.area_labels = { self.area: 0.3 }
+        self.food_labels = { 'mughlai': 1.0 }
 
-        # self.address_labels = np.unique_values(self.data['Address'])        
-        # torch.randint(0.5, 1.0, (self.address_labels.size), dtype=torch.float)
+        keys = np.unique(self.data['Address'].astype(str).str.lower())
+        vals = torch.rand((keys.size, 1), dtype=torch.float).tolist()
+        self.address_labels = dict(zip(keys, vals))
 
         self.data['City'] = self.data['City'].str.lower().apply(
             lambda x: next((v for k, v in self.city_labels.items() if k in x.split(',')), 1.0)           
@@ -70,10 +52,9 @@ class SWGDataset(Dataset):
         ).astype(float)
 
         self.data['Address'] = self.data['Address'].str.lower().apply(
-            lambda x: next((v for k, v in self.address_labels.items() if k in x.split(',')), 0.0)
+            lambda x: next((v[0] for k, v in self.address_labels.items() if k == x), 0.0)
         ).astype(float)
 
-        print(f"Address:\n{self.data['Address']}")
         filter_cols = [col for col in self.data.columns if col != 'Address']
         self.x = torch.tensor(self.data[filter_cols].values, dtype=torch.float)
         self.y = torch.tensor(self.data[filter_cols].iloc[:,-1].values, dtype=torch.float)
@@ -130,11 +111,8 @@ class SWGDataset(Dataset):
 
         # Restuarant to Area
         r_to_a_adj = torch.ones((x_n, a_n))  
-        print(f"r_to_a_adj.shape:\n{r_to_a_adj.shape}")     
-        #print(f"r_to_a_adj:\n{r_to_a_adj}")     
         # Area to Restaurant
         a_to_r_adj = r_to_a_adj.t()
-        #print(f"a_to_r_adj:\n{a_to_r_adj}")     
 
         # Restaurant to Customer
         c_col_2 = self.c[:, 2]
@@ -147,10 +125,8 @@ class SWGDataset(Dataset):
         # Area to Customer
         a_to_c_adj = torch.ones((a_n, c_n), dtype=torch.float)
         #a_to_c_adj = torch.randint(0, 2, (a_n, c_n), dtype=torch.float)
-        #print(f"a_to_c_adj.shape:{a_to_c_adj.shape}")
         # Cutomer to Area
         c_to_a_adj = a_to_c_adj.t()
-        #print(f"c_to_a_adj.shape:{c_to_a_adj.shape}")
 
         # Total
         total_n = x_n + c_n + a_n # 10115
@@ -171,30 +147,18 @@ class SWGDataset(Dataset):
         adj_matrix[x_n+a_n:total_n, x_n:x_n+a_n] = c_to_a_adj
         adj_matrix[x_n+a_n:total_n, x_n+a_n:total_n] = c_to_c_adj
 
-        print(f"adj_matrix:{adj_matrix.shape}")
         adj_matrix_np = adj_matrix.numpy()
         self.adjM = adj_matrix_np
 
-        #print(f"adj_matrix[114:115]:\n{adj_matrix[114:115]}")
         # rows, cols = np.nonzero(adj_matrix_np)
         # values = adj_matrix_np[rows, cols]
         # self.adjM = sp.sparse.coo_matrix((values, (rows, cols)), shape=adj_matrix_np.shape, copy=True)
         # sp.sparse.save_npz('adjM.npz', self.adjM)
         np.save('adjM.npy', self.adjM, allow_pickle=False) 
 
-    def create_train_val_test_split(self):
-        assignment = torch.randint(0, 3, (114,))
-
-        data_splits = {
-            "train_idx": (assignment == 0).numpy(),  # True where assignment is 0
-            "val_idx": (assignment == 1).numpy(),    # True where assignment is 1
-            "test_idx": (assignment == 2).numpy()    # True where assignment is 2
-        }
-
-        np.savez_compressed('train_val_test_idx.npz', **data_splits)
-
     def create_zip(self):
-        with zipfile.ZipFile('SWGD_processed.zip', 'w', compression=zipfile.ZIP_DEFLATED) as zipf:
+        with zipfile.ZipFile(f'SWGD_{self.city.replace(" ","-")}-{self.area.replace(" ","-")}.zip',
+                             'w', compression=zipfile.ZIP_DEFLATED) as zipf:
             zipf.write('adjM.npy')
             zipf.write('features_0.npz')
             zipf.write('features_1.npz')
@@ -202,7 +166,6 @@ class SWGDataset(Dataset):
             zipf.write('edge_attrs_1.npy')
             zipf.write('edge_attrs_3.npy')
             zipf.write('labels.npy')
-            zipf.write('train_val_test_idx.npz')
 
         os.remove('adjM.npy')
         os.remove('features_0.npz')
@@ -211,15 +174,15 @@ class SWGDataset(Dataset):
         os.remove('edge_attrs_1.npy')
         os.remove('edge_attrs_3.npy')
         os.remove('labels.npy')
-        os.remove('train_val_test_idx.npz')
 
 def main():
     csv_path = './restaurant.csv'
-    
-    dataset = SWGDataset(csv_path)
+    city = 'mumbai'
+    area = 'powai'
+
+    dataset = SWGDataset(csv_path, city, area)
     dataset.create_features()
     dataset.create_adjacency()
-    dataset.create_train_val_test_split()
     dataset.create_zip()
 
 if __name__ == "__main__":

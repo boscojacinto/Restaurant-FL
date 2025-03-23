@@ -31,7 +31,7 @@ def load_data(partition_id: int, num_partitions: int, model_name: str) -> tuple[
 	global fds
 	if fds is None:
 		path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../')
-		dataset = SWGDataset(path)
+		dataset = SWGDataset(path, partition_id)
 		fds = dataset.data 
 
 	transform = RandomLinkSplit(

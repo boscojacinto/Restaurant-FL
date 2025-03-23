@@ -17,17 +17,20 @@ from torch_geometric.data import (
     extract_zip,
 )
 
-class SWGDataset(InMemoryDataset):
-    
-    url = 'https://www.dropbox.com/scl/fi/gurib9vhn77w4vx3uv9ip/SWGD_processed.zip?rlkey=4c1cy8umipwohv869m1s7r63i&st=04lvfbkz&dl=1'
+class SWGDataset(InMemoryDataset): 
 
     def __init__(
         self,
         root: str,
+        partition_id:int,
         transform: Optional[Callable] = None,
         pre_transform: Optional[Callable] = None,
         force_reload: bool = False,
     ) -> None:
+        if partition_id == 0:
+            self.url = 'https://www.dropbox.com/scl/fi/yunjx1gqni33lonymnk1u/SWGD_mumbai-powai.zip?rlkey=m7oa6092f4cpfo8rmwb1vdg0o&st=zopltm43&dl=1'
+        elif partition_id == 1:
+            self.url = 'https://www.dropbox.com/scl/fi/pi0u8bd94upmxn4qhnty8/SWGD_mumbai-santacruz-east.zip?rlkey=5e8ostffn0s8ve3rqqag1irw4&st=4aj7c48z&dl=1'
         super().__init__(root, transform, pre_transform,
                          force_reload=force_reload)
         self.load(self.processed_paths[0], data_cls=HeteroData)
@@ -36,7 +39,7 @@ class SWGDataset(InMemoryDataset):
     def raw_file_names(self) -> List[str]:
         return [
             'adjM.npz', 'features_0.npz', 'features_1.npz', 'features_2.npz',
-            'edge_attrs_1.npz', 'labels.npy', 'train_val_test_idx.npz'
+            'edge_attrs_1.npz', 'edge_attrs_3.npz', 'labels.npy'
         ]
 
     @property
@@ -44,9 +47,10 @@ class SWGDataset(InMemoryDataset):
         return 'data.pt'
 
     def download(self) -> None:
+        print(f"self.url:{self.url}")
         path = download_url(self.url, self.raw_dir)
         extract_zip(path, self.raw_dir)
-        #os.remove(path)
+        os.remove(path)
     
     def process(self) -> None:
         import scipy.sparse as sp
@@ -106,7 +110,7 @@ def main():
     path = osp.join(osp.dirname(osp.realpath(__file__)), '')
 
     # Create dataset instance
-    dataset = SWGDataset(path)
+    dataset = SWGDataset(path, 1)
     print(f"dataset.data['restaurant', 'area']:{dataset.data['restaurant', 'area'].num_edge_features}")
     print(f"dataset.data['area', 'restaurant']:{dataset.data['area', 'restaurant'].num_edge_features}")
     print(f"dataset.data = {dataset.data}")
