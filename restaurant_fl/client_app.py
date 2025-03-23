@@ -18,23 +18,23 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 logging.set_verbosity_error()
 
 class RestaurantClient(NumPyClient):
-	def __init__(self, model_name, trainloader, testloader) -> None:
+	def __init__(self, model_name, metadata, trainloader, testloader) -> None:
 		self.device = torch.device("cpu")
 		self.trainloader = trainloader
 		self.testloader = testloader
-		self.net = get_model(model_name, trainloader.metadata())
+		self.net = get_model(model_name, metadata)
 		self.net.to(self.device)
 
 	def fit(self, parameters, config) -> tuple[list, int, dict]:
-		set_params(self.net, parameters)
-		train(self.net, self.trainloader, epochs=1, device=self.device)
-		return get_params(self.net), 1, {}
+		#set_params(self.net, parameters)
+		train(self.net, self.trainloader, epochs=30, device=self.device)
+		return get_params(self.net), len(self.trainloader), {}
 
 	def evaluate(self, parameters, config) -> tuple[float, int, dict[str, float]]:
 		set_params(self.net, parameters)
 		loss, accuracy = test(self.net, self.testloader, device=self.device)
-		#print(f"LOSS:{loss} ACCURACY:{accuracy}")
-		return float(loss), 1, {"accuracy": float(accuracy)}
+		print(f"loss:{loss} accuracy:{accuracy}")
+		return float(loss), len(self.testloader), {"accuracy": float(accuracy)}
 
 
 def client_fn(context: Context) -> Client:
@@ -42,8 +42,8 @@ def client_fn(context: Context) -> Client:
 	num_partitions = context.node_config["num-partitions"]
 
 	model_name = context.run_config["model-name"]
-	trainloader, testloader = load_data(partition_id, num_partitions, model_name)
+	data, trainloader, testloader = load_data(partition_id, num_partitions, model_name)
 
-	return RestaurantClient(model_name, trainloader, testloader).to_client()
+	return RestaurantClient(model_name, data.metadata(), trainloader, testloader).to_client()
 
 app = ClientApp(client_fn=client_fn)

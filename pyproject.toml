@@ -31,7 +31,7 @@ serverapp = "restaurant_fl.server_app:app"
 clientapp = "restaurant_fl.client_app:app"
 
 [tool.flwr.app.config]
-num-server-rounds = 12
+num-server-rounds = 1
 model-name = "swigg/hgt-small-v1.0-restaurants-pred"
 fraction-fit = 0.5
 fraction-evaluate = 0.1

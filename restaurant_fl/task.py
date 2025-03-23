@@ -35,8 +35,8 @@ def load_data(partition_id: int, num_partitions: int, model_name: str) -> tuple[
 		fds = dataset.data 
 
 	transform = RandomLinkSplit(
-		num_val=0.05,
-		num_test=0.1,
+		num_val=0.1,
+		num_test=0.2,
 		neg_sampling_ratio=0.0,
 		edge_types=[('restaurant', 'to', 'restaurant'),
 					('restaurant', 'to', 'area'),
@@ -48,7 +48,7 @@ def load_data(partition_id: int, num_partitions: int, model_name: str) -> tuple[
 	)
 
 	trainloader, valloader, testloader = transform(fds)
-	return trainloader, testloader
+	return fds, trainloader, testloader
 
 def get_model(model_name, metadata):
 	return SWG(hidden_channels=64, out_channels=2, num_heads=2, num_layers=1,
@@ -58,27 +58,29 @@ def get_params(model):
 	return [val.cpu().numpy() for _, val in model.state_dict().items()]
 
 def set_params(model, parameters) -> None:
-	pass
-	# params_dict = zip(model.state_dict().keys(), parameters)
-	# state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
-	# model.load_state_dict(state_dict, strict=True)
+	#pass
+	params_dict = zip(model.state_dict().keys(), parameters)
+	state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
+	model.load_state_dict(state_dict, strict=True)
 
 def train(net, trainloader, epochs, device) -> None:
 	optimizer = torch.optim.Adam(net.parameters(), lr=0.005, weight_decay=0.001)		
-	net.train()
-	optimizer.zero_grad()
-	outputs = net(trainloader.x_dict, trainloader.edge_index_dict)
-	loss = F.cross_entropy(outputs, trainloader['restaurant'].y)
-	print(f"loss={loss}")
-	loss.backward()
-	optimizer.step()
+	for epoch in range(1, epochs):
+		net.train()
+		optimizer.zero_grad()
+		outputs = net(trainloader.x_dict, trainloader.edge_index_dict)
+		loss = F.cross_entropy(outputs, trainloader['restaurant'].y)
+		print(f"l={loss}")
+		loss.backward()
+		optimizer.step()
 
 def test(net, testloader, device) -> tuple[Any | float, Any]:
 	loss = 0
 	net.eval()
 	with torch.no_grad():
-		outputs = net(testloader.x_dict, testloader.edge_index_dict).argmax(dim=-1)
+		outputs = net(testloader.x_dict, testloader.edge_index_dict)
+		preds = outputs.argmax(dim=-1)
 
-	accuracy = (outputs == testloader['restaurant'].y).sum() / len(testloader['restaurant'].y)
-	print(f"accuracy:{accuracy}")
+	accuracy = (preds == testloader['restaurant'].y).sum() / len(testloader['restaurant'].y)
+	loss = 1.0 - accuracy 
 	return loss, accuracy

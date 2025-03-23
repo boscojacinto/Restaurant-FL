@@ -19,21 +19,6 @@ from flwr.common.logger import log
 
 from restaurant_fl.task import get_params, get_model
 
-class SwgStrategy(FedAvg):
-	def aggregate_fit(
-		self,
-		server_round: int,
-		results: List[Tuple[ClientProxy, FitRes]],
-		failures: List[Union[Tuple[ClientProxy, FitRes], BaseException]],
-	) -> Tuple[Optional[Parameters], Dict[str, Scalar]]:
-		weights_results = [
-			parameters_to_ndarrays(fit_res.parameters)
-			for _, fit_res in results
-		]
-
-		print(f"\nweights_results:\n{weights_results}")
-		return {"feature1": 4}		
-
 def server_fn(context: Context) -> ServerAppComponents:
 	num_rounds = context.run_config["num-server-rounds"]
 	config = ServerConfig(num_rounds=num_rounds)
