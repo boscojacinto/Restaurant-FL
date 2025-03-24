@@ -41,7 +41,7 @@ class SWG(torch.nn.Module):
 def main():
     path = osp.join(osp.dirname(osp.realpath(__file__)), '')
     # We initialize conference node features with a single one-vector as feature:
-    dataset = SWGDataset(path)
+    dataset = SWGDataset(path, 0)
     #data = dataset[0]
     transform = RandomLinkSplit(
         num_val=0.1,
@@ -58,6 +58,7 @@ def main():
 
     train_data, val_data, test_data = transform(dataset.data)
 
+    print(f"\n\ndataset.data.metadata():\n{dataset.data.metadata()}")
     model = SWG(hidden_channels=64, out_channels=2, num_heads=2, num_layers=1,
                 node_types=['restaurant', 'area', 'customer'], metadata=dataset.data.metadata())
 

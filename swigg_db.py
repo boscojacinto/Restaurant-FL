@@ -47,7 +47,6 @@ class SWGDataset(InMemoryDataset):
         return 'data.pt'
 
     def download(self) -> None:
-        print(f"self.url:{self.url}")
         path = download_url(self.url, self.raw_dir)
         extract_zip(path, self.raw_dir)
         os.remove(path)

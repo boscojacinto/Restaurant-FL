@@ -11,16 +11,13 @@ from scipy.sparse import coo_matrix, issparse, load_npz
 
 # 1. First, create a custom Dataset class
 class SWGDataset(Dataset):
-    def __init__(self, csv_file, city, area):
+    def __init__(self, csv_file, city):
 
         df = pd.read_csv(csv_file)
 
-        self.data = df.loc[(df['City'].str.contains(city, case=False)) & 
-            df['Area'].str.contains(area, case=False)
-        ]
-        self.data = self.data.drop(['ID', 'Price', 'Total ratings', 'Restaurant', 'Avg ratings', 'Avg ratings', 'Delivery time'], axis=1)
+        self.data = df.loc[(df['City'].str.contains(city, case=False))]
+        self.data = self.data.drop(['ID', 'City', 'Restaurant', 'Price', 'Avg ratings', 'Total ratings', 'Delivery time'], axis=1)
         self.city = city
-        self.area = area
 
     def __len__(self):
         return len(self.data)
@@ -31,50 +28,57 @@ class SWGDataset(Dataset):
 
     def create_features(self):
 
-        self.city_labels = { 'mumbai': 1.0 }
-        self.area_labels = { self.area: 0.3 }
         self.food_labels = { 'mughlai': 1.0 }
 
-        keys = np.unique(self.data['Address'].astype(str).str.lower())
+        keys = np.unique(self.data['Area'].astype(str).str.lower())
         vals = torch.rand((keys.size, 1), dtype=torch.float).tolist()
-        self.address_labels = dict(zip(keys, vals))
+        self.area_labels = dict(zip(keys, vals))
 
-        self.data['City'] = self.data['City'].str.lower().apply(
-            lambda x: next((v for k, v in self.city_labels.items() if k in x.split(',')), 1.0)           
+        i = 0
+        areas_df = {}
+        self.address_labels = {}
+
+        for area in self.area_labels:
+            areas_df[area] = self.data[self.data['Area'].str.lower() == area]
+            #print(f"\nareas_df[{area}]:\n{areas_df[area]}")
+            torch.manual_seed(42+i)
+            keys = np.unique(areas_df[area]['Address'].astype(str).str.lower())
+            vals = torch.rand((keys.size, 1), dtype=torch.float).tolist()
+            self.address_labels[area] = dict(zip(keys, vals))
+            #print(f"\naddress_labels:\n{self.address_labels[area]}")
+            i = i + 1
+
+        self.data['Address'] = self.data.apply(
+            lambda x: next((val[0] for addr, val in self.address_labels[x['Area'].lower()].items() if addr == x['Address'].lower()), 0.0),
+            axis=1
         ).astype(float)
 
         self.data['Area'] = self.data['Area'].str.lower().apply(
-            lambda x: next((v for k, v in self.area_labels.items() if k in x.split(',')), 1.0)
+            lambda x: next((v[0] for k, v in self.area_labels.items() if k == x), 0.0)
         ).astype(float)        
 
         self.data['Food type'] = self.data['Food type'].str.lower().apply(
             lambda x: next((v for k, v in self.food_labels.items() if k in x.split(',')), 0)
         ).astype(float)
 
-        self.data['Address'] = self.data['Address'].str.lower().apply(
-            lambda x: next((v[0] for k, v in self.address_labels.items() if k == x), 0.0)
-        ).astype(float)
-
-        filter_cols = [col for col in self.data.columns if col != 'Address']
-        self.x = torch.tensor(self.data[filter_cols].values, dtype=torch.float)
+        filter_cols = [col for col in self.data.columns if ((col != 'Address') & (col != 'Area'))]
+        self.f_r = torch.tensor(self.data[filter_cols].values, dtype=torch.float)
+        filter_cols = [col for col in self.data.columns if ((col != 'Address') & (col != 'Food type'))]
+        self.f_a = torch.tensor(list(self.area_labels.values()), dtype=torch.float)
         self.y = torch.tensor(self.data[filter_cols].iloc[:,-1].values, dtype=torch.float)
 
         # Restaurant features
-        x = self.x.numpy()
-        # np.savetxt('restaurant_matrix.csv', x,
-        #             delimiter=",", fmt="%.2f",
-        #             header='Area,City,Food type')
+        x = self.f_r.numpy()
         rows, cols = np.nonzero(x)
         values = x[rows, cols]
         self.features_0 = coo_matrix((values, (rows, cols)), shape=x.shape)
         sp.sparse.save_npz('features_0.npz', self.features_0)
 
         # Area features
-        self.a = torch.ones(1, 2, dtype=torch.float)
-        mask = torch.rand(1) < 0.1
-        self.a[:, 1] = 0.0
-        self.a[mask, 1] = 1.0
-        self.features_1 =coo_matrix(self.a)
+        x = self.f_a.numpy()
+        rows, cols = np.nonzero(x)
+        values = x[rows, cols]
+        self.features_1 = coo_matrix((values, (rows, cols)), shape=x.shape)
         sp.sparse.save_npz('features_1.npz', self.features_1)
         self.edge_attrs_1 = torch.tensor(self.data['Address'].values, dtype=torch.float).numpy()
         np.save('edge_attrs_1.npy', self.edge_attrs_1, allow_pickle=False) 
@@ -94,14 +98,14 @@ class SWGDataset(Dataset):
         np.save('labels.npy', self.labels, allow_pickle=False) 
 
     def create_adjacency(self):
-        x_n = self.x.shape[0]
+        r_n = self.f_r.shape[0]
         c_n = self.c.shape[0]
-        a_n = 1
+        a_n = self.f_a.shape[0]
 
         # Restaurant to Restaurant
-        x_col_2 = self.x[:, 2]
+        x_col_2 = self.f_r[:, -1]
         r_to_r_adj = (x_col_2[:, None] == x_col_2[None, :]).int()
-        r_to_r_adj = r_to_r_adj - torch.eye(x_n, dtype=torch.float)
+        r_to_r_adj = r_to_r_adj - torch.eye(r_n, dtype=torch.float)
 
         # Area to Area
         a_to_a_adj = torch.zeros((a_n, a_n))
@@ -110,14 +114,14 @@ class SWGDataset(Dataset):
         c_to_c_adj = torch.zeros((c_n, c_n))
 
         # Restuarant to Area
-        r_to_a_adj = torch.ones((x_n, a_n))  
+        r_to_a_adj = torch.ones((r_n, a_n))  
         # Area to Restaurant
         a_to_r_adj = r_to_a_adj.t()
 
         # Restaurant to Customer
-        c_col_2 = self.c[:, 2]
+        c_col_2 = self.c[:, -1]
         torch.manual_seed(323)
-        r_to_c_adj = torch.randint(0, 2, (x_n, c_n), dtype=torch.float)
+        r_to_c_adj = torch.randint(0, 2, (r_n, c_n), dtype=torch.float)
         r_to_c_adj = r_to_c_adj * c_col_2.t()
         # Customer to Restaurant
         c_to_r_adj = r_to_c_adj.t()
@@ -129,23 +133,23 @@ class SWGDataset(Dataset):
         c_to_a_adj = a_to_c_adj.t()
 
         # Total
-        total_n = x_n + c_n + a_n # 10115
+        total_n = r_n + c_n + a_n # 10115
 
         adj_matrix = torch.zeros((total_n, total_n), dtype=torch.float)
         # First layer
-        adj_matrix[0:x_n, 0:x_n] = r_to_r_adj
-        adj_matrix[0:x_n, x_n:x_n+a_n] = r_to_a_adj
-        adj_matrix[0:x_n, x_n+a_n:total_n] = r_to_c_adj
+        adj_matrix[0:r_n, 0:r_n] = r_to_r_adj
+        adj_matrix[0:r_n, r_n:r_n+a_n] = r_to_a_adj
+        adj_matrix[0:r_n, r_n+a_n:total_n] = r_to_c_adj
 
         # Second layer
-        adj_matrix[x_n:x_n+a_n, 0:x_n] = a_to_r_adj
-        adj_matrix[x_n:x_n+a_n, x_n:x_n+a_n] = a_to_a_adj
-        adj_matrix[x_n:x_n+a_n, x_n+a_n:total_n] = a_to_c_adj
+        adj_matrix[r_n:r_n+a_n, 0:r_n] = a_to_r_adj
+        adj_matrix[r_n:r_n+a_n, r_n:r_n+a_n] = a_to_a_adj
+        adj_matrix[r_n:r_n+a_n, r_n+a_n:total_n] = a_to_c_adj
 
         # Third layer
-        adj_matrix[x_n+a_n:total_n, 0:x_n] = c_to_r_adj
-        adj_matrix[x_n+a_n:total_n, x_n:x_n+a_n] = c_to_a_adj
-        adj_matrix[x_n+a_n:total_n, x_n+a_n:total_n] = c_to_c_adj
+        adj_matrix[r_n+a_n:total_n, 0:r_n] = c_to_r_adj
+        adj_matrix[r_n+a_n:total_n, r_n:r_n+a_n] = c_to_a_adj
+        adj_matrix[r_n+a_n:total_n, r_n+a_n:total_n] = c_to_c_adj
 
         adj_matrix_np = adj_matrix.numpy()
         self.adjM = adj_matrix_np
@@ -157,7 +161,7 @@ class SWGDataset(Dataset):
         np.save('adjM.npy', self.adjM, allow_pickle=False) 
 
     def create_zip(self):
-        with zipfile.ZipFile(f'SWGD_{self.city.replace(" ","-")}-{self.area.replace(" ","-")}.zip',
+        with zipfile.ZipFile(f'SWGD_{self.city.replace(" ","-")}.zip',
                              'w', compression=zipfile.ZIP_DEFLATED) as zipf:
             zipf.write('adjM.npy')
             zipf.write('features_0.npz')
@@ -177,10 +181,9 @@ class SWGDataset(Dataset):
 
 def main():
     csv_path = './restaurant.csv'
-    city = 'mumbai'
-    area = 'powai'
+    city = 'delhi'
 
-    dataset = SWGDataset(csv_path, city, area)
+    dataset = SWGDataset(csv_path, city)
     dataset.create_features()
     dataset.create_adjacency()
     dataset.create_zip()
