@@ -31,6 +31,9 @@ class SWGDataset(InMemoryDataset):
             self.url = 'https://www.dropbox.com/scl/fi/yunjx1gqni33lonymnk1u/SWGD_mumbai-powai.zip?rlkey=m7oa6092f4cpfo8rmwb1vdg0o&st=zopltm43&dl=1'
         elif partition_id == 1:
             self.url = 'https://www.dropbox.com/scl/fi/pi0u8bd94upmxn4qhnty8/SWGD_mumbai-santacruz-east.zip?rlkey=5e8ostffn0s8ve3rqqag1irw4&st=4aj7c48z&dl=1'
+        else:
+            self.url = 'https://www.dropbox.com/scl/fi/0j9injxqgw12n0u7cfuk3/SWGD_mumbai.zip?rlkey=kacx2y4j8m8ohnzc3o2fcr1im&st=ggx6g06q&dl=1'
+
         super().__init__(root, transform, pre_transform,
                          force_reload=force_reload)
         self.load(self.processed_paths[0], data_cls=HeteroData)
@@ -109,7 +112,7 @@ def main():
     path = osp.join(osp.dirname(osp.realpath(__file__)), '')
 
     # Create dataset instance
-    dataset = SWGDataset(path, 1)
+    dataset = SWGDataset(path, 3)
     print(f"dataset.data['restaurant', 'area']:{dataset.data['restaurant', 'area'].num_edge_features}")
     print(f"dataset.data['area', 'restaurant']:{dataset.data['area', 'restaurant'].num_edge_features}")
     print(f"dataset.data = {dataset.data}")
@@ -120,11 +123,7 @@ def main():
         neg_sampling_ratio=0.0,
         edge_types=[('restaurant', 'to', 'restaurant'),
                     ('restaurant', 'to', 'area'),
-                    ('restaurant', 'to', 'customer'),
-                    ('area', 'to', 'restaurant'),
-                    ('area', 'to', 'customer'),
-                    ('customer', 'to', 'restaurant'),
-                    ('customer', 'to', 'area')]
+                    ('area', 'to', 'restaurant')]
     )
 
     train_data, val_data, test_data = transform(dataset.data)

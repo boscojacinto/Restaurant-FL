@@ -41,7 +41,7 @@ class SWG(torch.nn.Module):
 def main():
     path = osp.join(osp.dirname(osp.realpath(__file__)), '')
     # We initialize conference node features with a single one-vector as feature:
-    dataset = SWGDataset(path, 0)
+    dataset = SWGDataset(path, 3)
     #data = dataset[0]
     transform = RandomLinkSplit(
         num_val=0.1,
