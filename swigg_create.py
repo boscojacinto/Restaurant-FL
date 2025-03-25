@@ -33,6 +33,7 @@ class SWGDataset(Dataset):
         keys = np.unique(self.data['Area'].astype(str).str.lower())
         vals = torch.rand((keys.size, 1), dtype=torch.float).tolist()
         self.area_labels = dict(zip(keys, vals))
+        print(f"self.area_labels:{self.area_labels}")
 
         i = 0
         areas_df = {}
@@ -75,7 +76,7 @@ class SWGDataset(Dataset):
         sp.sparse.save_npz('features_0.npz', self.features_0)
 
         # Area features
-        x = self.f_a.numpy()
+        x = self.a.numpy()
         rows, cols = np.nonzero(x)
         values = x[rows, cols]
         self.features_1 = coo_matrix((values, (rows, cols)), shape=x.shape)

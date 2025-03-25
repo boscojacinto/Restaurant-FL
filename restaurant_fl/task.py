@@ -18,7 +18,7 @@ import os
 import sys
 from torch_geometric.transforms import RandomLinkSplit, ToUndirected
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../'))
-from swigg_db import SWGDataset
+from swigg_db_local import SWGDatasetLocal
 from swigg_ml import SWG
 import torch.nn.functional as F
 import numpy as np
@@ -31,7 +31,7 @@ def load_data(partition_id: int, num_partitions: int, model_name: str) -> tuple[
 	global fds
 	if fds is None:
 		path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../')
-		dataset = SWGDataset(path, 4)
+		dataset = SWGDatasetLocal(path, partition_id)
 		fds = dataset.data 
 
 	transform = RandomLinkSplit(

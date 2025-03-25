@@ -32,7 +32,7 @@ class SWGDataset(InMemoryDataset):
         elif partition_id == 1:
             self.url = 'https://www.dropbox.com/scl/fi/pi0u8bd94upmxn4qhnty8/SWGD_mumbai-santacruz-east.zip?rlkey=5e8ostffn0s8ve3rqqag1irw4&st=4aj7c48z&dl=1'
         else:
-            self.url = 'https://www.dropbox.com/scl/fi/0j9injxqgw12n0u7cfuk3/SWGD_mumbai.zip?rlkey=kacx2y4j8m8ohnzc3o2fcr1im&st=ggx6g06q&dl=1'
+            self.url = 'https://www.dropbox.com/scl/fi/9y4rdq0o19ii1qr3evbma/SWGD_mumbai.zip?rlkey=u5dm6p1qe5ed8g841qilqz3wq&st=zig2l9xw&dl=1'
 
         super().__init__(root, transform, pre_transform,
                          force_reload=force_reload)
@@ -67,14 +67,6 @@ class SWGDataset(InMemoryDataset):
         y = np.load(osp.join(self.raw_dir, 'labels.npy'))
         data['restaurant'].y = torch.from_numpy(y).to(torch.long)
 
-        # split = np.load(osp.join(self.raw_dir, 'train_val_test_idx.npz'))
-        # for name in ['train', 'val', 'test']:
-        #     idx = split[f'{name}_idx']
-        #     idx = torch.from_numpy(idx).to(torch.long)
-        #     mask = torch.zeros(data['restaurant'].num_nodes, dtype=torch.bool)
-        #     mask[idx] = True
-        #     data['restaurant'][f'{name}_mask'] = mask
-
         s = {}
         N_r = data['restaurant'].num_nodes
         N_a = data['area'].num_nodes
@@ -102,6 +94,7 @@ class SWGDataset(InMemoryDataset):
         if self.pre_transform is not None:
             data = self.pre_transform(data)
 
+        print(f"\nstores: \n{data.stores}")
         self.save([data], self.processed_paths[0])
 
     def __repr__(self) -> str:
