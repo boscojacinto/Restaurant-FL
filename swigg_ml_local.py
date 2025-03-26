@@ -10,7 +10,7 @@ from torch_geometric.transforms import RandomLinkSplit, ToUndirected
 import networkx as nx
 import matplotlib.pyplot as plt
 
-from swigg_db import SWGDataset
+from swigg_db_local import SWGDatasetLocal
 
 class SWG(torch.nn.Module):
     def __init__(self, hidden_channels, out_channels, num_heads, num_layers, node_types, metadata):
@@ -41,7 +41,7 @@ class SWG(torch.nn.Module):
 def main():
     path = osp.join(osp.dirname(osp.realpath(__file__)), '')
     # We initialize conference node features with a single one-vector as feature:
-    dataset = SWGDataset(path, 0, force_reload=True)
+    dataset = SWGDatasetLocal(path, 0, force_reload=True)
 
     print(f"dataset:{dataset.data}")
     transform = RandomLinkSplit(
@@ -65,6 +65,8 @@ def main():
     val_data = val_data.to(device)
     test_data = test_data.to(device)
     model = model.to(device)
+    model.load_state_dict(torch.load('swg_state_global.pth'))
+    print(f"\nModel state loaded")
 
     with torch.no_grad():  # Initialize lazy modules.
         out = model(train_data.x_dict, train_data.edge_index_dict)
@@ -100,13 +102,11 @@ def main():
         loss = F.cross_entropy(out, train_data['restaurant'].y)
         return acc, loss
 
-    for epoch in range(1, 6):
+    for epoch in range(1, 18):
         train()
         acc, loss = test()
         print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Acc(train): {acc[0]:.4f}, \n'
                 f'Acc(val): {acc[1]:.4f}, Acc(test): {acc[2]:.4f}')
-
-    torch.save(model.state_dict(), 'swg_state_global.pth')
 
 if __name__ == "__main__":
     main()

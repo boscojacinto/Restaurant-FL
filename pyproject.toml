@@ -31,7 +31,7 @@ serverapp = "restaurant_fl.server_app:app"
 clientapp = "restaurant_fl.client_app:app"
 
 [tool.flwr.app.config]
-num-server-rounds = 10
+num-server-rounds = 1
 model-name = "swigg/hgt-small-v1.0-restaurants-pred"
 fraction-fit = 1.0
 fraction-evaluate = 1.0
@@ -40,9 +40,9 @@ fraction-evaluate = 1.0
 default = "local-simulation"
 
 [tool.flwr.federations.local-simulation]
-options.num-supernodes = 1
+options.num-supernodes = 6
 
 [tool.flwr.federations.local-simulation-gpu]
-options.num-supernodes = 1
+options.num-supernodes = 6
 options.backend.client-resources.num-cpus = 4 # each ClientApp assumes to use 4CPUs
 options.backend.client-resources.num-gpus = 0.25 # at most 4 ClientApp will run in a given GPU (lower it to increase parallelism)

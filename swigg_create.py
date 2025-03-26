@@ -33,7 +33,6 @@ class SWGDataset(Dataset):
         keys = np.unique(self.data['Area'].astype(str).str.lower())
         vals = torch.rand((keys.size, 1), dtype=torch.float).tolist()
         self.area_labels = dict(zip(keys, vals))
-        print(f"self.area_labels:{self.area_labels}")
 
         i = 0
         areas_df = {}
@@ -123,7 +122,7 @@ class SWGDataset(Dataset):
         # Restuarant to Area
         r_col = self.f_r[:, -1]
         a_col = self.f_a[:, -1]
-        
+
         rows = []
         cols = []
         values = []
@@ -135,6 +134,7 @@ class SWGDataset(Dataset):
                         if a_v == v[0]:
                             rows.append(r)
                             cols.append(i)
+                            print(f"r:{r}, a{i}, v:{v[0]}")
                             values.append(v[0])
                             break
 

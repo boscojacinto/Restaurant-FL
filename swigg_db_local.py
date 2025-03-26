@@ -19,7 +19,7 @@ from torch_geometric.data import (
 
 class SWGDatasetLocal(InMemoryDataset): 
     
-    url = 'https://www.dropbox.com/scl/fi/2w4rea25rs7bdl17z4tpf/data.pt?rlkey=1ziqessubooxp3w30aagzo496&st=pqslqdwq&dl=1'
+    url = 'https://www.dropbox.com/scl/fi/2w4rea25rs7bdl17z4tpf/data.pt?rlkey=1ziqessubooxp3w30aagzo496&st=4vgo8iai&dl=1'
     partition_id = 0
 
     def __init__(
@@ -42,13 +42,13 @@ class SWGDatasetLocal(InMemoryDataset):
 
     @property
     def processed_file_names(self) -> str:
-        return 'localdata.pt'
+        return ['localdata.pt']
 
     def download(self) -> None:
         path = download_url(self.url, self.raw_dir)
     
     def process(self) -> None:
-                 
+            
         self.load(os.path.join(self.raw_dir, 'data.pt'), data_cls=HeteroData)
 
         r_to_a_edge = self.data.edge_items()[1]
@@ -61,7 +61,8 @@ class SWGDatasetLocal(InMemoryDataset):
         area_attrs = edge['edge_attr']
         restaurants = edge['edge_index']
 
-        mask = torch.abs(area_attrs - local_area_attr) < 0.01
+        #mask = torch.abs(area_attrs - local_area_attr) < 0.01
+        mask = (restaurants[1] == restaurants[1][self.partition_id]) 
         local_area_attrs = area_attrs[mask]
         edge_mask = torch.stack([mask, mask], dim=0)
         local_restaurants = restaurants[edge_mask].reshape(2, -1)
@@ -109,20 +110,24 @@ def main():
     path = osp.join(osp.dirname(osp.realpath(__file__)), '')
 
     # Create dataset instance
-    dataset = SWGDatasetLocal(path, 3)
+    dataset = SWGDatasetLocal(path, 1, force_reload=True)
 
     transform = RandomLinkSplit(
-        num_val=0.05,
-        num_test=0.1,
+        num_val=0.1,
+        num_test=0.2,
         neg_sampling_ratio=0.0,
         edge_types=[('restaurant', 'to', 'restaurant'),
                     ('restaurant', 'to', 'area'),
-                    ('area', 'to', 'restaurant'),
                     ('restaurant', 'to', 'customer'),
-                    ('customer', 'to', 'restaurant')]
+                    ('customer', 'to', 'restaurant')
+                    ]
     )
 
     train_data, val_data, test_data = transform(dataset.data)
+    print(f"\ndataset.data:{dataset.data}")
+    print(f"\ntrain_data:{train_data}")
+    print(f"\nval_data:{val_data}")
+    print(f"\ntest_data:{test_data}")
 
     
 if __name__ == "__main__":

@@ -24,30 +24,30 @@ import torch.nn.functional as F
 import numpy as np
 
 disable_progress_bar()
-fds = None
+#fds = None
 
 def load_data(partition_id: int, num_partitions: int, model_name: str) -> tuple[DataLoader[Any], DataLoader[Any]]:
 	
-	global fds
-	if fds is None:
-		path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../')
-		dataset = SWGDatasetLocal(path, partition_id)
-		fds = dataset.data 
+	#global fds
+	#if fds is None:
+
+	path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../')
+	dataset = SWGDatasetLocal(path, partition_id, force_reload=True)
+	fds = dataset.data 
 
 	transform = RandomLinkSplit(
 		num_val=0.1,
 		num_test=0.2,
 		neg_sampling_ratio=0.0,
-		edge_types=[('restaurant', 'to', 'restaurant'),
-					('restaurant', 'to', 'area'),
-					('restaurant', 'to', 'customer'),
-					('area', 'to', 'restaurant'),
-					('area', 'to', 'customer'),
-					('customer', 'to', 'restaurant'),
-					('customer', 'to', 'area')]
+        edge_types=[('restaurant', 'to', 'restaurant'),
+                    ('restaurant', 'to', 'area'),
+                    ('restaurant', 'to', 'customer'),
+                    ('customer', 'to', 'restaurant')
+                    ]
 	)
 
 	trainloader, valloader, testloader = transform(fds)
+
 	return fds, trainloader, testloader
 
 def get_model(model_name, metadata):
@@ -58,7 +58,6 @@ def get_params(model):
 	return [val.cpu().numpy() for _, val in model.state_dict().items()]
 
 def set_params(model, parameters) -> None:
-	#pass
 	params_dict = zip(model.state_dict().keys(), parameters)
 	state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
 	model.load_state_dict(state_dict, strict=True)

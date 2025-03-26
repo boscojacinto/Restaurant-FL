@@ -27,12 +27,12 @@ class SWGDataset(InMemoryDataset):
         pre_transform: Optional[Callable] = None,
         force_reload: bool = False,
     ) -> None:
-        if partition_id == 0:
-            self.url = 'https://www.dropbox.com/scl/fi/yunjx1gqni33lonymnk1u/SWGD_mumbai-powai.zip?rlkey=m7oa6092f4cpfo8rmwb1vdg0o&st=zopltm43&dl=1'
-        elif partition_id == 1:
-            self.url = 'https://www.dropbox.com/scl/fi/pi0u8bd94upmxn4qhnty8/SWGD_mumbai-santacruz-east.zip?rlkey=5e8ostffn0s8ve3rqqag1irw4&st=4aj7c48z&dl=1'
-        else:
-            self.url = 'https://www.dropbox.com/scl/fi/9y4rdq0o19ii1qr3evbma/SWGD_mumbai.zip?rlkey=u5dm6p1qe5ed8g841qilqz3wq&st=zig2l9xw&dl=1'
+        # if partition_id == 0:
+        #     self.url = 'https://www.dropbox.com/scl/fi/yunjx1gqni33lonymnk1u/SWGD_mumbai-powai.zip?rlkey=m7oa6092f4cpfo8rmwb1vdg0o&st=zopltm43&dl=1'
+        # elif partition_id == 1:
+        #     self.url = 'https://www.dropbox.com/scl/fi/pi0u8bd94upmxn4qhnty8/SWGD_mumbai-santacruz-east.zip?rlkey=5e8ostffn0s8ve3rqqag1irw4&st=4aj7c48z&dl=1'
+        # else:
+        self.url = 'https://www.dropbox.com/scl/fi/9y4rdq0o19ii1qr3evbma/SWGD_mumbai.zip?rlkey=u5dm6p1qe5ed8g841qilqz3wq&st=07v5rlha&dl=1'
 
         super().__init__(root, transform, pre_transform,
                          force_reload=force_reload)
@@ -82,6 +82,7 @@ class SWGDataset(InMemoryDataset):
         i = 0
         for src, dst in product(node_types, node_types):
             A_sub = sp.coo_matrix(A[s[src][0]:s[src][1], s[dst][0]:s[dst][1]])
+            data[src, dst].edge_index = torch.empty(2, 0, dtype=torch.int64)
             if A_sub.nnz > 0:
                 row = torch.from_numpy(A_sub.row).to(torch.long)
                 col = torch.from_numpy(A_sub.col).to(torch.long)
@@ -94,7 +95,6 @@ class SWGDataset(InMemoryDataset):
         if self.pre_transform is not None:
             data = self.pre_transform(data)
 
-        print(f"\nstores: \n{data.stores}")
         self.save([data], self.processed_paths[0])
 
     def __repr__(self) -> str:
@@ -116,7 +116,10 @@ def main():
         neg_sampling_ratio=0.0,
         edge_types=[('restaurant', 'to', 'restaurant'),
                     ('restaurant', 'to', 'area'),
-                    ('area', 'to', 'restaurant')]
+                    ('restaurant', 'to', 'customer'),
+                    ('area', 'to', 'customer'),
+                    ('customer', 'to', 'restaurant'),
+                    ('customer', 'to', 'area')]
     )
 
     train_data, val_data, test_data = transform(dataset.data)

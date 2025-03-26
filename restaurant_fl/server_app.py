@@ -1,3 +1,4 @@
+import torch
 from typing import List, Tuple, Union, Optional, Dict, Callable
 from flwr.server import ServerApp, ServerAppComponents, ServerConfig
 from flwr.server.strategy import FedAvg
@@ -16,24 +17,39 @@ from flwr.common import (
     parameters_to_ndarrays,
 )
 from flwr.common.logger import log
-
 from restaurant_fl.task import get_params, get_model
+
+global_metadata = (['restaurant', 'area', 'customer'],
+				   [('restaurant', 'to', 'restaurant'),
+				    ('restaurant', 'to', 'area'),
+				    ('restaurant', 'to', 'customer'),
+				    ('area', 'to', 'restaurant'),
+				    ('area', 'to', 'area'),
+				    ('area', 'to', 'customer'),
+				    ('customer', 'to', 'restaurant'),
+				    ('customer', 'to', 'area'),
+				    ('customer', 'to', 'customer')
+				   ])
+
+def get_global_model(model_name, metadata):
+	model = get_model(model_name, metadata)
+	model.load_state_dict(torch.load('swg_state_global.pth'))
+	return model
 
 def server_fn(context: Context) -> ServerAppComponents:
 	num_rounds = context.run_config["num-server-rounds"]
 	config = ServerConfig(num_rounds=num_rounds)
 
 	model_name = context.run_config["model-name"]
-	# ndarrays = get_params(get_model(model_name, metadata=ds.metadata()))
-	# print(f"\n\n:ndarrays\n{ndarrays}")
-	# global_model_init = ndarrays_to_parameters(ndarrays)
+	ndarrays = get_params(get_global_model(model_name, metadata=global_metadata))
+	global_model_init = ndarrays_to_parameters(ndarrays)
 
 	fraction_fit = context.run_config["fraction-fit"]
 	fraction_evaluate = context.run_config["fraction-evaluate"]
 	strategy = FedAvg(
 		fraction_fit=fraction_fit,
 		fraction_evaluate=fraction_evaluate,
-		#initial_parameters=global_model_init,
+		initial_parameters=global_model_init,
 	)
 
 	return ServerAppComponents(config=config, strategy=strategy)

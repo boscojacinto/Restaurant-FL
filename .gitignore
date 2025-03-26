@@ -1,5 +1,5 @@
 venv/
-restaurant_fl/__pycache__/
+restaurant_fl/__pycache__
 raw/
 processed/
-__pycache__/
+__pycache__
