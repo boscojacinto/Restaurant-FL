@@ -50,7 +50,7 @@ class SWGDataset(Dataset):
             lambda x: next((val[0] for addr, val in self.address_labels[x['Area'].lower()].items() if addr == x['Address'].lower()), 0.0),
             axis=1
         ).astype(float)
-        print(f"self.data['Address']:{self.data['Address']}")
+        #print(f"self.data['Address']:{self.data['Address']}")
 
         self.data['Area'] = self.data['Area'].str.lower().apply(
             lambda x: next((v[0] for k, v in self.area_labels.items() if k == x), 0.0)
@@ -134,7 +134,7 @@ class SWGDataset(Dataset):
                         if a_v == v[0]:
                             rows.append(r)
                             cols.append(i)
-                            print(f"r:{r}, a{i}, v:{v[0]}")
+                            print(f"r:{r}, a:{i}, v:{v[0]}")
                             values.append(v[0])
                             break
 

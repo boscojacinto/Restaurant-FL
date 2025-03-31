@@ -32,7 +32,7 @@ class SWGDataset(InMemoryDataset):
         # elif partition_id == 1:
         #     self.url = 'https://www.dropbox.com/scl/fi/pi0u8bd94upmxn4qhnty8/SWGD_mumbai-santacruz-east.zip?rlkey=5e8ostffn0s8ve3rqqag1irw4&st=4aj7c48z&dl=1'
         # else:
-        self.url = 'https://www.dropbox.com/scl/fi/9y4rdq0o19ii1qr3evbma/SWGD_mumbai.zip?rlkey=u5dm6p1qe5ed8g841qilqz3wq&st=07v5rlha&dl=1'
+        self.url = 'https://www.dropbox.com/scl/fi/9y4rdq0o19ii1qr3evbma/SWGD_mumbai.zip?rlkey=u5dm6p1qe5ed8g841qilqz3wq&st=j9jb0vti&dl=1'
 
         super().__init__(root, transform, pre_transform,
                          force_reload=force_reload)
@@ -110,20 +110,20 @@ def main():
     print(f"dataset.data['area', 'restaurant']:{dataset.data['area', 'restaurant'].num_edge_features}")
     print(f"dataset.data = {dataset.data}")
 
-    transform = RandomLinkSplit(
-        num_val=0.05,
-        num_test=0.1,
-        neg_sampling_ratio=0.0,
-        edge_types=[('restaurant', 'to', 'restaurant'),
-                    ('restaurant', 'to', 'area'),
-                    ('restaurant', 'to', 'customer'),
-                    ('area', 'to', 'customer'),
-                    ('customer', 'to', 'restaurant'),
-                    ('customer', 'to', 'area')]
-    )
+    # transform = RandomLinkSplit(
+    #     num_val=0.05,
+    #     num_test=0.1,
+    #     neg_sampling_ratio=0.0,
+    #     edge_types=[('restaurant', 'to', 'restaurant'),
+    #                 ('restaurant', 'to', 'area'),
+    #                 ('restaurant', 'to', 'customer'),
+    #                 ('area', 'to', 'customer'),
+    #                 ('customer', 'to', 'restaurant'),
+    #                 ('customer', 'to', 'area')]
+    # )
 
-    train_data, val_data, test_data = transform(dataset.data)
-    print(f"test_datalen:{len(test_data['restaurant'].y)}")
+    # train_data, val_data, test_data = transform(dataset.data)
+    # print(f"test_datalen:{len(test_data['restaurant'].y)}")
 
     # Create a simple graph  
     # G = to_networkx(dataset.data, node_attrs=['x'])
