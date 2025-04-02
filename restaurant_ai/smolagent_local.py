@@ -1,4 +1,4 @@
-from smolagents import CodeAgent, OpenAIServerModel, DuckDuckGoSearchTool, FinalAnswerTool, HfApiModel, load_tool, tool
+from smolagents import CodeAgent, ToolCallingAgent, OpenAIServerModel, DuckDuckGoSearchTool, FinalAnswerTool, HfApiModel, load_tool, tool
 import datetime
 import requests
 import pytz
@@ -29,10 +29,33 @@ def get_current_time_in_timezone(timezone: str) -> str:
     except Exception as e:
         return f"Error fetching time for timezone '{timezone}': {str(e)}"
 
+@tool
+def suggest_menu(occasion: str) -> str:
+	"""
+	Suggests a menu based on the occasion.
+	Args:
+		occasion (str): The type of occasion for the party. Allowed values are:
+						- "casual": Menu for casual party
+						- "formal": Menu for formal party
+						- "superhero": Menu for superhero party
+						- "custom": Custom menu
+	"""
+
+	if occasion == "casual":
+		return "Pizza, snacks and drinks."
+	elif occasion == "formal":
+		return "3-course dinner with wine and dessert."
+	elif occasion == "superhero":
+		return "Buffet with high energy and healthy food."
+	else:
+		return "Custom menu for the butler."
+
+
 final_answer = FinalAnswerTool()
+duckduck_tool = DuckDuckGoSearchTool()
 
 model = OpenAIServerModel(
-			model_id="Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF",
+			model_id="Triangle104/Dans-PersonalityEngine-v1.0.0-8b-Q4_K_M-GGUF",
 			api_base="http://127.0.0.1:5000/v1",
 			api_key="sk-no-key-required",
 			max_tokens=2096,
@@ -45,7 +68,7 @@ with open("prompts.yaml", 'r') as stream:
 
 agent = CodeAgent(
 		model=model,
-		tools=[final_answer, get_current_time_in_timezone],
+		tools=[final_answer, DuckDuckGoSearchTool()],
 		max_steps=6,
 		verbosity_level=2,
 		grammar=None,
@@ -55,4 +78,7 @@ agent = CodeAgent(
 		prompt_templates=prompt_templates
 
 )
-agent.run("What is the current time in New York")
+
+#agent.run("What is the current time in New York")
+agent.run("Search for the best music recommendations for a party at the Wayne's mansion.")
+#agent.run("Prepare a formal menu for the party.")
