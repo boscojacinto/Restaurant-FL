@@ -55,7 +55,7 @@ final_answer = FinalAnswerTool()
 duckduck_tool = DuckDuckGoSearchTool()
 
 model = OpenAIServerModel(
-			model_id="Triangle104/Dans-PersonalityEngine-v1.0.0-8b-Q4_K_M-GGUF",
+			model_id="PowerInfer/SmallThinker-3B-Preview",
 			api_base="http://127.0.0.1:5000/v1",
 			api_key="sk-no-key-required",
 			max_tokens=2096,
