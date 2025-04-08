@@ -82,24 +82,27 @@ def main():
 	status_go.CallPrivateRPC.argtypes = [ctypes.c_char_p]
 	status_go.CallPrivateRPC.restype = ctypes.c_char_p
 
-	signal_client = SignalClient("ws://127.0.0.1:39325/signals")
+	signal_client = SignalClient("ws://127.0.0.1:33327/signals")
 	signal_client.start()
 	time.sleep(2)
 
 	data = {
-	"dataDir": "/tmp",
+	"dataDir": "./",
 	"mixpanelAppId": "",
 	"mixpanelToken": "",
 	"mediaServerEnableTLS": False,
 	"sentryDSN": "",
-	"logDir": "/tmp",
+	"logDir": "./",
 	"logEnabled": True,
 	"logLevel": "INFO",
 	"apiLoggingEnabled": True,
 	"metricsEnabled": True,
 	"metricsAddress": "",
-	"deviceName": "restaurant-pc",
-	"rootDataDir": "/tmp",
+	"deviceName": "restaurant-pc-7",
+	"rootDataDir": "./",
+	"wakuV2LightClient": False,
+	"wakuV2EnableMissingMessageVerification": True,
+	"wakuV2EnableStoreConfirmationForMessagesSent": True,
 	}
 	payload = json.dumps(data).encode('utf-8')	
 
@@ -109,9 +112,9 @@ def main():
 	time.sleep(5)
 
 	data = {'rootDataDir': './', 'kdfIterations': 256,
-			'deviceName': 'restaurant-pc', 'displayName': 'Restaurant2',
-			'password': 'swigg@123', "customizationColor":"blue",
-			'wakuV2Nameserver':'8.8.8.8', 'wakuV2Fleet':'status.staging'}
+			'deviceName': 'restaurant-pc-7', 'displayName': 'Restaurant7',
+			'password': 'swigg4@1234', "customizationColor":"blue",
+			'wakuV2Nameserver':'8.8.8.8', 'wakuV2Fleet':'status.prod'}
 
 	payload = json.dumps(data).encode('utf-8')	
 
@@ -120,19 +123,18 @@ def main():
 	print(f"CreateAccountAndLogin:{response}")
 	time.sleep(5)
 
+	data = {
+	"password": "swigg4@1234",
+	"keyUid": "0x0c0bff93b4c526a4d70c72b47096734795fae99cd94ad23b4bf22ef5f67e3b40",
+	"wakuV2Nameserver": "8.8.8.8",
+	"wakuV2Fleet": "status.prod"
+	}
+	payload = json.dumps(data).encode('utf-8')	
 
-	# data = {
-	# "password": "swigg@123",
-	# "keyUid": "0x64e12dbab591fd645628cba157ddaf771724960978b69268e28f035ad39b2388",
-	# "wakuV2Nameserver": "8.8.8.8",
-	# "wakuV2Fleet": "status.staging"
-	# }
-	# payload = json.dumps(data).encode('utf-8')	
-
-	# response = status_go.LoginAccount(payload)
-	# response = json.loads(response)
-	# print(f"LoginAccount:{response}")
-	# time.sleep(5)
+	response = status_go.LoginAccount(payload)
+	response = json.loads(response)
+	print(f"LoginAccount:{response}")
+	time.sleep(5)
 
 	data = {
 	"method": "wakuext_startMessenger",
@@ -142,19 +144,53 @@ def main():
 
 	response = status_go.CallRPC(payload)
 	response = json.loads(response)
-	print(response)
+	print(f"wakuext_startMessenge:{response}")
+	time.sleep(5)
 
+	data = {
+	"method": "wakuext_sendContactRequest",
+	"params": [
+		{
+			"id": "0x04c13e582c51cfd8185079b3136f7ce007683a3068788e09234069dda6e0dfc1040ca0308aa8948475f2f73ff1900ca4d2f36d46a484239731413d89dda84b2f6b",
+			"message": "Hi, Pop",
+		}
+	]	
+	}
+	payload = json.dumps(data).encode('utf-8')	
+	response = status_go.CallPrivateRPC(payload)
+	response = json.loads(response)
+	print(f"wakuext_sendContactRequest:{response}")
+	time.sleep(5)
 
-	# data = {
-	# "communityId": "",
-	# "chatId": "123",
-	# "ensName": ""
-	# }
-	# payload = json.dumps(data).encode('utf-8')	
+	data = {
+	"method": "chat_createOneToOneChat",
+	"params": [
+		"",
+		"0x04c13e582c51cfd8185079b3136f7ce007683a3068788e09234069dda6e0dfc1040ca0308aa8948475f2f73ff1900ca4d2f36d46a484239731413d89dda84b2f6b",
+		""
+	]	
+	}
+	payload = json.dumps(data).encode('utf-8')	
+	response = status_go.CallPrivateRPC(payload)
+	response = json.loads(response)
+	print(f"chat_createOneToOneChat:{response}")
+	time.sleep(5)
 
-	# response = status_go.CallPrivateRPC(payload)
-	# response = json.loads(response)
-	# print(f"CallPrivateRPC:{response}")
+	data = {
+	"method": "wakuext_sendChatMessage",
+	"params": [
+		{
+			"chatId": "0x04c13e582c51cfd8185079b3136f7ce007683a3068788e09234069dda6e0dfc1040ca0308aa8948475f2f73ff1900ca4d2f36d46a484239731413d89dda84b2f6b",
+			"text": "Hope it was not too smelly!",
+			"contentType": 1
+		}
+	]	
+	}
+	payload = json.dumps(data).encode('utf-8')	
+
+	response = status_go.CallPrivateRPC(payload)
+	response = json.loads(response)
+	print(f"wakuext_sendChatMessage:{response}")
 
 	time.sleep(100000000)
 
