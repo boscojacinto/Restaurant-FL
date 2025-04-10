@@ -5,12 +5,12 @@ import queue
 import ctypes
 import asyncio
 import requests
-import websocket
 import threading
 import multiprocessing
 from ctypes import CDLL
 from ollama import chat, generate, ChatResponse, AsyncClient
 from flwr.client.supernode.app import run_supernode
+import flwr
 
 status_go = None
 status_cb = None
@@ -61,7 +61,7 @@ class StatusClient:
     	response = self.lib.LoginAccount(payload)
     	print(f"\nLogin:\n{response}")
 
-    	time.sleep(1)
+    	time.sleep(2)
 
     	data = {"method": "wakuext_startMessenger", "params": []}
     	payload = json.dumps(data).encode('utf-8')
@@ -184,12 +184,31 @@ class AIClient:
 			self.thread.join()
 		print("AI client stopped")
 
+class FLClient:
+	def __init__(self):
+		self.started = False
+		self.thread = None
+
+	def run(self):
+		run_supernode()
+
+	def start(self):
+		self.thread = threading.Thread(target=self.run)
+		self.started = True
+		self.thread.start()
+
+
 def main():
 	global status_go
 	global ai_client
 	global status_client
 
 	status_go = CDLL("./restaurant_status/libstatus.so.0")
+
+	fl_client = FLClient()
+	time.sleep(4)
+	fl_client.start()
+
 	status_client = StatusClient(root="./")
 	ai_client = AIClient("swigg-gemma3:1b")
 
@@ -208,8 +227,8 @@ def main():
 	status_client.createOneToOneChat("0x04c13e582c51cfd8185079b3136f7ce007683a3068788e09234069dda6e0dfc1040ca0308aa8948475f2f73ff1900ca4d2f36d46a484239731413d89dda84b2f6b")
 	time.sleep(1)
 
-	status_client.sendChatMessage("0x04c13e582c51cfd8185079b3136f7ce007683a3068788e09234069dda6e0dfc1040ca0308aa8948475f2f73ff1900ca4d2f36d46a484239731413d89dda84b2f6b", "HI! I am your firendly restaurant bot")
-	time.sleep(0.2)
+	# status_client.sendChatMessage("0x04c13e582c51cfd8185079b3136f7ce007683a3068788e09234069dda6e0dfc1040ca0308aa8948475f2f73ff1900ca4d2f36d46a484239731413d89dda84b2f6b", "HI! I am your firendly restaurant bot")
+	# time.sleep(0.2)
 
 	status_client.start()
 
