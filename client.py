@@ -19,10 +19,10 @@ status_client = None
 fl_client_1 = None
 fl_client_2 = None
 STATUS_BACKEND_PORT = 0
-STATUS_BACKEND_BIN = "./restaurant_status/lib/status-backend"
-STATUS_GO_LIB = "./restaurant_status/lib/libstatus.so.0"
+STATUS_BACKEND_BIN = "./restaurant_status/libs/status-backend"
+STATUS_GO_LIB = "./restaurant_status/libs/libstatus.so.0"
 
-AI_MODEL = "swigg-gemma3:1b"
+AI_MODEL = "swigg1.0-gemma3:1b"
 customer_id = "0x04c13e582c51cfd8185079b3136f7ce007683a3068788e09234069dda6e0dfc1040ca0308aa8948475f2f73ff1900ca4d2f36d46a484239731413d89dda84b2f6b" # customer public key
 RESTAURANT_UID = "0xdc9e9199cee1b4686864450961848ca39420931d56080baa2ba196283dfc2682"
 RESTAURANT_PASSWORD = "swigg@12345"
