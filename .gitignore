@@ -4,3 +4,11 @@ raw/
 processed/
 __pycache__
 restaurant_status/node_modules
+ethereum/
+keystore/
+api.log
+pre_login.log
+accounts.*
+*.db
+*.db-shm
+*.db-wal

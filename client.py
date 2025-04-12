@@ -6,16 +6,28 @@ import ctypes
 import asyncio
 import requests
 import threading
+from subprocess import Popen, PIPE 
 import multiprocessing
 from ctypes import CDLL
 from ollama import chat, generate, ChatResponse, AsyncClient
 from flwr.client.supernode.app import run_supernode
-import flwr
 
 status_go = None
 status_cb = None
 ai_client = None
 status_client = None
+fl_client_1 = None
+fl_client_2 = None
+STATUS_BACKEND_PORT = 0
+STATUS_BACKEND_BIN = "./restaurant_status/lib/status-backend"
+STATUS_GO_LIB = "./restaurant_status/lib/libstatus.so.0"
+
+AI_MODEL = "swigg-gemma3:1b"
+customer_id = "0x04c13e582c51cfd8185079b3136f7ce007683a3068788e09234069dda6e0dfc1040ca0308aa8948475f2f73ff1900ca4d2f36d46a484239731413d89dda84b2f6b" # customer public key
+RESTAURANT_UID = "0xdc9e9199cee1b4686864450961848ca39420931d56080baa2ba196283dfc2682"
+RESTAURANT_PASSWORD = "swigg@12345"
+RESTAURANT_DEVICE = "restaurant-pc-8"
+RESTAURANT_NAME = "Restaurant8"
 
 class StatusClient:
     def __init__(self, root):
@@ -41,6 +53,7 @@ class StatusClient:
     	self.lib.CallPrivateRPC.restype = ctypes.c_char_p
     	self.thread = None
     	self.message_queue = queue.Queue()
+    	print(f"\n========= Initializing Status Messenger ========\n")    	
 
     def initApp(self, device_name, cb):
     	self.device_name = device_name
@@ -50,16 +63,14 @@ class StatusClient:
     	status_go.SetSignalEventCallback(self.cb)
     	data = {"dataDir": self.root, "mixpanelAppId": "", "mixpanelToken": "", "mediaServerEnableTLS": False, "sentryDSN": "", "logDir": self.root, "logEnabled": True, "logLevel": "INFO", "apiLoggingEnabled": True, "metricsEnabled": True, "metricsAddress": "", "deviceName": self.device_name, "rootDataDir": self.root, "wakuV2LightClient": False, "wakuV2EnableMissingMessageVerification": True, "wakuV2EnableStoreConfirmationForMessagesSent": True}
     	payload = json.dumps(data).encode('utf-8')
-    	response = self.lib.InitializeApplication(payload)
-    	print(f"\nInit App:\n{response}")
+    	self.lib.InitializeApplication(payload)
 
     def login(self, uid, password):
     	self.uid = uid
     	self.password = password
     	data = {"password": self.password, "keyUid": self.uid, "wakuV2Nameserver": self.wakuv2_nameserver, "wakuV2Fleet": self.wakuv2_fleet}
     	payload = json.dumps(data).encode('utf-8')
-    	response = self.lib.LoginAccount(payload)
-    	print(f"\nLogin:\n{response}")
+    	self.lib.LoginAccount(payload)
 
     	time.sleep(2)
 
@@ -72,14 +83,12 @@ class StatusClient:
     	self.password = password
     	data = {'rootDataDir': self.root, 'kdfIterations': 256, 'deviceName': self.device_name, 'displayName': self.display_name, 'password': self.password, "customizationColor":"blue", 'wakuV2Nameserver':self.wakuv2_nameserver, 'wakuV2Fleet':self.wakuv2_fleet}
     	payload = json.dumps(data).encode('utf-8')
-    	response = self.lib.CreateAccountAndLogin(payload)
-    	print(f"\nCreate Account and Login:\n{response}")
+    	self.lib.CreateAccountAndLogin(payload)
 
     def sendContactRequest(self, publicKey, message):
     	data = {"method": "wakuext_sendContactRequest", "params": [{"id": publicKey, "message": message}]}
     	payload = json.dumps(data).encode('utf-8')
-    	response = self.lib.CallPrivateRPC(payload)
-    	print(f"\nSent Contact Reques:\n{response}")
+    	self.lib.CallPrivateRPC(payload)
 
     def createOneToOneChat(self, chatId):
     	data = {"method": "chat_createOneToOneChat", "params": ["", chatId, ""]}
@@ -98,12 +107,9 @@ class StatusClient:
     		key_uid = signal["event"]["settings"]["key-uid"]
     		public_key = signal["event"]["settings"]["current-user-status"]["publicKey"]
     		print(f"Node Login: uid:{key_uid} publicKey:{public_key}")
-    		if ai_client is not None and ai_client.started is False:
-    			ai_client.start()
     	elif signal["type"] == "message.delivered":
     		print("Message delivered!")
     	elif signal["type"] == "messages.new":
-    		print(f"MSGG:{signal["event"]}")    		
     		try:
     			new_msg = signal["event"]["chats"][0]["lastMessage"]["parsedText"][0]["children"][0]["literal"]
     			print(f"New Message received!:{new_msg}")
@@ -117,11 +123,10 @@ class StatusClient:
     	while True:
     		try:
     			msg = self.message_queue.get(timeout=1)
-    			print(f"MESSAGE:{msg}")
+    			print(f"Queued Message:{msg}")
     			self.ai.sendMessage(msg)
     			self.message_queue.task_done()
     		except queue.Empty:
-    			print(f"Status loop")
     			time.sleep(1)
 
     def start(self):
@@ -136,7 +141,6 @@ class StatusClient:
     def stop(self):
     	if self.thread:
     		self.thread.join()
-    	print("Exited!")
 
 class AIClient:
 	def __init__(self, model):
@@ -146,30 +150,32 @@ class AIClient:
 		self.prompt = None
 		self.lock = threading.Lock()
 		self.started = False
-		print(f"\n\n========= Launching model {self.model} ========\n\n")
+		print(f"\n========= Launching AI model {self.model} ========\n")
 		response = chat(model=self.model)
 
-	def run(self):
-		response = generate(model=self.model, prompt=self.initial_prompt['content'], stream=False)
-		print(f"Bot:{response['response']}")
+	def run(self, c_id):
+		global customer_id
 
-		while True: #not stop.is_set():
-			print(f"AI loop running..:{self.prompt}")
+		response = generate(model=self.model, prompt=self.initial_prompt['content'], stream=False)
+		self.sm.sendChatMessage(customer_id, response['response'])
+
+		while True:
 			with self.lock:
 				if self.prompt is not None:
-					print(f"New prompt")
+					print(f"New prompt from customer: {self.prompt}")
 					response = generate(model=self.model, prompt=self.prompt['content'], stream=False)
-					print(f"Bot:{response['response']}")
-					self.sm.sendChatMessage("0x04c13e582c51cfd8185079b3136f7ce007683a3068788e09234069dda6e0dfc1040ca0308aa8948475f2f73ff1900ca4d2f36d46a484239731413d89dda84b2f6b", response['response'])					
+					#print(f"Sending Bot's response:{response['response']}")
+					self.sm.sendChatMessage(c_id, response['response'])					
 					self.prompt = None
-			time.sleep(1)
-		print("AI loop stopped")
+			time.sleep(0.5)
 
 	def start(self):
 		global status_client
+		global customer_id
+
 		self.sm = status_client
 		self.stop_event = threading.Event()
-		self.thread = threading.Thread(target=self.run)
+		self.thread = threading.Thread(target=self.run, args=(customer_id, ))
 		self.started = True 		
 		self.thread.start()
 
@@ -182,63 +188,91 @@ class AIClient:
 			self.stop_event.set()
 			self.started = False
 			self.thread.join()
-		print("AI client stopped")
 
 class FLClient:
-	def __init__(self):
+	def __init__(self, i):
 		self.started = False
 		self.thread = None
+		self.id = i
+		print(f"\n========= Initializing Flower Client {i} ========\n")
 
-	def run(self):
-		run_supernode()
+	def run(self, i):
+		run_supernode(i)
 
 	def start(self):
-		self.thread = threading.Thread(target=self.run)
+		self.thread = threading.Thread(target=self.run, args=(self.id,))
 		self.started = True
 		self.thread.start()
 
+	def stop(self):
+		self.thread.stop()
 
 def main():
 	global status_go
 	global ai_client
+	global fl_client_1
+	global fl_client_2
 	global status_client
+	global customer_id
+	global AI_MODEL
+	global RESTAURANT_UID
+	global RESTAURANT_PASSWORD
+	global RESTAURANT_DEVICE
+	global RESTAURANT_NAME
+	global STATUS_BACKEND_BIN
 
-	status_go = CDLL("./restaurant_status/libstatus.so.0")
+	try:
+		status_backend = Popen([STATUS_BACKEND_BIN, "--address", "127.0.0.1:0"])
+	except OSError as e:
+		print(f"Error: status_backend failed to start:{e}.")
 
-	fl_client = FLClient()
-	time.sleep(4)
-	fl_client.start()
+	status_go = CDLL(STATUS_GO_LIB)
+
+	fl_client_1 = FLClient(1)
+	fl_client_1.start()
+	time.sleep(0.5)
+
+	fl_client_2 = FLClient(2)
+	fl_client_2.start()
+	time.sleep(0.5)
 
 	status_client = StatusClient(root="./")
-	ai_client = AIClient("swigg-gemma3:1b")
+	time.sleep(0.5)
 
-	status_client.initApp("restaurant-pc-8", cb=status_client.on_status_cb)
-	time.sleep(1)
+	ai_client = AIClient(AI_MODEL)
 
-	# status_client.createAccountAndLogin("Restaurant8", "swigg@12345")
-	# time.sleep(1)
+	status_client.initApp(RESTAURANT_PASSWORD, cb=status_client.on_status_cb)
+	time.sleep(0.5)
 
-	status_client.login("0xdc9e9199cee1b4686864450961848ca39420931d56080baa2ba196283dfc2682", "swigg@12345")
-	time.sleep(1)
+	# status_client.createAccountAndLogin(RESTAURANT_NAME, RESTAURANT_PASSWORD)
+	# time.sleep(0.5)
 
-	# status_client.sendContactRequest("0x04c13e582c51cfd8185079b3136f7ce007683a3068788e09234069dda6e0dfc1040ca0308aa8948475f2f73ff1900ca4d2f36d46a484239731413d89dda84b2f6b", "Hello! This is your restaurant Bot")
-	# time.sleep(1)
+	status_client.login(RESTAURANT_UID, RESTAURANT_PASSWORD)
+	time.sleep(0.5)
 
-	status_client.createOneToOneChat("0x04c13e582c51cfd8185079b3136f7ce007683a3068788e09234069dda6e0dfc1040ca0308aa8948475f2f73ff1900ca4d2f36d46a484239731413d89dda84b2f6b")
-	time.sleep(1)
+	# status_client.sendContactRequest(customer_id, "Hello! This is your restaurant Bot")
+	# time.sleep(0.5)
 
-	# status_client.sendChatMessage("0x04c13e582c51cfd8185079b3136f7ce007683a3068788e09234069dda6e0dfc1040ca0308aa8948475f2f73ff1900ca4d2f36d46a484239731413d89dda84b2f6b", "HI! I am your firendly restaurant bot")
-	# time.sleep(0.2)
+	status_client.createOneToOneChat(customer_id)
+	time.sleep(0.5)
+
+	status_client.sendChatMessage(customer_id, "HI! I am your friendly restaurant bot")
+	time.sleep(0.5)
 
 	status_client.start()
+	time.sleep(0.5)
+	
+	ai_client.start()
 
 	try:
 		while True:
-			time.sleep(1)
-			print("tick")
+			time.sleep(0.1)
 	except KeyboardInterrupt:
+		fl_client_1.stop()
+		fl_client_2.stop()
 		status_client.stop()
 		ai_client.stop()
+		status_backend.terminate()
 
 if __name__ == '__main__':
 	main()

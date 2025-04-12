@@ -4,6 +4,8 @@ import json
 import requests
 import threading
 from flwr.server.app import run_superlink
+from flwr.cli.run import run
+
 from types import SimpleNamespace
 import flwr
 from pathlib import Path
@@ -21,17 +23,22 @@ class FLServer:
 		self.started = True
 		self.thread.start()
 
+	def federate(self):
+		print("Started Federated Learning")
+		run(federation="local-deployment")
+
 def main():
 	print(flwr.__file__)
 
 	fl_server = FLServer()
-	time.sleep(4)
+	time.sleep(1)
 	fl_server.start()
+	# time.sleep(10)
+	# fl_server.federate()
 
 	try:
 		while True:
 			time.sleep(1)
-			print("tick")
 	except KeyboardInterrupt:
 		pass
 
