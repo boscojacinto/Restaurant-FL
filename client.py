@@ -9,8 +9,9 @@ import threading
 from subprocess import Popen, PIPE 
 import multiprocessing
 from ctypes import CDLL
-from ollama import chat, generate, ChatResponse, AsyncClient
 from flwr.client.supernode.app import run_supernode
+from restaurant_model.AIModel import chat 
+from restaurant_model import CUSTOM_MODEL
 
 status_go = None
 status_cb = None
@@ -145,25 +146,24 @@ class StatusClient:
 class AIClient:
 	def __init__(self, model):
 		self.thread = None
-		self.model = model
-		self.initial_prompt = {'role': 'user', 'content': 'Hello'}
+		self.initial_prompt = 'Hello'
 		self.prompt = None
 		self.lock = threading.Lock()
 		self.started = False
-		print(f"\n========= Launching AI model {self.model} ========\n")
-		response = chat(model=self.model)
+		print(f"\n========= Launching AI model {CUSTOM_MODEL} ========\n")
+		response = chat('')
 
 	def run(self, c_id):
 		global customer_id
 
-		response = generate(model=self.model, prompt=self.initial_prompt['content'], stream=False)
+		response = chat(self.initial_prompt)
 		self.sm.sendChatMessage(customer_id, response['response'])
 
 		while True:
 			with self.lock:
 				if self.prompt is not None:
 					print(f"New prompt from customer: {self.prompt}")
-					response = generate(model=self.model, prompt=self.prompt['content'], stream=False)
+					response = chat(self.prompt)
 					#print(f"Sending Bot's response:{response['response']}")
 					self.sm.sendChatMessage(c_id, response['response'])					
 					self.prompt = None
@@ -181,7 +181,7 @@ class AIClient:
 
 	def sendMessage(self, message):
 		with self.lock:
-			self.prompt = {'role': 'user', 'content': message}
+			self.prompt = message
 
 	def stop(self):
 		if self.thread:

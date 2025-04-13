@@ -17,6 +17,7 @@ You are enthusiastic, warm, and intelligent but is also considerate
 of the user's time.
 """
 
+STOP_WORD = "zQ3sh"
 SUMMARY_QUERY = f"List the `user` personality in 3 words as follows \n(Personality: \n\r1. x\n\r2. y\n\r3. z\n\r)"
 
 TEMPLATE = """{{- range $i, $_ := .Messages }}
@@ -34,6 +35,7 @@ TEMPLATE = """{{- range $i, $_ := .Messages }}
 
 class AIModel:
     def __init__(self):
+        self.messages = []
         pass
 
     async def create(self) -> int:
@@ -50,10 +52,8 @@ class AIModel:
             print(f"Dint no find source model:{SOURCE_MODEL}")
             return False
 
-    async def chat(self):
-        messages = [
-        {'role': 'user', 'content': 'I love chinese, but hate the MSG added in the dishes. Why is MSG added?'}
-        ]
+    async def chat(self, msg) -> str:
+        messages = self.messages.append({'role': 'user', 'content': msg})
 
         response = await AsyncClient().chat(
             model=CUSTOM_MODEL,
@@ -65,25 +65,10 @@ class AIModel:
             }
         )
 
-        print(f"Bot:{response["message"]["content"]}")
-        
-        messages.append(response["message"])
-        messages.append({'role': 'user', 'content': "zQ3sh"})
+        self.messages.append(response["message"])
+        return response["message"]["content"]
 
-        response = await AsyncClient().chat(
-            model=CUSTOM_MODEL,
-            messages=messages,
-            options={
-                #"seed": 42,
-                "temperature": 1.0,
-                #"stop": ["STOP"]
-            }
-        )
-
-        print(f"Bot(turn 2):{response["message"]["content"]}")
-
-    async def generate(self):
-        prompt = ""
+    async def generate(self, prompt) -> str:
         response = await AsyncClient().generate(
             model=SOURCE_MODEL,
             system=SYSTEM_PROMPT,
@@ -95,44 +80,30 @@ class AIModel:
             }
         )
 
-        print(f"Bot:{response["response"]}")
+        return response["response"] 
 
-        response = await AsyncClient().generate(
-            model=SOURCE_MODEL,
-            prompt=prompt,
-            options={
-                "seed": 42,
-                "temperature": 1.0,
-                #"stop": ["STOP"]
-            }
-        )
-
-        print(f"Bot(turn2):{response["response"]}")
-
-    async def embed(self):
-        texts = [
-        "Friendly, Enthusiastic, Insightful",
-        "Enthusiastic, Friendly, Intelligent"
-        ]
+    async def embed(self, text) -> []:
 
         response = await AsyncClient().embed(
             model="nomic-embed-text",
-            input=texts
+            input=text
         )
 
         embeddings = response["embeddings"]
 
-        for i, emb in enumerate(embeddings):
-            print(f"Embedding for text {i+1}: {emb[:40]}")
+    async def similarity(self, text1, text2):
+        embedding1 = self.embed(text1)
+        embedding2 = self.embed(text2)
 
-        dot_prod = np.dot(embeddings[0], embeddings[1])
+        dot_prod = np.dot(embedding1[0], embedding1[0])
         norm1 = np.linalg.norm(embeddings[0])
         norm2 = np.linalg.norm(embeddings[1])
         sim = dot_prod / (norm1 * norm2)
-        print(f"Similarity: {sim:.4f}")
+
+        return sim 
 
 if __name__ == '__main__':
     ai = AIModel()
     #asyncio.run(ai.create())
-    asyncio.run(ai.chat())
+    asyncio.run(ai.chat("Hello"))
     #asyncio.run(ai.embed())

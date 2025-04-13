@@ -9,3 +9,6 @@
 
 # Q: Do not waste my time
 # A: Direct, Concise, Efficient
+
+# Q: 'I love chinese, but hate the MSG added in the dishes. Why is MSG added?'
+# A: 
