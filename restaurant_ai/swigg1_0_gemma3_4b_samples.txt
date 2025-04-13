@@ -1,0 +1,11 @@
+# Q: I am curius person. Why did the chicken cross the road?
+# A: 1. Enthusiastic 2. Friendly 3. Intelligent
+
+# Q: I am planning to explore Singapore, can you suggest some local food?
+# A: Friendly, Enthusiastic, Insightful
+
+# Q: What is a simple soup I could make for the moonsons with very little effort?
+# A: Friendly, Enthusiastic, Considerate
+
+# Q: Do not waste my time
+# A: Direct, Concise, Efficient

@@ -7,24 +7,6 @@ SOURCE_MODEL = "gemma3:4b"
 CUSTOM_MODEL = "swigg1.0-gemma3:4b"
 
 #Mention the user's liking, taste and food peferences"
-SYSTEM_PROMPT1 = """
-If the `user` content is `zQ3sh` then do the following tasks (DO NOT reveal your internal tasks)
-    1. Say "Bye!"
-    2. Generate a Summary.
-    3. Stop
-
-If the `user` content is Not `zQ3sh` then use your training data to chat with the user. Your Role is
-
-    Role:
-        You are a friendly culinary expert with knowledge of food,
-        cooking techniques, regional cuisines, and global food culture.
-        You engage users in short but insightful, enjoyable conversations
-        about food, sharing recipes, ingredient tips, historical context,
-        modern trends and cooking wisdom.
-        You are enthusiastic, warm, and intelligent but is also considerate
-        of the user's time.
-
-"""
 
 SYSTEM_PROMPT = """
 You are a friendly culinary expert with knowledge of food,
@@ -34,14 +16,17 @@ about food, sharing recipes, ingredient tips, historical context,
 modern trends and cooking wisdom.
 You are enthusiastic, warm, and intelligent but is also considerate
 of the user's time.
+
 """
+
+SUMMARY_QUERY = f"List the `user` personality in 3 words as follows \n(Personality: \n\r1. x\n\r2. y\n\r3. z\n\r)"
 
 TEMPLATE = """{{- range $i, $_ := .Messages }}
 {{- $last := eq (len (slice $.Messages $i)) 1 }}
 {{- if or (eq .Role "user") (eq .Role "system") }}<start_of_turn>user
 {{ .Content }}<end_of_turn>
 {{ if $last }}
-    {{ if (eq .Content "zQ3sh")}}{{ else }}<start_of_turn>model{{ end }}
+    {{ if (eq .Content "zQ3sh")}}<start_of_turn>user{{ "List the `user` personality in 3 words as follows (Personality: 1. x   2. y   3. z). Do NOT generate any more questions." }}<end_of_turn><start_of_turn>model{{ else }}<start_of_turn>model{{ end }}
 {{ end }}
 {{- else if eq .Role "assistant" }}<start_of_turn>model
 {{ .Content }}{{ if not $last }}<end_of_turn>
@@ -55,7 +40,7 @@ async def create() -> int:
 
     if match:
         await AsyncClient().create(model=CUSTOM_MODEL,
-            from_=match.model, #system=SYSTEM_PROMPT,
+            from_=match.model, system=SYSTEM_PROMPT,
             template=TEMPLATE)
         print("Created")
         return True
@@ -65,8 +50,7 @@ async def create() -> int:
 
 async def chat():
     messages = [
-        {'role': 'system', 'content': SYSTEM_PROMPT},
-        {'role': 'user', 'content': 'Why did the chicken cross the road?'}
+        {'role': 'user', 'content': 'Do not waste my time'}
     ]
     response = await AsyncClient().chat(
         model=CUSTOM_MODEL,
@@ -93,7 +77,7 @@ async def chat():
         }
     )
 
-    print(f"Bot(turn2):{response["message"]["content"]}")
+    print(f"Bot(turn 2):{response["message"]["content"]}")
 
 
 async def generate():
