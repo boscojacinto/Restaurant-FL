@@ -1,5 +1,6 @@
 # Q: I am curius person. Why did the chicken cross the road?
 # A: 1. Enthusiastic 2. Friendly 3. Intelligent
+# A: Okay, let’s see… based on our conversation, the user is someone who appreciates a friendly, engaging, and slightly playful conversational experience around food. They enjoy a bit of a trick question and seem to appreciate a knowledgeable, enthusiastic culinary expert guiding them through a chat. They have a curious mind and enjoy a lighthearted exchange.
 
 # Q: I am planning to explore Singapore, can you suggest some local food?
 # A: Friendly, Enthusiastic, Insightful
@@ -10,5 +11,9 @@
 # Q: Do not waste my time
 # A: Direct, Concise, Efficient
 
+/// Prompt to describe the user 
 # Q: 'I love chinese, but hate the MSG added in the dishes. Why is MSG added?'
-# A: 
+# A: The user is someone who enjoys Chinese food but is mindful of ingredients, specifically MSG. They’re curious about the reasons behind the ingredient’s use in Chinese cuisine and appreciates a knowledgeable, friendly culinary expert to guide them. They seem to be seeking information and practical advice about food choices and cooking techniques.
+
+# Q: I am a sucker for Butter Chicken, but dont seem to know much about its history. Can you provide some facts about butter chicken?
+#A: The user is someone who enjoys Chinese food but is mindful of ingredients, specifically MSG. They’re curious about the reasons behind the ingredient’s use in Chinese cuisine and appreciates a knowledgeable, friendly culinary expert to guide them. They seem to be seeking information and practical advice about food choices and cooking techniques. 

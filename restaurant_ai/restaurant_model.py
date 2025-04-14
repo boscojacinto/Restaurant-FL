@@ -1,7 +1,10 @@
 import os
 import asyncio
-import ollama 
+import torch
+import ollama
+import spacy
 import numpy as np
+from transformers import XLNetTokenizer, XLNetModel
 from ollama import AsyncClient, ListResponse, ProgressResponse
 
 SOURCE_MODEL = "gemma3:4b"
@@ -18,14 +21,14 @@ of the user's time.
 """
 
 STOP_WORD = "zQ3sh"
-SUMMARY_QUERY = f"List the `user` personality in 3 words as follows \n(Personality: \n\r1. x\n\r2. y\n\r3. z\n\r)"
+SUMMARY_QUERY = "List the `user` personality in 3 words as follows: x,   y,   z. Do NOT prefix it with anyother word. Do NOT generate any more questions."
 
 TEMPLATE = """{{- range $i, $_ := .Messages }}
 {{- $last := eq (len (slice $.Messages $i)) 1 }}
 {{- if or (eq .Role "user") (eq .Role "system") }}<start_of_turn>user
 {{ .Content }}<end_of_turn>
 {{ if $last }}
-    {{ if (eq .Content "zQ3sh")}}<start_of_turn>user{{ "List the `user` personality in 3 words as follows (Personality: x,   y,   z). Do NOT generate any more questions." }}<end_of_turn><start_of_turn>model{{ else }}<start_of_turn>model{{ end }}
+    {{ if (eq .Content "zQ3sh")}}<start_of_turn>user{{ "Describe the `user` based on the chat. Do NOT generate any more questions." }}<end_of_turn><start_of_turn>model{{ else }}<start_of_turn>model{{ end }}
 {{ end }}
 {{- else if eq .Role "assistant" }}<start_of_turn>model
 {{ .Content }}{{ if not $last }}<end_of_turn>
@@ -36,7 +39,7 @@ TEMPLATE = """{{- range $i, $_ := .Messages }}
 class AIModel:
     def __init__(self):
         self.messages = []
-        pass
+        self.summary = None
 
     async def create(self) -> int:
         model_list:ListResponse = ollama.list()
@@ -46,18 +49,17 @@ class AIModel:
             await AsyncClient().create(model=CUSTOM_MODEL,
                 from_=match.model, system=SYSTEM_PROMPT,
                 template=TEMPLATE)
-            print("Created")
             return True
         else:
             print(f"Dint no find source model:{SOURCE_MODEL}")
             return False
 
     async def chat(self, msg) -> str:
-        messages = self.messages.append({'role': 'user', 'content': msg})
+        self.messages.append({'role': 'user', 'content': msg})
 
         response = await AsyncClient().chat(
             model=CUSTOM_MODEL,
-            messages=messages,
+            messages=self.messages,
             options={
                 #"seed": 42,
                 "temperature": 1.0,
@@ -65,7 +67,11 @@ class AIModel:
             }
         )
 
-        self.messages.append(response["message"])
+        if msg == STOP_WORD:
+            self.summary = response["message"]["content"]
+        else:
+            self.messages.append(response["message"])
+
         return response["message"]["content"]
 
     async def generate(self, prompt) -> str:
@@ -82,28 +88,71 @@ class AIModel:
 
         return response["response"] 
 
-    async def embed(self, text) -> []:
-
+    async def embed(self, text):
         response = await AsyncClient().embed(
             model="nomic-embed-text",
             input=text
         )
 
         embeddings = response["embeddings"]
+        return embeddings
 
     async def similarity(self, text1, text2):
-        embedding1 = self.embed(text1)
-        embedding2 = self.embed(text2)
+        embedding1 = await self.embed(text1)
+        embedding2 = await self.embed(text2)
 
-        dot_prod = np.dot(embedding1[0], embedding1[0])
-        norm1 = np.linalg.norm(embeddings[0])
-        norm2 = np.linalg.norm(embeddings[1])
+        dot_prod = np.dot(embedding1[0], embedding2[0])
+        norm1 = np.linalg.norm(embedding1[0])
+        norm2 = np.linalg.norm(embedding2[0])
         sim = dot_prod / (norm1 * norm2)
+        return sim
 
-        return sim 
+    async def xlnet_similarity(self, embd1, embd2):
+
+        dot_prod = torch.dot(embd1, embd2)
+        norm1 = torch.linalg.norm(embd1)
+        norm2 = torch.linalg.norm(embd2)
+        sim = dot_prod / (norm1 * norm2)
+        return sim
+
+    async def xlnet_embed(self, text):
+        tokenizer = XLNetTokenizer.from_pretrained('xlnet-base-cased')
+        model = XLNetModel.from_pretrained('xlnet-base-cased',
+                                    output_hidden_states=True,
+                                    output_attentions=True).to("cpu")
+        input_ids = torch.tensor([tokenizer.encode(text)]).to("cpu")
+        all_hidden_states, all_attentions = model(input_ids)[-2:]
+        rep = (all_hidden_states[-2][0] * all_attentions[-2][0].mean(dim=0).mean(dim=0).view(-1, 1)).sum(dim=0)
+        return rep
+
+    def ner(self, text):
+        nlp = spacy.load("en_core_web_sm")
+        doc = nlp(text)
+        keywords = [(ent.text, ent.label_) for ent in doc.ents]
+        #print(f"entities:{keywords}")
+
+        keywords = [token.text for token in doc if token.pos_ in ["ADJ"]]
+        #print(f"nouns, adj:{keywords}")
+
+        keywords = [token.text for token in doc if token.dep_ in ["nsubj", "dobj"]]
+        #print(f"sub, obj:{keywords}")
+
 
 if __name__ == '__main__':
-    ai = AIModel()
-    #asyncio.run(ai.create())
-    asyncio.run(ai.chat("Hello"))
-    #asyncio.run(ai.embed())
+    bot = AIModel()
+    #asyncio.run(bot.create())
+    #asyncio.run(bot.chat("I am a sucker for Butter Chicken, but dont seem to know much about its history. Can you provide some facts about butter chicken?"))
+    #asyncio.run(bot.chat("zQ3sh"))
+    # emb1 = asyncio.run(bot.xlnet_embed("The user is someone who enjoys Chinese food but is mindful of ingredients, specifically MSG. They’re curious about the reasons behind the ingredient’s use in Chinese cuisine and appreciates a knowledgeable, friendly culinary expert to guide them. They seem to be seeking information and practical advice about food choices and cooking techniques."))
+    # emb2 = asyncio.run(bot.xlnet_embed("The user is someone who does NOT enjoy Chinese food and it NOT mindful of ingredients, specifically MSG. They’re NOT curious about the reasons behind the ingredient’s use in Chinese cuisine and doesnt appreciate a knowledgeable, friendly culinary expert to guide them. They dont seem to be seeking information and practical advice about food choices and cooking techniques."))
+    # asyncio.run(bot.xlnet_similarity(emb1, emb2))
+
+    # emb1 = asyncio.run(bot.embed("The user is someone who enjoys Chinese food but is mindful of ingredients, specifically MSG. They’re curious about the reasons behind the ingredient’s use in Chinese cuisine and appreciates a knowledgeable, friendly culinary expert to guide them. They seem to be seeking information and practical advice about food choices and cooking techniques."))
+    # emb2 = asyncio.run(bot.embed("The user is someone who does NOT enjoy Chinese food and it NOT mindful of ingredients, specifically MSG. They’re NOT curious about the reasons behind the ingredient’s use in Chinese cuisine and doesnt appreciate a knowledgeable, friendly culinary expert to guide them. They dont seem to be seeking information and practical advice about food choices and cooking techniques."))
+    # asyncio.run(bot.similarity(emb1, emb2))
+
+    #asyncio.run(bot.similarity("The user is someone who enjoys Chinese food but is mindful of ingredients, specifically MSG. They’re curious about the reasons behind the ingredient’s use in Chinese cuisine and appreciates a knowledgeable, friendly culinary expert to guide them. They seem to be seeking information and practical advice about food choices and cooking techniques.", "The user is someone who does not enjoy Chinese food and it not mindful of ingredients, specifically MSG. They’re not curious about the reasons behind the ingredient’s use in Chinese cuisine and doesnt appreciate a knowledgeable, friendly culinary expert to guide them. They dont seem to be seeking information and practical advice about food choices and cooking techniques."))
+    #asyncio.run(bot.similarity("Direct, Concise, Efficient", "Friendly, Enthusiastic, Considerate"))
+
+    #bot.ner("The user is someone who enjoys Chinese food but is mindful of ingredients, specifically MSG. They’re curious about the reasons behind the ingredient’s use in Chinese cuisine and appreciates a knowledgeable, friendly culinary expert to guide them. They seem to be seeking information and practical advice about food choices and cooking techniques.")
+    #asyncio.run(bot.embed())

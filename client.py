@@ -10,8 +10,8 @@ from subprocess import Popen, PIPE
 import multiprocessing
 from ctypes import CDLL
 from flwr.client.supernode.app import run_supernode
-from restaurant_model.AIModel import chat 
-from restaurant_model import CUSTOM_MODEL
+from restaurant_ai.restaurant_model import AIModel as bot
+from restaurant_ai.restaurant_model import CUSTOM_MODEL
 
 status_go = None
 status_cb = None
@@ -24,7 +24,7 @@ STATUS_BACKEND_BIN = "./restaurant_status/libs/status-backend"
 STATUS_GO_LIB = "./restaurant_status/libs/libstatus.so.0"
 
 AI_MODEL = "swigg1.0-gemma3:1b"
-customer_id = "0x04c13e582c51cfd8185079b3136f7ce007683a3068788e09234069dda6e0dfc1040ca0308aa8948475f2f73ff1900ca4d2f36d46a484239731413d89dda84b2f6b" # customer public key
+customer_id = "0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4" # customer public key
 RESTAURANT_UID = "0xdc9e9199cee1b4686864450961848ca39420931d56080baa2ba196283dfc2682"
 RESTAURANT_PASSWORD = "swigg@12345"
 RESTAURANT_DEVICE = "restaurant-pc-8"
@@ -113,9 +113,10 @@ class StatusClient:
     	elif signal["type"] == "messages.new":
     		try:
     			new_msg = signal["event"]["chats"][0]["lastMessage"]["parsedText"][0]["children"][0]["literal"]
-    			print(f"New Message received!:{new_msg}")
+    			c_id = signal["event"]["chats"][0]["lastMessage"]["from"]
+    			print(f"New Message received!:{new_msg}, from:{c_id}")
     			if ai_client is not None:
-    				ai_client.sendMessage(new_msg)
+    				ai_client.sendMessage(c_id, new_msg)
     		except KeyError:
     			pass
     	return
@@ -128,7 +129,7 @@ class StatusClient:
     			self.ai.sendMessage(msg)
     			self.message_queue.task_done()
     		except queue.Empty:
-    			time.sleep(1)
+    			time.sleep(0.2)
 
     def start(self):
     	global ai_client
@@ -148,40 +149,69 @@ class AIClient:
 		self.thread = None
 		self.initial_prompt = 'Hello'
 		self.prompt = None
-		self.lock = threading.Lock()
+		self.customer_id = None
 		self.started = False
+		self.bots = {}
+		self.lock = threading.Lock()
 		print(f"\n========= Launching AI model {CUSTOM_MODEL} ========\n")
-		response = chat('')
 
-	def run(self, c_id):
-		global customer_id
-
-		response = chat(self.initial_prompt)
-		self.sm.sendChatMessage(customer_id, response['response'])
+	def run(self):
 
 		while True:
 			with self.lock:
-				if self.prompt is not None:
-					print(f"New prompt from customer: {self.prompt}")
-					response = chat(self.prompt)
-					#print(f"Sending Bot's response:{response['response']}")
-					self.sm.sendChatMessage(c_id, response['response'])					
+				if self.prompt is not None \
+				and self.customer_id is not None \
+				and self.bots[self.customer_id] is not None:
+
+					print(f"New prompt: {self.prompt}, from customer: {self.customer_id}")
+					_chat = self.bots[self.customer_id].chat
+
+					response = asyncio.run(_chat(self.prompt))
+					print(f"Sending Bot's response:{response}")
+					_summary = self.bots[self.customer_id].summary
+
+					self.sm.sendChatMessage(self.customer_id, response)
+
+					if _summary is not None:
+						_embed = self.bots[self.customer_id].embed
+						asyncio.run(_embed(_summary))
+						self.bots[self.customer_id] = None
+
 					self.prompt = None
-			time.sleep(0.5)
+					self.customer_id = None
 
 	def start(self):
 		global status_client
-		global customer_id
 
 		self.sm = status_client
 		self.stop_event = threading.Event()
-		self.thread = threading.Thread(target=self.run, args=(customer_id, ))
+		self.thread = threading.Thread(target=self.run)
 		self.started = True 		
 		self.thread.start()
 
-	def sendMessage(self, message):
+	def sendMessage(self, customer_id, message):
 		with self.lock:
+			try:
+				self.bots[customer_id]
+			except KeyError:
+				self.bots[customer_id] = bot()
+
 			self.prompt = message
+			self.customer_id = customer_id
+
+	def greet(self, customer_id):
+		try:
+			self.bots[customer_id]
+		except KeyError:
+			self.bots[customer_id] = bot()
+
+		_chat = self.bots[customer_id].chat
+		
+		self.sm.createOneToOneChat(customer_id)
+
+		response = asyncio.run(_chat(self.initial_prompt))
+		print(f"Greeting:{response}")
+		self.sm.sendChatMessage(customer_id, response)
 
 	def stop(self):
 		if self.thread:
@@ -253,16 +283,12 @@ def main():
 	# status_client.sendContactRequest(customer_id, "Hello! This is your restaurant Bot")
 	# time.sleep(0.5)
 
-	status_client.createOneToOneChat(customer_id)
-	time.sleep(0.5)
-
-	status_client.sendChatMessage(customer_id, "HI! I am your friendly restaurant bot")
-	time.sleep(0.5)
-
 	status_client.start()
 	time.sleep(0.5)
 	
 	ai_client.start()
+
+	ai_client.greet(customer_id)
 
 	try:
 		while True:
