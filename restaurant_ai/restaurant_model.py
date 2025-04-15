@@ -28,7 +28,7 @@ TEMPLATE = """{{- range $i, $_ := .Messages }}
 {{- if or (eq .Role "user") (eq .Role "system") }}<start_of_turn>user
 {{ .Content }}<end_of_turn>
 {{ if $last }}
-    {{ if (eq .Content "zQ3sh")}}<start_of_turn>user{{ "Describe the `user` based on the chat. Do NOT generate any more questions." }}<end_of_turn><start_of_turn>model{{ else }}<start_of_turn>model{{ end }}
+    {{ if (eq .Content "zQ3sh")}}<start_of_turn>user{{ "Describe the `user` based on the chat. Do NOT mention yourself. Do NOT generate any more questions." }}<end_of_turn><start_of_turn>model{{ else }}<start_of_turn>model{{ end }}
 {{ end }}
 {{- else if eq .Role "assistant" }}<start_of_turn>model
 {{ .Content }}{{ if not $last }}<end_of_turn>
@@ -40,6 +40,7 @@ class AIModel:
     def __init__(self):
         self.messages = []
         self.summary = None
+        self.embeddings = None
 
     async def create(self) -> int:
         model_list:ListResponse = ollama.list()
@@ -94,8 +95,8 @@ class AIModel:
             input=text
         )
 
-        embeddings = response["embeddings"]
-        return embeddings
+        self.embeddings = response["embeddings"]
+        return self.embeddings
 
     async def similarity(self, text1, text2):
         embedding1 = await self.embed(text1)
@@ -104,7 +105,12 @@ class AIModel:
         dot_prod = np.dot(embedding1[0], embedding2[0])
         norm1 = np.linalg.norm(embedding1[0])
         norm2 = np.linalg.norm(embedding2[0])
+        print(f"norm1:{norm1}")
+        print(f"norm2:{norm2}")
+        print(f"(norm1 * norm2):{(norm1 * norm2)}")
+        print(f"dot_prod:{dot_prod}")
         sim = dot_prod / (norm1 * norm2)
+        print(f"sim:{sim}")
         return sim
 
     async def xlnet_similarity(self, embd1, embd2):
@@ -129,30 +135,32 @@ class AIModel:
         nlp = spacy.load("en_core_web_sm")
         doc = nlp(text)
         keywords = [(ent.text, ent.label_) for ent in doc.ents]
-        #print(f"entities:{keywords}")
+        print(f"entities:{keywords}")
 
         keywords = [token.text for token in doc if token.pos_ in ["ADJ"]]
-        #print(f"nouns, adj:{keywords}")
+        print(f"adj:{keywords}")
 
         keywords = [token.text for token in doc if token.dep_ in ["nsubj", "dobj"]]
-        #print(f"sub, obj:{keywords}")
+        print(f"sub, obj:{keywords}")
 
 
 if __name__ == '__main__':
     bot = AIModel()
     #asyncio.run(bot.create())
-    #asyncio.run(bot.chat("I am a sucker for Butter Chicken, but dont seem to know much about its history. Can you provide some facts about butter chicken?"))
-    #asyncio.run(bot.chat("zQ3sh"))
+    # print(asyncio.run(bot.chat("I love Steak, but do NOT like Chinese or Butter Chicken")))
+    # print(asyncio.run(bot.chat("zQ3sh")))
+    
     # emb1 = asyncio.run(bot.xlnet_embed("The user is someone who enjoys Chinese food but is mindful of ingredients, specifically MSG. They’re curious about the reasons behind the ingredient’s use in Chinese cuisine and appreciates a knowledgeable, friendly culinary expert to guide them. They seem to be seeking information and practical advice about food choices and cooking techniques."))
     # emb2 = asyncio.run(bot.xlnet_embed("The user is someone who does NOT enjoy Chinese food and it NOT mindful of ingredients, specifically MSG. They’re NOT curious about the reasons behind the ingredient’s use in Chinese cuisine and doesnt appreciate a knowledgeable, friendly culinary expert to guide them. They dont seem to be seeking information and practical advice about food choices and cooking techniques."))
-    # asyncio.run(bot.xlnet_similarity(emb1, emb2))
+    # aentssyncio.run(bot.xlnet_similarity(emb1, emb2))
 
-    # emb1 = asyncio.run(bot.embed("The user is someone who enjoys Chinese food but is mindful of ingredients, specifically MSG. They’re curious about the reasons behind the ingredient’s use in Chinese cuisine and appreciates a knowledgeable, friendly culinary expert to guide them. They seem to be seeking information and practical advice about food choices and cooking techniques."))
-    # emb2 = asyncio.run(bot.embed("The user is someone who does NOT enjoy Chinese food and it NOT mindful of ingredients, specifically MSG. They’re NOT curious about the reasons behind the ingredient’s use in Chinese cuisine and doesnt appreciate a knowledgeable, friendly culinary expert to guide them. They dont seem to be seeking information and practical advice about food choices and cooking techniques."))
-    # asyncio.run(bot.similarity(emb1, emb2))
+    emb1 = asyncio.run(bot.embed("The user demonstrates a clear interest in culinary history, particularly regarding popular dishes like Butter Chicken. They appreciate concise, informative explanations and are open to learning more about the origins and evolution of food. Their responses are brief, indicating a preference for direct information and a desire for focused conversation"))
+    #emb2 = asyncio.run(bot.embed("The user enjoys discussing food enthusiastically, specifically Butter Chicken. They appreciate concise, informative responses and seem to value culinary knowledge and historical context. They engage in a light, conversational manner, indicating an interest in learning about food and its origins."))
+    # asyncio.run(bot.similarity("That user enjoys steak, specifically, and has a clear preference against Chinese and Butter Chicken cuisine.", 
+    #     "Based on our conversation, this user is someone who enjoys Chinese cuisine, is curious about the ingredients used in it, and is particularly sensitive to the use of MSG. They are interested in understanding the reasons behind culinary practices and are open to exploring alternative methods for achieving desired flavors. They appreciate informative and engaging explanations, and seem to value a thoughtful approach to food."))
 
     #asyncio.run(bot.similarity("The user is someone who enjoys Chinese food but is mindful of ingredients, specifically MSG. They’re curious about the reasons behind the ingredient’s use in Chinese cuisine and appreciates a knowledgeable, friendly culinary expert to guide them. They seem to be seeking information and practical advice about food choices and cooking techniques.", "The user is someone who does not enjoy Chinese food and it not mindful of ingredients, specifically MSG. They’re not curious about the reasons behind the ingredient’s use in Chinese cuisine and doesnt appreciate a knowledgeable, friendly culinary expert to guide them. They dont seem to be seeking information and practical advice about food choices and cooking techniques."))
     #asyncio.run(bot.similarity("Direct, Concise, Efficient", "Friendly, Enthusiastic, Considerate"))
 
-    #bot.ner("The user is someone who enjoys Chinese food but is mindful of ingredients, specifically MSG. They’re curious about the reasons behind the ingredient’s use in Chinese cuisine and appreciates a knowledgeable, friendly culinary expert to guide them. They seem to be seeking information and practical advice about food choices and cooking techniques.")
+    # bot.ner("The user demonstrates an interest in culinary history and specific dishes, particularly Butter Chicken. They appreciate concise information and are open to receiving recipes and ingredient tips. Their responses are brief, indicating a desire for focused conversation.")
     #asyncio.run(bot.embed())

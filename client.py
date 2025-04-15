@@ -1,14 +1,19 @@
 import os
 import time
 import json
+import torch
 import queue
 import ctypes
+import random
 import asyncio
 import requests
 import threading
-from subprocess import Popen, PIPE 
+import scipy as sp
+import numpy as np
 import multiprocessing
 from ctypes import CDLL
+from subprocess import Popen, PIPE 
+from scipy.sparse import coo_matrix
 from flwr.client.supernode.app import run_supernode
 from restaurant_ai.restaurant_model import AIModel as bot
 from restaurant_ai.restaurant_model import CUSTOM_MODEL
@@ -19,6 +24,7 @@ ai_client = None
 status_client = None
 fl_client_1 = None
 fl_client_2 = None
+customer_embeddings = None
 STATUS_BACKEND_PORT = 0
 STATUS_BACKEND_BIN = "./restaurant_status/libs/status-backend"
 STATUS_GO_LIB = "./restaurant_status/libs/libstatus.so.0"
@@ -29,6 +35,9 @@ RESTAURANT_UID = "0xdc9e9199cee1b4686864450961848ca39420931d56080baa2ba196283dfc
 RESTAURANT_PASSWORD = "swigg@12345"
 RESTAURANT_DEVICE = "restaurant-pc-8"
 RESTAURANT_NAME = "Restaurant8"
+MAX_CUSTOMERS = 10000
+CUSTOMER_FEATURES_NUM = 3
+CUSTOMER_FEATURES_FILE = 'features_customers.npz'
 
 class StatusClient:
     def __init__(self, root):
@@ -96,6 +105,12 @@ class StatusClient:
     	payload = json.dumps(data).encode('utf-8')
     	self.lib.CallPrivateRPC(payload)
 
+    def deactivateOneToOneChat(self, Id):
+    	print(f"deactivateOneToOneChat:{Id}")
+    	data = {"method": "wakuext_deactivateChat", "params": [{"id": Id, "preserveHistory": False}]}
+    	payload = json.dumps(data).encode('utf-8')
+    	self.lib.CallPrivateRPC(payload)
+
     def sendChatMessage(self, chatId, message):
     	data = {"method": "wakuext_sendChatMessage", "params": [{"chatId": chatId, "text": message, "contentType": 1}]}
     	payload = json.dumps(data).encode('utf-8')
@@ -110,15 +125,21 @@ class StatusClient:
     		print(f"Node Login: uid:{key_uid} publicKey:{public_key}")
     	elif signal["type"] == "message.delivered":
     		print("Message delivered!")
+    		print(f"Type:{signal["type"]} Event:\n{signal["event"]}")
     	elif signal["type"] == "messages.new":
     		try:
     			new_msg = signal["event"]["chats"][0]["lastMessage"]["parsedText"][0]["children"][0]["literal"]
     			c_id = signal["event"]["chats"][0]["lastMessage"]["from"]
     			print(f"New Message received!:{new_msg}, from:{c_id}")
+    			print(f"Type:{signal["type"]} Event:\n{signal["event"]}")
     			if ai_client is not None:
     				ai_client.sendMessage(c_id, new_msg)
     		except KeyError:
     			pass
+    	elif signal["type"] == "wakuv2.peerstats":
+    		pass
+    	else:
+    		print(f"\nType:{signal["type"]} Event:\n{signal["event"]}")
     	return
 
     def run(self):
@@ -155,7 +176,7 @@ class AIClient:
 		self.lock = threading.Lock()
 		print(f"\n========= Launching AI model {CUSTOM_MODEL} ========\n")
 
-	def run(self):
+	def run(self, save_embeddings):
 
 		while True:
 			with self.lock:
@@ -174,7 +195,8 @@ class AIClient:
 
 					if _summary is not None:
 						_embed = self.bots[self.customer_id].embed
-						asyncio.run(_embed(_summary))
+						embeds = asyncio.run(_embed(_summary))
+						asyncio.run(save_embeddings(self.customer_id, embeds))
 						self.bots[self.customer_id] = None
 
 					self.prompt = None
@@ -185,7 +207,7 @@ class AIClient:
 
 		self.sm = status_client
 		self.stop_event = threading.Event()
-		self.thread = threading.Thread(target=self.run)
+		self.thread = threading.Thread(target=self.run, args=(save_embeddings, ))
 		self.started = True 		
 		self.thread.start()
 
@@ -237,6 +259,29 @@ class FLClient:
 	def stop(self):
 		self.thread.stop()
 
+def start_federated_learning():
+	customer_embeds = torch.load('customer_embeddings.pt')
+	customer_feats =coo_matrix(customer_embeds)
+	sp.sparse.save_npz(CUSTOMER_FEATURES_FILE, customer_feats)
+
+def init_embeddings():
+	customer_embeds = torch.zeros(MAX_CUSTOMERS, CUSTOMER_FEATURES_NUM,
+								 dtype=torch.float)
+	torch.save(customer_embeds, 'customer_embeddings.pt')
+
+async def save_embeddings(customer_id, embeds):
+	global status_client
+
+	customer_embeds = torch.load('customer_embeddings.pt')
+	torch.manual_seed(42)
+	c_id = random.randint(0, MAX_CUSTOMERS - 1)
+	customer_embeds[c_id, 2] = torch.tensor(np.linalg.norm(
+								embeds[0]), dtype=torch.float)
+	torch.save(customer_embeds, 'customer_embeddings.pt')
+	customer_feats =coo_matrix(customer_embeds)
+	sp.sparse.save_npz(CUSTOMER_FEATURES_FILE, customer_feats)
+	status_client.deactivateOneToOneChat(customer_id)
+
 def main():
 	global status_go
 	global ai_client
@@ -270,6 +315,8 @@ def main():
 	time.sleep(0.5)
 
 	ai_client = AIClient(AI_MODEL)
+
+	init_embeddings()
 
 	status_client.initApp(RESTAURANT_PASSWORD, cb=status_client.on_status_cb)
 	time.sleep(0.5)

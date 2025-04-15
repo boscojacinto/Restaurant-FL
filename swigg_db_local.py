@@ -2,6 +2,7 @@ import os
 import os.path as osp
 import numpy as np
 import torch
+import scipy.sparse as sp
 from itertools import product
 from typing import Callable, List, Optional
 import networkx as nx
@@ -9,6 +10,7 @@ import matplotlib.pyplot as plt
 import torch_geometric.transforms as T
 from torch_geometric.utils import to_networkx
 from torch_geometric.transforms import RandomLinkSplit, ToUndirected
+from client import CUSTOMER_FEATURES_FILE 
 
 from torch_geometric.data import (
     HeteroData,
@@ -75,12 +77,6 @@ class SWGDatasetLocal(InMemoryDataset):
         mask = torch.isin(r_to_r_edge, local_restaurants[0])
         r_to_r_indices = torch.where(mask)[0].to(dtype=torch.int64)
 
-        # Customer features
-        edge_customer = torch.randperm(10000, dtype=torch.int64)[0:500].sort()[0]
-        edge_restaurants = torch.full((500,), edge['edge_index'][0][46], dtype=torch.int64)
-        r_to_c_edge_index = torch.stack([edge_restaurants, edge_customer], dim=0)
-        c_to_r_edge_index = torch.stack([edge_customer, edge_restaurants], dim=0)
-
         edge_dict = {
             ('restaurant', 'to', 'area'): r_to_a_indices,
             ('area', 'to', 'restaurant'): a_to_r_indices,
@@ -89,10 +85,28 @@ class SWGDatasetLocal(InMemoryDataset):
 
         local_graph = self.data.edge_subgraph(edge_dict)
 
+        x = sp.load_npz(osp.join('/home/boscojacinto/projects/Restaurant-SetFit-FedLearning/', CUSTOMER_FEATURES_FILE))
+        customers_nodes = torch.from_numpy(x.todense()).to(torch.float)
+        print(f"cust:\n{customers_nodes}")
+
+        # Customer features
+        edge_customer = customers_nodes[:, -1]
+        edge_customer = torch.nonzero(edge_customer, as_tuple=False).squeeze()
+        edge_restaurants = torch.full(edge_customer.shape, edge['edge_index'][0][self.partition_id], dtype=torch.int64)
+        r_to_c_edge_index = torch.stack([edge_restaurants, edge_customer], dim=0)
+        c_to_r_edge_index = torch.stack([edge_customer, edge_restaurants], dim=0)
+
+        print(f"partition_id:{self.partition_id}")
+        print(f"edge_customer:{edge_customer}")
+        print(f"edge_restaurants:{edge_restaurants}")
+        
         customer_graph = HeteroData({
+            'customer': {'x': customers_nodes},
             ('restaurant', 'to', 'customer'): { 'edge_index': r_to_c_edge_index },
             ('customer', 'to', 'restaurant'): { 'edge_index': c_to_r_edge_index }
         })        
+        print(f"customer_graph:{customer_graph}")
+
         local_graph.update(customer_graph)
         
         self.data = local_graph
@@ -111,33 +125,33 @@ def main():
 
     # Create dataset instance
     dataset = SWGDatasetLocal(path, 1, force_reload=True)
-
-    transform = RandomLinkSplit(
-        num_val=0.1,
-        num_test=0.2,
-        neg_sampling_ratio=0.0,
-        edge_types=[('restaurant', 'to', 'restaurant'),
-                    ('restaurant', 'to', 'area'),
-                    ('restaurant', 'to', 'customer'),
-                    ('customer', 'to', 'restaurant')
-                    ]
-    )
-
-    train_data, val_data, test_data = transform(dataset.data)
     print(f"\ndataset.data:{dataset.data}")
-    print(f"\ntrain_data:{train_data}")
-    print(f"\nval_data:{val_data}")
-    print(f"\ntest_data:{test_data}")
+
+    # transform = RandomLinkSplit(
+    #     num_val=0.1,
+    #     num_test=0.2,
+    #     neg_sampling_ratio=0.0,
+    #     edge_types=[('restaurant', 'to', 'restaurant'),
+    #                 ('restaurant', 'to', 'area'),
+    #                 ('restaurant', 'to', 'customer'),
+    #                 ('customer', 'to', 'restaurant')
+    #                 ]
+    # )
+
+    # train_data, val_data, test_data = transform(dataset.data)
+    # print(f"\ntrain_data:{train_data}")
+    # print(f"\nval_data:{val_data}")
+    # print(f"\ntest_data:{test_data}")
 
 
-    # Create a simple graph  
-    G = to_networkx(dataset.data, node_attrs=['x'])
-    print(f"Number of nodes: {G.number_of_nodes()}")
-    print(f"Number of edges: {G.number_of_edges()}")
+    # # Create a simple graph  
+    # G = to_networkx(dataset.data, node_attrs=['x'])
+    # print(f"Number of nodes: {G.number_of_nodes()}")
+    # print(f"Number of edges: {G.number_of_edges()}")
 
-    pos = nx.spring_layout(G)  # Layout for visualization
-    nx.draw(G, pos, with_labels=False, node_color='grey', node_size=500, font_size=10)
-    plt.show()
+    # pos = nx.spring_layout(G)  # Layout for visualization
+    # nx.draw(G, pos, with_labels=False, node_color='grey', node_size=500, font_size=10)
+    # plt.show()
     
     
 if __name__ == "__main__":
