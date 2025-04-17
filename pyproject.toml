@@ -42,3 +42,11 @@ default = "local-deployment"
 [tool.flwr.federations.local-deployment]
 address = "0.0.0.0:9093"
 insecure = true
+
+[tool.flwr.federations.local-simulation]
+options.num-supernodes = 2
+
+[tool.flwr.federations.local-simulation-gpu]
+options.num-supernodes = 2
+options.backend.client-resources.num-cpus = 4 # each ClientApp assumes to use 4CPUs
+options.backend.client-resources.num-gpus = 0.25 # at most 4 ClientApp will run in a given GPU (lower it to increase parallelism)

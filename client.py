@@ -1,4 +1,7 @@
 import os
+import re
+import sys
+import grpc
 import time
 import json
 import torch
@@ -12,11 +15,15 @@ import scipy as sp
 import numpy as np
 import multiprocessing
 from ctypes import CDLL
+import restaurant_pb2
+import restaurant_pb2_grpc
+from math import ceil, floor
 from subprocess import Popen, PIPE 
 from scipy.sparse import coo_matrix
 from flwr.client.supernode.app import run_supernode
 from restaurant_ai.restaurant_model import AIModel as bot
 from restaurant_ai.restaurant_model import CUSTOM_MODEL
+import private_set_intersection.python as psi
 
 status_go = None
 status_cb = None
@@ -24,13 +31,16 @@ ai_client = None
 status_client = None
 fl_client_1 = None
 fl_client_2 = None
+psi_client = None
 customer_embeddings = None
+restaurant_service = None
+
 STATUS_BACKEND_PORT = 0
 STATUS_BACKEND_BIN = "./restaurant_status/libs/status-backend"
 STATUS_GO_LIB = "./restaurant_status/libs/libstatus.so.0"
 
 AI_MODEL = "swigg1.0-gemma3:1b"
-customer_id = "0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4" # customer public key
+customer_ids = ["0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4"]
 RESTAURANT_UID = "0xdc9e9199cee1b4686864450961848ca39420931d56080baa2ba196283dfc2682"
 RESTAURANT_PASSWORD = "swigg@12345"
 RESTAURANT_DEVICE = "restaurant-pc-8"
@@ -38,6 +48,8 @@ RESTAURANT_NAME = "Restaurant8"
 MAX_CUSTOMERS = 10000
 CUSTOMER_FEATURES_NUM = 3
 CUSTOMER_FEATURES_FILE = 'features_customers.npz'
+INITIAL_PROMPT = 'Hello'
+FEEDBACK_PROMPT = 'Can you describe your visit to Restaurant 1 in your own words'
 
 class StatusClient:
     def __init__(self, root):
@@ -106,7 +118,6 @@ class StatusClient:
     	self.lib.CallPrivateRPC(payload)
 
     def deactivateOneToOneChat(self, Id):
-    	print(f"deactivateOneToOneChat:{Id}")
     	data = {"method": "wakuext_deactivateChat", "params": [{"id": Id, "preserveHistory": False}]}
     	payload = json.dumps(data).encode('utf-8')
     	self.lib.CallPrivateRPC(payload)
@@ -125,21 +136,17 @@ class StatusClient:
     		print(f"Node Login: uid:{key_uid} publicKey:{public_key}")
     	elif signal["type"] == "message.delivered":
     		print("Message delivered!")
-    		print(f"Type:{signal["type"]} Event:\n{signal["event"]}")
     	elif signal["type"] == "messages.new":
     		try:
     			new_msg = signal["event"]["chats"][0]["lastMessage"]["parsedText"][0]["children"][0]["literal"]
     			c_id = signal["event"]["chats"][0]["lastMessage"]["from"]
     			print(f"New Message received!:{new_msg}, from:{c_id}")
-    			print(f"Type:{signal["type"]} Event:\n{signal["event"]}")
     			if ai_client is not None:
     				ai_client.sendMessage(c_id, new_msg)
     		except KeyError:
     			pass
     	elif signal["type"] == "wakuv2.peerstats":
     		pass
-    	else:
-    		print(f"\nType:{signal["type"]} Event:\n{signal["event"]}")
     	return
 
     def run(self):
@@ -168,7 +175,8 @@ class StatusClient:
 class AIClient:
 	def __init__(self, model):
 		self.thread = None
-		self.initial_prompt = 'Hello'
+		self.initial_prompt = INITIAL_PROMPT
+		self.feedback_prompt = FEEDBACK_PROMPT
 		self.prompt = None
 		self.customer_id = None
 		self.started = False
@@ -197,6 +205,9 @@ class AIClient:
 						_embed = self.bots[self.customer_id].embed
 						embeds = asyncio.run(_embed(_summary))
 						asyncio.run(save_embeddings(self.customer_id, embeds))
+						if asyncio.run(restaurant_feedback(self.customer_id)):
+							print("Request customer feedback")
+							self.sm.sendChatMessage(self.customer_id, self.feedback_prompt)
 						self.bots[self.customer_id] = None
 
 					self.prompt = None
@@ -215,6 +226,8 @@ class AIClient:
 		with self.lock:
 			try:
 				self.bots[customer_id]
+				if self.bots[customer_id] == None:
+					self.bots[customer_id] = bot()
 			except KeyError:
 				self.bots[customer_id] = bot()
 
@@ -282,13 +295,49 @@ async def save_embeddings(customer_id, embeds):
 	sp.sparse.save_npz(CUSTOMER_FEATURES_FILE, customer_feats)
 	status_client.deactivateOneToOneChat(customer_id)
 
+async def restaurant_feedback(customer_id):
+	global restaurant_service
+	global psi_client
+
+	client_key = bytes(range(32))
+	psi_client = psi.client.CreateFromKey(client_key, False)
+
+	try:
+		async with grpc.aio.insecure_channel('[::]:50051') as channel:
+			restaurant_service = restaurant_pb2_grpc.RestaurantNeighborStub(channel)
+
+			return await restaurant_setup_and_fetch(customer_id)
+
+	except grpc.RpcError as e:
+		print(f"RPC error: {e}")
+	except Exception as e:
+		print(f"Restaurant feeback error: {e}")
+
+async def restaurant_setup_and_fetch(customer_id):
+	global psi_client
+
+	setup_request = restaurant_pb2.SetupRequest(num_customers=1)
+	setup_reply = await restaurant_service.Setup(setup_request)
+
+	items = [customer_id]
+	request = psi.Request()
+	request.ParseFromString(psi_client.CreateRequest(
+							items).SerializeToString())
+
+	customer_request = restaurant_pb2.CustomerRequest(request=request)
+	customer_reply = await restaurant_service.Fetch(request=customer_request)
+
+	intersection = psi_client.GetIntersectionSize(setup_reply.setup,
+										customer_reply.response)
+	return intersection
+
 def main():
 	global status_go
 	global ai_client
 	global fl_client_1
 	global fl_client_2
 	global status_client
-	global customer_id
+	global customer_ids
 	global AI_MODEL
 	global RESTAURANT_UID
 	global RESTAURANT_PASSWORD
@@ -327,7 +376,7 @@ def main():
 	status_client.login(RESTAURANT_UID, RESTAURANT_PASSWORD)
 	time.sleep(0.5)
 
-	# status_client.sendContactRequest(customer_id, "Hello! This is your restaurant Bot")
+	# status_client.sendContactRequest(customer_ids[0], "Hello! This is your restaurant Bot")
 	# time.sleep(0.5)
 
 	status_client.start()
@@ -335,7 +384,7 @@ def main():
 	
 	ai_client.start()
 
-	ai_client.greet(customer_id)
+	ai_client.greet(customer_ids[0])
 
 	try:
 		while True:

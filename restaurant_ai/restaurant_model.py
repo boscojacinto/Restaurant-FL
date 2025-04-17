@@ -70,6 +70,7 @@ class AIModel:
 
         if msg == STOP_WORD:
             self.summary = response["message"]["content"]
+            self.messages = []
         else:
             self.messages.append(response["message"])
 

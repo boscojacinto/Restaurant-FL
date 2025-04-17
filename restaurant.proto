@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package psi_proto;
+
+import "psi.proto";
+
+service RestaurantNeighbor {
+  rpc Setup (SetupRequest) returns (SetupReply) {}
+  rpc Fetch (CustomerRequest) returns (CustomerReply) {}
+}
+
+message SetupRequest {
+  uint32 num_customers = 1;
+}
+
+message SetupReply {
+  psi_proto.ServerSetup setup = 1;
+}
+
+message CustomerRequest {
+  psi_proto.Request request = 1;
+}
+
+message CustomerReply {
+  psi_proto.Response response = 1;
+}
