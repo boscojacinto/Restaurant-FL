@@ -20,15 +20,18 @@ You are enthusiastic, warm, and intelligent but is also considerate
 of the user's time.
 """
 
-STOP_WORD = "zQ3sh"
+DEFAULT_STOP_WORD = "zQ3sh"
+DEFAULT_FEEDBACK_WORD = "shzQ3"
+
 SUMMARY_QUERY = "List the `user` personality in 3 words as follows: x,   y,   z. Do NOT prefix it with anyother word. Do NOT generate any more questions."
+FEEDBACK_PROMPT = 'Can you describe your visit to %s in your own words'
 
 TEMPLATE = """{{- range $i, $_ := .Messages }}
 {{- $last := eq (len (slice $.Messages $i)) 1 }}
 {{- if or (eq .Role "user") (eq .Role "system") }}<start_of_turn>user
 {{ .Content }}<end_of_turn>
 {{ if $last }}
-    {{ if (eq .Content "zQ3sh")}}<start_of_turn>user{{ "Describe the `user` based on the chat. Do NOT mention yourself. Do NOT generate any more questions." }}<end_of_turn><start_of_turn>model{{ else }}<start_of_turn>model{{ end }}
+    {{if (eq .Content "%s")}}<start_of_turn>user{{"Describe the `user` based on the chat. Do NOT mention yourself. Do NOT explain the emojis in the last prompt. Do NOT generate any more questions."}}<end_of_turn><start_of_turn>model{{ else if (eq .Content "%s") }}<start_of_turn>user{{"Describe the `user`'s experience about the restaurant. Do NOT mention yourself. Do NOT explain the emojis in the last prompt. Do NOT generate any more questions."}}<end_of_turn><start_of_turn>model{{ else }}<start_of_turn>model{{ end }}
 {{ end }}
 {{- else if eq .Role "assistant" }}<start_of_turn>model
 {{ .Content }}{{ if not $last }}<end_of_turn>
@@ -37,9 +40,15 @@ TEMPLATE = """{{- range $i, $_ := .Messages }}
 {{- end }}"""
 
 class AIModel:
-    def __init__(self):
+    def __init__(self, customer_id, restaurantKey):
+        self.userKey = customer_id['emojiHash']
+        self.restaurantKey = restaurantKey
+        self.template = TEMPLATE % (self.userKey, self.restaurantKey)
+        self.feedback_prompt = FEEDBACK_PROMPT % "Restaurant 1"
         self.messages = []
+        self.context = None
         self.summary = None
+        self.feedback = None
         self.embeddings = None
 
     async def create(self) -> int:
@@ -49,7 +58,7 @@ class AIModel:
         if match:
             await AsyncClient().create(model=CUSTOM_MODEL,
                 from_=match.model, system=SYSTEM_PROMPT,
-                template=TEMPLATE)
+                template=self.template)
             return True
         else:
             print(f"Dint no find source model:{SOURCE_MODEL}")
@@ -68,8 +77,11 @@ class AIModel:
             }
         )
 
-        if msg == STOP_WORD:
+        if msg == self.userKey:
             self.summary = response["message"]["content"]
+            self.messages = []
+        elif msg == self.restaurantKey:
+            self.feedback = response["message"]["content"]
             self.messages = []
         else:
             self.messages.append(response["message"])
@@ -77,18 +89,31 @@ class AIModel:
         return response["message"]["content"]
 
     async def generate(self, prompt) -> str:
+        #self.messages.append({'role': 'user', 'content': msg})
+
         response = await AsyncClient().generate(
-            model=SOURCE_MODEL,
-            system=SYSTEM_PROMPT,
+            model=CUSTOM_MODEL,
             prompt=prompt,
+            template=self.template,
+            context=self.context,
             options={
-                "seed": 42,
                 "temperature": 1.0,
-                #"stop": ["STOP"]
             }
         )
 
-        return response["response"] 
+        if prompt == self.userKey:
+            self.summary = response["response"]
+            self.messages = []
+            self.context = None
+        elif prompt == self.restaurantKey:
+            self.feedback = response["response"]
+            self.messages = []
+            self.context = None
+        else:
+            self.context = response["context"]
+            #self.messages.append(response["message"])
+        
+        return response["response"]
 
     async def embed(self, text):
         response = await AsyncClient().embed(
@@ -146,16 +171,23 @@ class AIModel:
 
 
 if __name__ == '__main__':
-    bot = AIModel()
+    bot = AIModel("""👨‍✈️ℹ️📛🤘👩🏼‍🎤👨🏿‍🦱🏌🏼‍♀️🪣🐍🅱️👋🏼👱🏿‍♀️🙅🏼‍♂️🤨""", """😪🤐🧜👬🌙🙋🎐🦵🤴👨🪦🚾☺️2️⃣""")
     #asyncio.run(bot.create())
-    # print(asyncio.run(bot.chat("I love Steak, but do NOT like Chinese or Butter Chicken")))
-    # print(asyncio.run(bot.chat("zQ3sh")))
+    # print(f"bot.userKey:{bot.userKey}")
+    # print(f"bot.restaurantKey:{bot.restaurantKey}")
+    # print(asyncio.run(bot.generate("Why did the chicken cross the road?")))
+    # print(asyncio.run(bot.generate("What is butter chicken made of?")))
+    # print(asyncio.run(bot.generate("""👨‍✈️ℹ️📛🤘👩🏼‍🎤👨🏿‍🦱🏌🏼‍♀️🪣🐍🅱️👋🏼👱🏿‍♀️🙅🏼‍♂️🤨""")))
+    # print(f"self.summary:{bot.summary}")
+    # print(asyncio.run(bot.generate("The experience was good. The food was delicious and the staff was warm. I would recommend going.")))
+    # print(asyncio.run(bot.generate("""😪🤐🧜👬🌙🙋🎐🦵🤴👨🪦🚾☺️2️⃣""")))
+    # print(f"self.feedback:{bot.feedback}")
     
     # emb1 = asyncio.run(bot.xlnet_embed("The user is someone who enjoys Chinese food but is mindful of ingredients, specifically MSG. They’re curious about the reasons behind the ingredient’s use in Chinese cuisine and appreciates a knowledgeable, friendly culinary expert to guide them. They seem to be seeking information and practical advice about food choices and cooking techniques."))
     # emb2 = asyncio.run(bot.xlnet_embed("The user is someone who does NOT enjoy Chinese food and it NOT mindful of ingredients, specifically MSG. They’re NOT curious about the reasons behind the ingredient’s use in Chinese cuisine and doesnt appreciate a knowledgeable, friendly culinary expert to guide them. They dont seem to be seeking information and practical advice about food choices and cooking techniques."))
     # aentssyncio.run(bot.xlnet_similarity(emb1, emb2))
 
-    emb1 = asyncio.run(bot.embed("The user demonstrates a clear interest in culinary history, particularly regarding popular dishes like Butter Chicken. They appreciate concise, informative explanations and are open to learning more about the origins and evolution of food. Their responses are brief, indicating a preference for direct information and a desire for focused conversation"))
+    #emb1 = asyncio.run(bot.embed("The user demonstrates a clear interest in culinary history, particularly regarding popular dishes like Butter Chicken. They appreciate concise, informative explanations and are open to learning more about the origins and evolution of food. Their responses are brief, indicating a preference for direct information and a desire for focused conversation"))
     #emb2 = asyncio.run(bot.embed("The user enjoys discussing food enthusiastically, specifically Butter Chicken. They appreciate concise, informative responses and seem to value culinary knowledge and historical context. They engage in a light, conversational manner, indicating an interest in learning about food and its origins."))
     # asyncio.run(bot.similarity("That user enjoys steak, specifically, and has a clear preference against Chinese and Butter Chicken cuisine.", 
     #     "Based on our conversation, this user is someone who enjoys Chinese cuisine, is curious about the ingredients used in it, and is particularly sensitive to the use of MSG. They are interested in understanding the reasons behind culinary practices and are open to exploring alternative methods for achieving desired flavors. They appreciate informative and engaging explanations, and seem to value a thoughtful approach to food."))

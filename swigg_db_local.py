@@ -11,6 +11,7 @@ import torch_geometric.transforms as T
 from torch_geometric.utils import to_networkx
 from torch_geometric.transforms import RandomLinkSplit, ToUndirected
 from client import CUSTOMER_FEATURES_FILE 
+from client import RESTAURANT_FEATURES_FILE 
 
 from torch_geometric.data import (
     HeteroData,
@@ -53,6 +54,8 @@ class SWGDatasetLocal(InMemoryDataset):
             
         self.load(os.path.join(self.raw_dir, 'data.pt'), data_cls=HeteroData)
 
+        print(f"self.data:{self.data}")
+        print(f"node_items:{self.data.node_items()[0]}")
         r_to_a_edge = self.data.edge_items()[1]
         edge = r_to_a_edge[1]
         local_restaurant = edge['edge_index'][0][self.partition_id]
@@ -99,8 +102,42 @@ class SWGDatasetLocal(InMemoryDataset):
         print(f"partition_id:{self.partition_id}")
         print(f"edge_customer:{edge_customer}")
         print(f"edge_restaurants:{edge_restaurants}")
+
+        #Restaurant features
+        x = sp.load_npz(osp.join('/home/boscojacinto/projects/Restaurant-SetFit-FedLearning/', RESTAURANT_FEATURES_FILE))
+        restaurant_nodes = torch.from_numpy(x.todense()).to(torch.float)
+        print(f"rest:\n{restaurant_nodes}")
+        edge_restaurant = restaurant_nodes[:, -1]
+        edge_restaurant = torch.nonzero(edge_restaurant, as_tuple=False)
+        edge_restaurant = edge_restaurant[:, -1]
+
+        if edge['edge_index'][0][edge_restaurant[0]]:
+            edge_customers = torch.full(edge_restaurant.shape, edge_customer[0], dtype=torch.int64)
+            new_edge = torch.stack([torch.tensor([edge_restaurant[0]]),
+                torch.tensor([edge_customer[0]])], dim=0)
+            print(f"new_edge:{new_edge}")
+
+            r_to_c_edge_index = torch.hstack((r_to_c_edge_index, new_edge))
+            print(f"r_to_c_edge_index:{r_to_c_edge_index}")
+            new_edge = torch.stack([torch.tensor([edge_customer[0]]),
+                torch.tensor([edge_restaurant[0]])], dim=0)
+            print(f"new_edge:{new_edge}")
+            c_to_r_edge_index = torch.hstack((c_to_r_edge_index, new_edge))
+            print(f"c_to_r_edge_index:{c_to_r_edge_index}")
         
+        list_restaurants = self.data.node_items()[0]
+        print(f"list_restaurants0:{list_restaurants}")
+
+        list_restaurants = list_restaurants[1]['x']
+        print(f"list_restaurants1:{list_restaurants}")
+        print(f"edge_restaurant[0]:{edge_restaurant[0]}")
+        print(f"restaurant_nodes[0, -1]:{restaurant_nodes[edge_restaurant[0], -1]}")
+
+        list_restaurants[edge_restaurant[0], -1 ] = torch.Tensor([restaurant_nodes[edge_restaurant[0], -1]]).type(torch.float)
+        print(f"list_restaurants2:{list_restaurants}")
+
         customer_graph = HeteroData({
+            'restaurant': {'x': list_restaurants},
             'customer': {'x': customers_nodes},
             ('restaurant', 'to', 'customer'): { 'edge_index': r_to_c_edge_index },
             ('customer', 'to', 'restaurant'): { 'edge_index': c_to_r_edge_index }

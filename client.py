@@ -40,16 +40,18 @@ STATUS_BACKEND_BIN = "./restaurant_status/libs/status-backend"
 STATUS_GO_LIB = "./restaurant_status/libs/libstatus.so.0"
 
 AI_MODEL = "swigg1.0-gemma3:1b"
-customer_ids = ["0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4"]
+customer_ids = [{'id': 2, 'name': "Rohan", 'publicKey': "0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4", 'emojiHash': """👨‍✈️ℹ️📛🤘👩🏼‍🎤👨🏿‍🦱🏌🏼‍♀️🪣🐍🅱️👋🏼👱🏿‍♀️🙅🏼‍♂️🤨"""}]
 RESTAURANT_UID = "0xdc9e9199cee1b4686864450961848ca39420931d56080baa2ba196283dfc2682"
 RESTAURANT_PASSWORD = "swigg@12345"
 RESTAURANT_DEVICE = "restaurant-pc-8"
 RESTAURANT_NAME = "Restaurant8"
 MAX_CUSTOMERS = 10000
+MAX_RESTAURANTS = 50
 CUSTOMER_FEATURES_NUM = 3
+RESTAURANT_FEATURES_NUM = 1
 CUSTOMER_FEATURES_FILE = 'features_customers.npz'
+RESTAURANT_FEATURES_FILE = 'features_restaurants.npz'
 INITIAL_PROMPT = 'Hello'
-FEEDBACK_PROMPT = 'Can you describe your visit to Restaurant 1 in your own words'
 
 class StatusClient:
     def __init__(self, root):
@@ -134,9 +136,11 @@ class StatusClient:
     		key_uid = signal["event"]["settings"]["key-uid"]
     		public_key = signal["event"]["settings"]["current-user-status"]["publicKey"]
     		print(f"Node Login: uid:{key_uid} publicKey:{public_key}")
+    		#print(f"type:{signal["type"]} \n\nevent:{signal["event"]}")
     	elif signal["type"] == "message.delivered":
     		print("Message delivered!")
     	elif signal["type"] == "messages.new":
+    		#print(f"type:{signal["type"]} \n\nevent:{signal["event"]}")
     		try:
     			new_msg = signal["event"]["chats"][0]["lastMessage"]["parsedText"][0]["children"][0]["literal"]
     			c_id = signal["event"]["chats"][0]["lastMessage"]["from"]
@@ -147,6 +151,9 @@ class StatusClient:
     			pass
     	elif signal["type"] == "wakuv2.peerstats":
     		pass
+    	else:
+    		pass
+    		#print(f"type:{signal["type"]} \n\nevent:{signal["event"]}")
     	return
 
     def run(self):
@@ -176,7 +183,6 @@ class AIClient:
 	def __init__(self, model):
 		self.thread = None
 		self.initial_prompt = INITIAL_PROMPT
-		self.feedback_prompt = FEEDBACK_PROMPT
 		self.prompt = None
 		self.customer_id = None
 		self.started = False
@@ -184,30 +190,29 @@ class AIClient:
 		self.lock = threading.Lock()
 		print(f"\n========= Launching AI model {CUSTOM_MODEL} ========\n")
 
-	def run(self, save_embeddings):
+	def run(self, save_customer_embeddings, save_restaurant_embeddings):
 
 		while True:
 			with self.lock:
 				if self.prompt is not None \
 				and self.customer_id is not None \
 				and self.bots[self.customer_id] is not None:
-
+					bot = self.bots[self.customer_id]
 					print(f"New prompt: {self.prompt}, from customer: {self.customer_id}")
-					_chat = self.bots[self.customer_id].chat
 
-					response = asyncio.run(_chat(self.prompt))
+					response = asyncio.run(bot.generate(self.prompt))
 					print(f"Sending Bot's response:{response}")
-					_summary = self.bots[self.customer_id].summary
-
 					self.sm.sendChatMessage(self.customer_id, response)
 
-					if _summary is not None:
-						_embed = self.bots[self.customer_id].embed
-						embeds = asyncio.run(_embed(_summary))
-						asyncio.run(save_embeddings(self.customer_id, embeds))
-						if asyncio.run(restaurant_feedback(self.customer_id)):
-							print("Request customer feedback")
-							self.sm.sendChatMessage(self.customer_id, self.feedback_prompt)
+					if bot.summary is not None:
+						embeds = asyncio.run(bot.embed(bot.summary))
+						asyncio.run(save_customer_embeddings(self.customer_id, embeds))
+						self.sm.sendChatMessage(self.customer_id, bot.feedback_prompt)
+					elif bot.feedback is not None:
+						embeds = asyncio.run(bot.embed(_feedback))
+						asyncio.run(save_restaurant_embeddings(self.customer_id, embeds))
+						self.sm.deactivateOneToOneChat(self.customer_id)
+						bot = None
 						self.bots[self.customer_id] = None
 
 					self.prompt = None
@@ -218,7 +223,8 @@ class AIClient:
 
 		self.sm = status_client
 		self.stop_event = threading.Event()
-		self.thread = threading.Thread(target=self.run, args=(save_embeddings, ))
+		self.thread = threading.Thread(target=self.run, args=(save_customer_embeddings,
+									save_restaurant_embeddings))
 		self.started = True 		
 		self.thread.start()
 
@@ -226,27 +232,27 @@ class AIClient:
 		with self.lock:
 			try:
 				self.bots[customer_id]
-				if self.bots[customer_id] == None:
-					self.bots[customer_id] = bot()
+				self.prompt = message
+				self.customer_id = customer_id
 			except KeyError:
-				self.bots[customer_id] = bot()
-
-			self.prompt = message
-			self.customer_id = customer_id
+				print("Cannot send message to Bot, User Session closed.")
 
 	def greet(self, customer_id):
+		c_id = customer_id['publicKey']
 		try:
-			self.bots[customer_id]
+			self.bots[c_id]
 		except KeyError:
-			self.bots[customer_id] = bot()
+			intersection, restaurantKey = asyncio.run(restaurant_feedback(c_id))
+			if intersection == 1 and restaurantKey is not None:
+				print("Customer in Neighbor restaurant Set")
+			self.bots[c_id] = bot(customer_id, restaurantKey)
 
-		_chat = self.bots[customer_id].chat
-		
-		self.sm.createOneToOneChat(customer_id)
+		_generate = self.bots[c_id].generate
+		self.sm.createOneToOneChat(c_id)
 
-		response = asyncio.run(_chat(self.initial_prompt))
+		response = asyncio.run(_generate(self.initial_prompt))
 		print(f"Greeting:{response}")
-		self.sm.sendChatMessage(customer_id, response)
+		self.sm.sendChatMessage(c_id, response)
 
 	def stop(self):
 		if self.thread:
@@ -277,14 +283,20 @@ def start_federated_learning():
 	customer_feats =coo_matrix(customer_embeds)
 	sp.sparse.save_npz(CUSTOMER_FEATURES_FILE, customer_feats)
 
+	restaurant_embeds = torch.load('restaurant_embeddings.pt')
+	restaurant_feats =coo_matrix(restaurant_embeds)
+	sp.sparse.save_npz(RESTAURANT_FEATURES_FILE, restaurant_feats)
+
 def init_embeddings():
 	customer_embeds = torch.zeros(MAX_CUSTOMERS, CUSTOMER_FEATURES_NUM,
 								 dtype=torch.float)
-	torch.save(customer_embeds, 'customer_embeddings.pt')
+	torch.save(customer_embeds, 'restaurant_embeddings.pt')
+	customer_embeds = torch.zeros(MAX_RESTAURANTS, RESTAURANT_FEATURES_NUM,
+								 dtype=torch.float)
+	torch.save(customer_embeds, 'restaurant_embeddings.pt')
 
-async def save_embeddings(customer_id, embeds):
-	global status_client
 
+async def save_customer_embeddings(customer_id, embeds):
 	customer_embeds = torch.load('customer_embeddings.pt')
 	torch.manual_seed(42)
 	c_id = random.randint(0, MAX_CUSTOMERS - 1)
@@ -293,7 +305,17 @@ async def save_embeddings(customer_id, embeds):
 	torch.save(customer_embeds, 'customer_embeddings.pt')
 	customer_feats =coo_matrix(customer_embeds)
 	sp.sparse.save_npz(CUSTOMER_FEATURES_FILE, customer_feats)
-	status_client.deactivateOneToOneChat(customer_id)
+
+async def save_restaurant_embeddings(restaurant_id, embeds):
+	restaurant_embeds = torch.load('restaurant_embeddings.pt')
+	torch.manual_seed(42)
+	r_id = random.randint(0, MAX_RESTAURANTS - 1)
+	print(f"r_id:{r_id}")
+	restaurant_embeds[r_id, -1] = torch.tensor(np.linalg.norm(
+								embeds[0]), dtype=torch.float)
+	torch.save(restaurant_embeds, 'restaurant_embeddings.pt')
+	restaurant_feats =coo_matrix(restaurant_embeds)
+	sp.sparse.save_npz(RESTAURANT_FEATURES_FILE, restaurant_feats)
 
 async def restaurant_feedback(customer_id):
 	global restaurant_service
@@ -305,7 +327,6 @@ async def restaurant_feedback(customer_id):
 	try:
 		async with grpc.aio.insecure_channel('[::]:50051') as channel:
 			restaurant_service = restaurant_pb2_grpc.RestaurantNeighborStub(channel)
-
 			return await restaurant_setup_and_fetch(customer_id)
 
 	except grpc.RpcError as e:
@@ -318,6 +339,7 @@ async def restaurant_setup_and_fetch(customer_id):
 
 	setup_request = restaurant_pb2.SetupRequest(num_customers=1)
 	setup_reply = await restaurant_service.Setup(setup_request)
+	print(f"setup_reply.restaurantKey:{setup_reply.restaurantKey}")
 
 	items = [customer_id]
 	request = psi.Request()
@@ -329,7 +351,7 @@ async def restaurant_setup_and_fetch(customer_id):
 
 	intersection = psi_client.GetIntersectionSize(setup_reply.setup,
 										customer_reply.response)
-	return intersection
+	return intersection, setup_reply.restaurantKey
 
 def main():
 	global status_go
@@ -352,13 +374,13 @@ def main():
 
 	status_go = CDLL(STATUS_GO_LIB)
 
-	fl_client_1 = FLClient(1)
-	fl_client_1.start()
-	time.sleep(0.5)
+	# fl_client_1 = FLClient(1)
+	# fl_client_1.start()
+	# time.sleep(0.5)
 
-	fl_client_2 = FLClient(2)
-	fl_client_2.start()
-	time.sleep(0.5)
+	# fl_client_2 = FLClient(2)
+	# fl_client_2.start()
+	# time.sleep(0.5)
 
 	status_client = StatusClient(root="./")
 	time.sleep(0.5)
@@ -376,7 +398,7 @@ def main():
 	status_client.login(RESTAURANT_UID, RESTAURANT_PASSWORD)
 	time.sleep(0.5)
 
-	# status_client.sendContactRequest(customer_ids[0], "Hello! This is your restaurant Bot")
+	# status_client.sendContactRequest(customer_ids[0]['publicKey'], "Hello! This is your restaurant Bot")
 	# time.sleep(0.5)
 
 	status_client.start()

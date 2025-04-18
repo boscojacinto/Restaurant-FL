@@ -15,6 +15,7 @@ message SetupRequest {
 
 message SetupReply {
   psi_proto.ServerSetup setup = 1;
+  string restaurantKey = 2;
 }
 
 message CustomerRequest {
