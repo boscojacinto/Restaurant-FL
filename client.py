@@ -46,11 +46,13 @@ RESTAURANT_PASSWORD = "swigg@12345"
 RESTAURANT_DEVICE = "restaurant-pc-8"
 RESTAURANT_NAME = "Restaurant8"
 MAX_CUSTOMERS = 10000
-MAX_RESTAURANTS = 50
+MAX_RESTAURANTS = 1277
 CUSTOMER_FEATURES_NUM = 3
 RESTAURANT_FEATURES_NUM = 1
 CUSTOMER_FEATURES_FILE = 'features_customers.npz'
 RESTAURANT_FEATURES_FILE = 'features_restaurants.npz'
+NEIGHBOR_REST_CUST_FILE = 'neighbor_rest_cust.npy'
+
 INITIAL_PROMPT = 'Hello'
 
 class StatusClient:
@@ -306,7 +308,7 @@ async def save_customer_embeddings(customer_id, embeds):
 	customer_feats =coo_matrix(customer_embeds)
 	sp.sparse.save_npz(CUSTOMER_FEATURES_FILE, customer_feats)
 
-async def save_restaurant_embeddings(restaurant_id, embeds):
+async def save_restaurant_embeddings(customer_id, embeds):
 	restaurant_embeds = torch.load('restaurant_embeddings.pt')
 	torch.manual_seed(42)
 	r_id = random.randint(0, MAX_RESTAURANTS - 1)
@@ -316,6 +318,16 @@ async def save_restaurant_embeddings(restaurant_id, embeds):
 	torch.save(restaurant_embeds, 'restaurant_embeddings.pt')
 	restaurant_feats =coo_matrix(restaurant_embeds)
 	sp.sparse.save_npz(RESTAURANT_FEATURES_FILE, restaurant_feats)
+
+	r_c_adj = torch.zeros((MAX_RESTAURANTS, MAX_CUSTOMERS), dtype=torch.float)
+
+	r_c_adj[r_id, customer_id] = 1
+	r_c_adj_np = r_c_adj.numpy()
+	np.save(NEIGHBOR_REST_CUST_FILE, r_c_adj_np, allow_pickle=False)
+	x = np.load(os.path.join('/home/boscojacinto/projects/Restaurant-SetFit-FedLearning/', NEIGHBOR_REST_CUST_FILE))
+	r_c_adj = sp.sparse.coo_matrix(x)
+	row = torch.from_numpy(r_c_adj.row).to(torch.long)
+	col = torch.from_numpy(r_c_adj.col).to(torch.long)
 
 async def restaurant_feedback(customer_id):
 	global restaurant_service
@@ -374,13 +386,13 @@ def main():
 
 	status_go = CDLL(STATUS_GO_LIB)
 
-	# fl_client_1 = FLClient(1)
-	# fl_client_1.start()
-	# time.sleep(0.5)
+	fl_client_1 = FLClient(1)
+	fl_client_1.start()
+	time.sleep(0.5)
 
-	# fl_client_2 = FLClient(2)
-	# fl_client_2.start()
-	# time.sleep(0.5)
+	fl_client_2 = FLClient(2)
+	fl_client_2.start()
+	time.sleep(0.5)
 
 	status_client = StatusClient(root="./")
 	time.sleep(0.5)

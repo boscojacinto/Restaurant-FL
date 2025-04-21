@@ -78,7 +78,6 @@ class SWGDataset(InMemoryDataset):
         s['customer'] = (N_r + N_a, N_r + N_a + N_c)
 
         A = np.load(osp.join(self.raw_dir, 'adjM.npy'))
-        #print(f"A.shape:{A.shape}")
         i = 0
         for src, dst in product(node_types, node_types):
             A_sub = sp.coo_matrix(A[s[src][0]:s[src][1], s[dst][0]:s[dst][1]])
@@ -105,7 +104,7 @@ def main():
     path = osp.join(osp.dirname(osp.realpath(__file__)), '')
 
     # Create dataset instance
-    dataset = SWGDataset(path, 3)
+    dataset = SWGDataset(path, 3, force_reload=True)
     print(f"dataset.data['restaurant', 'area']:{dataset.data['restaurant', 'area'].num_edge_features}")
     print(f"dataset.data['area', 'restaurant']:{dataset.data['area', 'restaurant'].num_edge_features}")
     print(f"dataset.data = {dataset.data}")

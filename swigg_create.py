@@ -109,9 +109,11 @@ class SWGDataset(Dataset):
         a_n = len(self.area_labels) #self.f_a.shape[0]
 
         # Restaurant to Restaurant
-        x_col_2 = self.f_r[:, -1]
-        r_to_r_adj = (x_col_2[:, None] == x_col_2[None, :]).int()
-        r_to_r_adj = r_to_r_adj - torch.eye(r_n, dtype=torch.float)
+        # x_col_2 = self.f_r[:, -1]
+        # r_to_r_adj = (x_col_2[:, None] == x_col_2[None, :]).int()
+        # print(f"r_to_r_adj.shape={r_to_r_adj.shape}")
+        # r_to_r_adj = r_to_r_adj - torch.eye(r_n, dtype=torch.float)
+        r_to_r_adj = torch.zeros((r_n, r_n), dtype=torch.float)
 
         # Area to Area
         a_to_a_adj = torch.zeros((a_n, a_n))
