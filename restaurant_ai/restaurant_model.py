@@ -23,7 +23,8 @@ of the user's time.
 DEFAULT_STOP_WORD = "zQ3sh"
 DEFAULT_FEEDBACK_WORD = "shzQ3"
 
-SUMMARY_QUERY = "List the `user` personality in 3 words as follows: x,   y,   z. Do NOT prefix it with anyother word. Do NOT generate any more questions."
+SUMMARY_QUERY = "Describe the `user` based on the chat. Do NOT mention yourself. Do NOT explain the emojis in the last message. Do NOT generate any more questions."
+FEEDBACK_QUERY = "Describe the `user`'s experience about the restaurant. Do NOT mention yourself. Do NOT explain the emojis in the last message. Do NOT generate any more questions."
 FEEDBACK_PROMPT = 'Can you describe your visit to %s in your own words'
 
 TEMPLATE = """{{- range $i, $_ := .Messages }}
@@ -31,7 +32,9 @@ TEMPLATE = """{{- range $i, $_ := .Messages }}
 {{- if or (eq .Role "user") (eq .Role "system") }}<start_of_turn>user
 {{ .Content }}<end_of_turn>
 {{ if $last }}
-    {{if (eq .Content "%s")}}<start_of_turn>user{{"Describe the `user` based on the chat. Do NOT mention yourself. Do NOT explain the emojis in the last prompt. Do NOT generate any more questions."}}<end_of_turn><start_of_turn>model{{ else if (eq .Content "%s") }}<start_of_turn>user{{"Describe the `user`'s experience about the restaurant. Do NOT mention yourself. Do NOT explain the emojis in the last prompt. Do NOT generate any more questions."}}<end_of_turn><start_of_turn>model{{ else }}<start_of_turn>model{{ end }}
+    {{if (eq .Content "%s")}}<start_of_turn>user{{"%s"}}<end_of_turn><start_of_turn>model
+    {{ else if (eq .Content "%s") }}<start_of_turn>user{{"%s"}}<end_of_turn><start_of_turn>model
+    {{ else }}<start_of_turn>model{{ end }}
 {{ end }}
 {{- else if eq .Role "assistant" }}<start_of_turn>model
 {{ .Content }}{{ if not $last }}<end_of_turn>
@@ -43,7 +46,8 @@ class AIModel:
     def __init__(self, customer_id, restaurantKey):
         self.userKey = customer_id['emojiHash']
         self.restaurantKey = restaurantKey
-        self.template = TEMPLATE % (self.userKey, self.restaurantKey)
+        self.template = TEMPLATE % (self.userKey, SUMMARY_QUERY,
+                            self.restaurantKey, FEEDBACK_QUERY)
         self.feedback_prompt = FEEDBACK_PROMPT % "Restaurant 1"
         self.messages = []
         self.context = None

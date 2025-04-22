@@ -9,7 +9,7 @@ import restaurant_pb2_grpc
 psi_server = None
 customer_ids = ["0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4",
 				"0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d2"]
-restaurantKey = """😪🤐🧜👬🌙🙋🎐🦵🤴👨🪦🚾☺️2️⃣"""
+restaurantKey = """🚕🔈🧩👩🏽‍🤝‍👩🏾🏌️‍♂️👆🏾👩‍👧‍👧🐀😴🧑🏼‍💻🤒💇🏼‍♂️🥞🕵️‍♀️"""
 
 def restaurant_setup():
 	global psi_server
