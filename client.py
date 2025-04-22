@@ -208,13 +208,14 @@ class AIClient:
 
 					if bot.summary is not None:
 						embeds = asyncio.run(bot.embed(bot.summary))
+						bot.summary = None
 						asyncio.run(save_customer_embeddings(self.customer_id, embeds))
 						self.sm.sendChatMessage(self.customer_id, bot.feedback_prompt)
 					elif bot.feedback is not None:
-						embeds = asyncio.run(bot.embed(_feedback))
+						embeds = asyncio.run(bot.embed(bot.feedback))
+						bot.feedback = None
 						asyncio.run(save_restaurant_embeddings(self.customer_id, embeds))
 						self.sm.deactivateOneToOneChat(self.customer_id)
-						bot = None
 						self.bots[self.customer_id] = None
 
 					self.prompt = None
@@ -321,7 +322,10 @@ async def save_restaurant_embeddings(customer_id, embeds):
 
 	r_c_adj = torch.zeros((MAX_RESTAURANTS, MAX_CUSTOMERS), dtype=torch.float)
 
-	r_c_adj[r_id, customer_id] = 1
+	torch.manual_seed(24)
+	c_id = random.randint(0, MAX_CUSTOMERS - 1)
+
+	r_c_adj[r_id, c_id] = 1
 	r_c_adj_np = r_c_adj.numpy()
 	np.save(NEIGHBOR_REST_CUST_FILE, r_c_adj_np, allow_pickle=False)
 	x = np.load(os.path.join('/home/boscojacinto/projects/Restaurant-SetFit-FedLearning/', NEIGHBOR_REST_CUST_FILE))
