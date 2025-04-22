@@ -1,8 +1,8 @@
 venv/
-restaurant_fl/__pycache__
+restaurant_fl/__pycache__/
 raw/
 processed/
-__pycache__
+__pycache__/
 restaurant_status/node_modules
 ethereum/
 keystore/

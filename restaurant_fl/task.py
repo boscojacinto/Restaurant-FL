@@ -39,11 +39,12 @@ def load_data(partition_id: int, num_partitions: int, model_name: str) -> tuple[
 		num_val=0.1,
 		num_test=0.2,
 		neg_sampling_ratio=0.0,
-        edge_types=[('restaurant', 'to', 'restaurant'),
-                    ('restaurant', 'to', 'area'),
-                    ('restaurant', 'to', 'customer'),
-                    ('customer', 'to', 'restaurant')
-                    ]
+		edge_types=[('restaurant', 'to', 'area'),
+					('restaurant', 'to', 'customer'),
+					],
+		rev_edge_types=[('area', 'to', 'restaurant'),
+					('customer', 'to', 'restaurant'),
+					],
 	)
 
 	trainloader, valloader, testloader = transform(fds)
