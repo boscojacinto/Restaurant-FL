@@ -1,5 +1,5 @@
 # Restaurant-FL
-## An automated Restaurant success prediction model (federated learning) using natural language based unstructured feature extraction and heterogeneous graph transfomers to capture high-order interactions between restaurants, customers and locality.
+## An automated Restaurant success prediction model (federated learning) using natural language based unstructured feature extraction and heterogeneous graph transformers to capture high-order interactions between restaurants, customers and locality.
 
 Traditional restaurant success prediction models rely on restaurant datasets with fixed features like food type, ratings etc and a bunch of customer statistics like food preference, avg spend, demographic etc usually queried as a feedback questionnaire with multiple choice answers.
 
@@ -22,7 +22,7 @@ of the user's time.
 
 Customers are usually reluctant to provide feedback or honest opinions because they lack incentive to do so, this is where a natural non-pushy conversation can spark a drive to gain knowledge and facts about food. Additionally a small percentage of the price can be waivered by the restauarant adding economic incentive. Keeping the identities annoynomus can also help with the indulgence in the chat. In general storing data locally and not on server farms helps increase confidence. Also providing feedback of a recent but different restaurant visit can encourage a much honest review. Hence with the above in mind.
 
-##For the Bot the following points served as a fundamental requirements for the design.
+## For the Bot the following points served as a fundamental requirements for the design.
 ---
 1. The Bot should run locally on the current restaurant PoS.
 	#### After a lot of experimentation we observed gemma3:4b has the right balance of capabilty and performace (currently tool calling doesn not work). We used ollama to serve multiple instances (currently 4 simultaneous chats) 
@@ -35,7 +35,7 @@ Customers are usually reluctant to provide feedback or honest opinions because t
 
 ![Using the Status-IM app](./Bot_Model_01.png)
 
-##For the training of the Restaurant predicition ,odel the following were our requirements
+## For the training of the Restaurant predicition, model the following were our requirements
 ---
 1. Since the customer and restaurant insights do not leave the restaurant PoS 
    system, hence the model needs to train locally.
@@ -53,7 +53,7 @@ Customers are usually reluctant to provide feedback or honest opinions because t
    #### Flowerai only has a CLI to interact with, but since the code is open-source we made a couple minor modifications to integrate the apis with our runtime [Is it possible to attach (long running) business logic in the long running SuperNode process?](https://discuss.flower.ai/t/is-it-possible-to-attach-long-running-business-logic-in-the-long-running-supernode-process/913) 
 
  
-##For the Restaurant dataset design, the following were the considerations
+## For the Restaurant dataset design, the following were the considerations
 ---
 1. There should be a global restaurant dataset(country-wide) with basic 
    features like restaurant name, city, area. This dataset should be converted to a global heterogeneous graph with resturant nodes, area nodes and placeholder customer nodes.
@@ -67,10 +67,13 @@ Customers are usually reluctant to provide feedback or honest opinions because t
    conversation of the customer with the Bot. The customer features and the neighbour restaurant feature should also be added to the respective nodes in the graph.
    #### We currently store the normalized customer and restaurant embeddings extracted from the conversation and create a subgraph dataset of type SWGDatasetLocal which is then used by the FL train, eval workflow 
 
-![Global and local graph and FL flow](./FL_01.png)
+| ![Local Graph - Restauarnt 0](./LocalGraph_01.png) | ![Local Graph - Restauarnt 0](./LocalGraph_01.png) |
+|----------------------------------------------------|----------------------------------------------------|
+
+![FL flow](./FL_01.png)
 
 
-##For the Restaurant success predicition model, the following were the considerations
+## For the Restaurant success predicition model, the following were the considerations
 ---
 1. The model should be a graph convolution neural network(GNN) so as to utilize 
    the spatial features of the nodes (restaurant and customers).
@@ -84,7 +87,7 @@ Customers are usually reluctant to provide feedback or honest opinions because t
 [https://arxiv.org/abs/2003.01332]
 
 
-##For the Neighbor Restaurant feedback, we had the following considerations
+## For the Neighbor Restaurant feedback, we had the following considerations
 ---
 1. Identify if the customer has recently visited a neighboring restaurant; in a
    privacy preserving way.
