@@ -18,7 +18,9 @@ of the user's time.
 
 ![Using the Status-IM app](./Bot_Chat_01.png)
 
-Customers are usually reluctant to provide feedback or honest opinions because they lack incentive to do so, this is where a natural non-pushy conversation can spark a drive to gain knowledge and facts about food. Additionally a small percentage of the price can be waivered by the restauarant adding economic incentive. Keeping the identities annoynomus can also help with the indulgence in the chat. In general storing data locally and not on server farms helps increase confidence. Also providing feedback of a recent but different restaurant visit can encourage a much honest review. Hence with the above in mind, the following point served as a foundational requirements for the design.
+Customers are usually reluctant to provide feedback or honest opinions because they lack incentive to do so, this is where a natural non-pushy conversation can spark a drive to gain knowledge and facts about food. Additionally a small percentage of the price can be waivered by the restauarant adding economic incentive. Keeping the identities annoynomus can also help with the indulgence in the chat. In general storing data locally and not on server farms helps increase confidence. Also providing feedback of a recent but different restaurant visit can encourage a much honest review. Hence with the above in mind.
+
+For the Bot the following point served as a fundamental requirements for the design.
 
 1. The Bot should run locally on the current restaurant PoS.
 	*after a lot of experimentation we observed gemma3:4b has the right balance of capabilty and performace (currently tool calling doesn not work). We used ollama to serve multiple instances (currently 4 simultaneous chats)* 
@@ -31,22 +33,52 @@ Customers are usually reluctant to provide feedback or honest opinions because t
 
 ![Using the Status-IM app](./Bot_Model_01.png)
 
-For the Restaurant success predicition model the following were our requirements
+For the training of then Restaurant predicition Model the following were our requirements
 
 1. Since the customer and restaurant insights do not leave the restaurant PoS 
    system, hence the model needs to train locally.
    *the restaurtant trains on the local dataset of customer and neighboring restaurants*
 
 2. The model should learn first-order interaction between the customer, the 
-   local restaurant and the neighboring restaurants.
-   *we used a heterogeneous graph structure to represnts restaurant and customer with their respective features as nodes of two types. the edges between restaurant and customer represents the interaction between them. we also added area nodes and the edges between them and the restaurant represent the relative distance (locality) from the central area*
+   local restaurant and the neighboring restaurants from its local training.
 
 3. The model should learn higher-order interaction between restaurants, areas,
-   localities and customers.
+   localities and customers as a result of the aggeration of the weights from the local graphs.
    *we used federated learning using Flower AI's framework to train the local graph on individual restaurant machines and then use FedAvg to aggregrates the local train weights to update the global model and global graph with all the restaurants, customers and area features and edges*
 
-        
+4. The federated client should be able to integrate with the rest of the 
+   workflows (status-im chat client, bot client)
+   *flowerai only had a CLI, but since the code is open-source we made a couple minor modifications to integrate the apis with our runtime [Is it possible to attach (long running) business logic in the long running SuperNode process?](https://discuss.flower.ai/t/is-it-possible-to-attach-long-running-business-logic-in-the-long-running-supernode-process/913)* 
 
+ 
+For the Restaurant Dataset design, the following were the considerations
+
+1. There should be a global restaurant dataset(country-wide) with basic 
+   features like restaurant name, city, area. This dataset should be converted to a global heterogeneous graph with resturant nodes, area nodes and placeholder customer nodes.
+   *we used a publicly available [Swiggy Dataset Restaurants](https://www.kaggle.com/datasets/abhijitdahatonde/swiggy-restuarant-dataset) and converted it to a city-wide graph of type [pyG HeteroData](https://pytorch-geometric.readthedocs.io/en/latest/generated/torch_geometric.data.HeteroData.html) called SWGDataset*
+
+2. The local restaurant data should be a subgraph of the global graph which
+   will be created when the restaurant is selected for training by the Flower FL framework. The subgraph should contain the restaurant node under subject and also the neighbouring restaurant nodes (same area).
+
+3. The local graph should add customer nodes, its edges to the restaurant
+   and its edges to neighboring restaurants as determined by the outcome of the
+   conversation of the customer with the Bot. The customer features and the neighbour restaurant feature should also be added to the respective nodes in the graph.
+   *we currently store the normalized customer and restaurant embeddings extracted from the conversation and create a subgraph dataset of type SWGDatasetLocal which is then used by the FL train, eval workflow* 
+
+![Global and local graph and FL flow](./FL_01.png)
+
+
+For the Restaurant success predicition Model, the following were the considerations
+
+1. The model should be a graph convolution neural network(GNN) so as to utilize 
+   the spatial features of the nodes (restaurant and customers).
+   *we came across a reference design [Restaurant Success Prediction](https://medium.com/restaurant-success-prediction/restaurant-success-prediction-4809efe09203) but it consisted of only restaurant nodes (homogeneous graph) and general restaurant reviews(yelp, facebook) and also had a correlated data problem (number of reviews <--> number of positive reviews) as highlited by the authors. Also as per the article the model results were not great due to clustering techinque used and also a significant percentage of the restaurants in the Yelp dataset where missing corresponding data in the Facebook dataset. 
+   Due to the above drawbacks we continued our search and came across a model for classifying authors based on their research papers, terms (publication period) and conferences using the Open Academic Graph dataset [https://arxiv.org/abs/2003.01332](Heterogeneous Graph Transformer), this research involved the use of heterogenous graphs and Transformer-like attention architecture which help in extracting metapaths for downstream tasks. Additionaly the HGT architecture had been added to the pyTorch Geometric library as a ready to use class [HGTConv](https://pytorch-geometric.readthedocs.io/en/latest/generated/torch_geometric.nn.conv.HGTConv.html?highlight=hgtconv#torch_geometric.nn.conv.HGTConv) which was a treat to our eyes!. It was a match made in heaven, although this architecture is mainly used for predicting protein function based on molecular structure, we saw the possibility of it being incooperated with our data flywheel. We used restaurant and customer nodes with their respective features, the edges between restaurant and customer represents the interaction between them. We also added area nodes and the edges between them and the restaurant represent the relative distance (locality) from the central area*
+
+2. The model should lend itself compatiable to the Flower AI federation 
+   framework.
+   *the flower ai federation framework was selected for it simplicity, but it lacked any working examples or support for graph datasets. The main concern was if the flower client (which would run on the restaurant PoS) would be able to parition the global graph using the inbuilt FederatedDataset and partition dataloader classes [is-it-possible-to-partition-graph-datasets](https://discuss.flower.ai/t/is-it-possible-to-partition-graph-datasets/836).
+   We landed up bypassing the FederatedDataset and using our own method to create a parition(local subgraph) from the global graph and it worked just fine, even the inbuilt FedAvg strategy by flowerai worked well on the locally trained weights of the HGTConv model. Although flowerai should support graphs in the future.*
 
 
 
