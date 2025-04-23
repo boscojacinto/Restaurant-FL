@@ -67,7 +67,7 @@ Customers are usually reluctant to provide feedback or honest opinions because t
    conversation of the customer with the Bot. The customer features and the neighbour restaurant feature should also be added to the respective nodes in the graph.
    #### We currently store the normalized customer and restaurant embeddings extracted from the conversation and create a subgraph dataset of type SWGDatasetLocal which is then used by the FL train, eval workflow 
 
-| ![Local Graph - Restauarnt 0](./LocalGraph_01.png) | ![Local Graph - Restauarnt 0](./LocalGraph_01.png) |
+| ![Local Graph - Restauarnt 0](./LocalGraph_01.png) | ![Local Graph - Restauarnt 0](./LocalGraph_02.png) |
 |----------------------------------------------------|----------------------------------------------------|
 
 ![FL flow](./FL_01.png)
