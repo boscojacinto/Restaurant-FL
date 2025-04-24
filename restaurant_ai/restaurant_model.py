@@ -56,16 +56,15 @@ class AIModel:
         self.embeddings = None
 
     async def create(self) -> int:
-        model_list:ListResponse = ollama.list()
-        match = next((m for m in model_list.models if m.model == SOURCE_MODEL), None)
+        done: ProgressResponse = await AsyncClient().pull(SOURCE_MODEL)
 
-        if match:
+        if done.status == 'success':
             await AsyncClient().create(model=CUSTOM_MODEL,
-                from_=match.model, system=SYSTEM_PROMPT,
+                from_=SOURCE_MODEL, system=SYSTEM_PROMPT,
                 template=self.template)
             return True
         else:
-            print(f"Dint no find source model:{SOURCE_MODEL}")
+            print(f"Failed to pull source model:{SOURCE_MODEL}")
             return False
 
     async def chat(self, msg) -> str:
@@ -175,29 +174,7 @@ class AIModel:
 
 
 if __name__ == '__main__':
-    bot = AIModel("""👨‍✈️ℹ️📛🤘👩🏼‍🎤👨🏿‍🦱🏌🏼‍♀️🪣🐍🅱️👋🏼👱🏿‍♀️🙅🏼‍♂️🤨""", """😪🤐🧜👬🌙🙋🎐🦵🤴👨🪦🚾☺️2️⃣""")
-    #asyncio.run(bot.create())
-    # print(f"bot.userKey:{bot.userKey}")
-    # print(f"bot.restaurantKey:{bot.restaurantKey}")
-    # print(asyncio.run(bot.generate("Why did the chicken cross the road?")))
-    # print(asyncio.run(bot.generate("What is butter chicken made of?")))
-    # print(asyncio.run(bot.generate("""👨‍✈️ℹ️📛🤘👩🏼‍🎤👨🏿‍🦱🏌🏼‍♀️🪣🐍🅱️👋🏼👱🏿‍♀️🙅🏼‍♂️🤨""")))
-    # print(f"self.summary:{bot.summary}")
-    # print(asyncio.run(bot.generate("The experience was good. The food was delicious and the staff was warm. I would recommend going.")))
-    # print(asyncio.run(bot.generate("""😪🤐🧜👬🌙🙋🎐🦵🤴👨🪦🚾☺️2️⃣""")))
-    # print(f"self.feedback:{bot.feedback}")
-    
-    # emb1 = asyncio.run(bot.xlnet_embed("The user is someone who enjoys Chinese food but is mindful of ingredients, specifically MSG. They’re curious about the reasons behind the ingredient’s use in Chinese cuisine and appreciates a knowledgeable, friendly culinary expert to guide them. They seem to be seeking information and practical advice about food choices and cooking techniques."))
-    # emb2 = asyncio.run(bot.xlnet_embed("The user is someone who does NOT enjoy Chinese food and it NOT mindful of ingredients, specifically MSG. They’re NOT curious about the reasons behind the ingredient’s use in Chinese cuisine and doesnt appreciate a knowledgeable, friendly culinary expert to guide them. They dont seem to be seeking information and practical advice about food choices and cooking techniques."))
-    # aentssyncio.run(bot.xlnet_similarity(emb1, emb2))
-
-    #emb1 = asyncio.run(bot.embed("The user demonstrates a clear interest in culinary history, particularly regarding popular dishes like Butter Chicken. They appreciate concise, informative explanations and are open to learning more about the origins and evolution of food. Their responses are brief, indicating a preference for direct information and a desire for focused conversation"))
-    #emb2 = asyncio.run(bot.embed("The user enjoys discussing food enthusiastically, specifically Butter Chicken. They appreciate concise, informative responses and seem to value culinary knowledge and historical context. They engage in a light, conversational manner, indicating an interest in learning about food and its origins."))
-    # asyncio.run(bot.similarity("That user enjoys steak, specifically, and has a clear preference against Chinese and Butter Chicken cuisine.", 
-    #     "Based on our conversation, this user is someone who enjoys Chinese cuisine, is curious about the ingredients used in it, and is particularly sensitive to the use of MSG. They are interested in understanding the reasons behind culinary practices and are open to exploring alternative methods for achieving desired flavors. They appreciate informative and engaging explanations, and seem to value a thoughtful approach to food."))
-
-    #asyncio.run(bot.similarity("The user is someone who enjoys Chinese food but is mindful of ingredients, specifically MSG. They’re curious about the reasons behind the ingredient’s use in Chinese cuisine and appreciates a knowledgeable, friendly culinary expert to guide them. They seem to be seeking information and practical advice about food choices and cooking techniques.", "The user is someone who does not enjoy Chinese food and it not mindful of ingredients, specifically MSG. They’re not curious about the reasons behind the ingredient’s use in Chinese cuisine and doesnt appreciate a knowledgeable, friendly culinary expert to guide them. They dont seem to be seeking information and practical advice about food choices and cooking techniques."))
-    #asyncio.run(bot.similarity("Direct, Concise, Efficient", "Friendly, Enthusiastic, Considerate"))
-
-    # bot.ner("The user demonstrates an interest in culinary history and specific dishes, particularly Butter Chicken. They appreciate concise information and are open to receiving recipes and ingredient tips. Their responses are brief, indicating a desire for focused conversation.")
-    #asyncio.run(bot.embed())
+    customer_id = {}
+    customer_id['emojiHash'] = DEFAULT_STOP_WORD
+    bot = AIModel(customer_id, DEFAULT_FEEDBACK_WORD)
+    asyncio.run(bot.create())
