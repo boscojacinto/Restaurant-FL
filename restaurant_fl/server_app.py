@@ -33,7 +33,7 @@ global_metadata = (['restaurant', 'area', 'customer'],
 
 def get_global_model(model_name, metadata):
 	model = get_model(model_name, metadata)
-	model.load_state_dict(torch.load('swg_state_global.pth'))
+	model.load_state_dict(torch.load('./restaurant_fl/swg_state_global.pth'))
 	return model
 
 def server_fn(context: Context) -> ServerAppComponents:
