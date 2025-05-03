@@ -23,7 +23,7 @@ from torch_geometric.data import (
 
 class SWGDatasetLocal(InMemoryDataset): 
     
-    url = 'https://www.dropbox.com/scl/fi/2jgvl6ns32rjx7cbaxpdl/data.pt?rlkey=o483u2pb2rely4qd2tq26f1xo&st=tca6va90&dl=1'
+    url = 'https://www.dropbox.com/scl/fi/k8wk3x6ev5fx5mlvbjhn3/data.pt?rlkey=x8rhi4deb6ryijiu1brczbyh5&st=1xzptsjh&dl=1'
     partition_id = 0
 
     def __init__(
@@ -56,7 +56,6 @@ class SWGDatasetLocal(InMemoryDataset):
         self.load(os.path.join(self.raw_dir, 'data.pt'), data_cls=HeteroData)
 
         d = self._data.to_namedtuple()
-        #print(f"d.restaurant.x:{d.restaurant.x}")
         p_id = self.partition_id
 
         r_to_a = d.restaurant__to__area
@@ -100,12 +99,12 @@ class SWGDatasetLocal(InMemoryDataset):
         #print(f"{local_graph.to_namedtuple().restaurant.x}")
 
         # Customer features
-        x = sp.load_npz(osp.join('/home/boscojacinto/projects/Restaurant-SetFit-FedLearning/', CUSTOMER_FEATURES_FILE))
+        x = sp.load_npz(osp.join('/home/boscojacinto/projects/Restaurant-FL/', CUSTOMER_FEATURES_FILE))
         customer_attrs = torch.from_numpy(x.todense()).to(torch.float)
-        customer_attrs = customer_attrs[:, -1]
-        customers = torch.nonzero(customer_attrs, as_tuple=False)
-        #print(f"customers:{customers}")
+        #print(f"customer_attrs.shape:{customer_attrs.shape}")
+        customers = torch.nonzero(customer_attrs.any(dim=1)).squeeze()
         num_customers = customers.shape[0]
+        #print(f"customers:{customers}")
 
         r_indices = torch.full((num_customers, ), p_id, dtype=torch.int)
         c_indices = customers.flatten()
@@ -115,18 +114,20 @@ class SWGDatasetLocal(InMemoryDataset):
         lg = local_graph.to_namedtuple()
 
         # Restaurant features
-        x = sp.load_npz(osp.join('/home/boscojacinto/projects/Restaurant-SetFit-FedLearning/', RESTAURANT_FEATURES_FILE))
+        x = sp.load_npz(osp.join('/home/boscojacinto/projects/Restaurant-FL/', RESTAURANT_FEATURES_FILE))
         restaurant_attrs = torch.from_numpy(x.todense()).to(torch.float)
-        restaurant_attrs = restaurant_attrs[:, -1]
-        neighbor_restaurants = torch.nonzero(restaurant_attrs, as_tuple=False)
+        #print(f"restaurant_attrs:{restaurant_attrs}")
+        neighbor_restaurants = torch.nonzero(restaurant_attrs.any(dim=1)).squeeze()
+        neighbor_restaurants = torch.tensor([neighbor_restaurants.item()])
+        #print(f"neighbor_restaurants:{neighbor_restaurants.flatten()}")
 
-        x = np.load(osp.join('/home/boscojacinto/projects/Restaurant-SetFit-FedLearning/', NEIGHBOR_REST_CUST_FILE))
+        x = np.load(osp.join('/home/boscojacinto/projects/Restaurant-FL/', NEIGHBOR_REST_CUST_FILE))
         r_c_adj = sp.coo_matrix(x).toarray()
-        #print(f"neighbor_restaurants:{neighbor_restaurants}")
         for idx in neighbor_restaurants.flatten():
             idx = idx.item()
-            lg.restaurant.x[idx, -1] = restaurant_attrs[idx]
-            #print(f"lg.restaurant.x[idx, -1]: {lg.restaurant.x[idx, -1]}")
+            #print(f"idx:{idx}")
+            lg.restaurant.x[idx] = restaurant_attrs[idx]
+            #print(f"lg.restaurant.x[idx]: {lg.restaurant.x[idx]}")
             c_row = torch.tensor(r_c_adj[idx:])[0]
             #print(f"c_row:{c_row}")
             c_row = torch.nonzero(c_row)[0]
@@ -146,6 +147,7 @@ class SWGDatasetLocal(InMemoryDataset):
         r_to_a_indices = torch.hstack((lg.restaurant__to__area.edge_index, r_to_a_self))
 
         customer_graph = HeteroData({
+            'customer': {'x': customer_attrs },
             ('restaurant', 'to', 'area'): { 'edge_index': r_to_a_indices },
             ('restaurant', 'to', 'customer'): { 'edge_index': r_to_c_indices },
             ('customer', 'to', 'restaurant'): { 'edge_index': c_to_r_indices }
@@ -153,6 +155,7 @@ class SWGDatasetLocal(InMemoryDataset):
 
         local_graph = local_graph.update(customer_graph)        
         #print(f"new local_graph:{local_graph}")
+        ll = local_graph.to_namedtuple()
 
         self.data = local_graph
 

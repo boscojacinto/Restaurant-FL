@@ -1,6 +1,7 @@
 import os
 import os.path as osp
 import zipfile
+import asyncio
 import torch
 import pandas as pd
 import numpy as np
@@ -8,6 +9,7 @@ import scipy as sp
 from torch.utils.data import Dataset, DataLoader
 from torch_geometric.data import Data
 from scipy.sparse import coo_matrix, issparse, load_npz
+from restaurant_ai.restaurant_model import AIModel
 
 # 1. First, create a custom Dataset class
 class SWGDataset(Dataset):
@@ -27,8 +29,10 @@ class SWGDataset(Dataset):
         return sample
 
     def create_features(self):
+        bot = AIModel()
+        rest_embeds = asyncio.run(bot.embed('The restaurant is know for its mughlai food'))
 
-        self.food_labels = { 'mughlai': 1.0 }
+        self.food_labels = { 'mughlai': rest_embeds[0] }
 
         keys = np.unique(self.data['Area'].astype(str).str.lower())
         vals = torch.rand((keys.size, 1), dtype=torch.float).tolist()
@@ -57,11 +61,13 @@ class SWGDataset(Dataset):
         ).astype(float)        
 
         self.data['Food type'] = self.data['Food type'].str.lower().apply(
-            lambda x: next((v for k, v in self.food_labels.items() if k in x.split(',')), 0.0)
-        ).astype(float)
+            lambda x: next((v for k, v in self.food_labels.items() if k in x.split(',')), [0.0] * len(rest_embeds[0]))
+        )
 
         filter_cols = [col for col in self.data.columns if ((col != 'Address') & (col != 'Area'))]
-        self.f_r = torch.tensor(self.data[filter_cols].values, dtype=torch.float)
+        values = [embeds[0] for embeds in self.data[filter_cols].values]
+        self.f_r = torch.tensor(values, dtype=torch.float)
+        
         filter_cols = [col for col in self.data.columns if ((col != 'Address') & (col != 'Food type'))]
         self.f_a = torch.tensor(self.data[filter_cols].values, dtype=torch.float)
         self.y = torch.tensor(self.data[filter_cols].iloc[:,-1].values, dtype=torch.float)
@@ -81,7 +87,7 @@ class SWGDataset(Dataset):
         self.features_1 = coo_matrix((values, (rows, cols)), shape=x.shape)
         sp.sparse.save_npz('features_1.npz', self.features_1)
         self.edge_attrs_1 = self.data.apply(
-            lambda x: (x['Address'] if x['Food type'] == 1.0 else 0.0),
+            lambda x: (x['Address'] if any(i != 0.0 for i in x['Food type']) else 0.0),
             axis=1
         ).to_numpy(dtype=float)
         self.edge_attrs_1 = np.compress(self.edge_attrs_1 != 0, self.edge_attrs_1)
@@ -92,11 +98,11 @@ class SWGDataset(Dataset):
         np.save('edge_attrs_3.npy', self.edge_attrs_3, allow_pickle=False) 
 
         # Customer features
-        self.c = torch.ones(10000, 3, dtype=torch.float)
-        mask = torch.rand(10000) < 0.1
-        self.c[:, 2] = 0.0
-        self.c[mask, 2] = 1.0
-        self.features_2 =coo_matrix(self.c)
+        self.c = torch.zeros((10000, 1024), dtype=torch.float)
+        #mask = torch.rand(10000) < 0.1
+        #self.c[:, 2] = 0.0
+        #self.c[mask, 2] = 1.0
+        self.features_2 = coo_matrix(self.c)
         sp.sparse.save_npz('features_2.npz', self.features_2)
 
         # Labels (based on food type success)
@@ -122,13 +128,14 @@ class SWGDataset(Dataset):
         c_to_c_adj = torch.zeros((c_n, c_n))
 
         # Restuarant to Area
+        r_mask = (self.f_r != 0.0).any(dim=1).unsqueeze(1)
         r_col = self.f_r[:, -1]
         a_col = self.f_a[:, -1]
 
         rows = []
         cols = []
         values = []
-        for r, r_v in enumerate(r_col):
+        for r, r_v in enumerate(r_mask):
             if r_v:
                 a_v = a_col[r]
                 if a_v:

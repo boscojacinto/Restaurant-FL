@@ -32,7 +32,7 @@ class SWGDataset(InMemoryDataset):
         # elif partition_id == 1:
         #     self.url = 'https://www.dropbox.com/scl/fi/pi0u8bd94upmxn4qhnty8/SWGD_mumbai-santacruz-east.zip?rlkey=5e8ostffn0s8ve3rqqag1irw4&st=4aj7c48z&dl=1'
         # else:
-        self.url = 'https://www.dropbox.com/scl/fi/9y4rdq0o19ii1qr3evbma/SWGD_mumbai.zip?rlkey=u5dm6p1qe5ed8g841qilqz3wq&st=i47iwvuc&dl=1'
+        self.url = 'https://www.dropbox.com/scl/fi/oscg6t3utw6z0o6no662q/SWGD_mumbai.zip?rlkey=4cr0v3npt5mjvxysdskjt7p80&st=uiyzr3v8&dl=1'
 
         super().__init__(root, transform, pre_transform,
                          force_reload=force_reload)
