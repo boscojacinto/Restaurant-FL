@@ -51,9 +51,9 @@ def load_data(partition_id: int, num_partitions: int, model_name: str) -> tuple[
 
 	return fds, trainloader, testloader
 
-def get_model(model_name, metadata):
+def get_model(model_name, data):
 	return SWG(hidden_channels=64, out_channels=2, num_heads=2, num_layers=1,
-			node_types=['restaurant', 'area', 'customer'], metadata=metadata)
+			node_types=['restaurant', 'area', 'customer'], data=data)
 
 def get_params(model):
 	return [val.cpu().numpy() for _, val in model.state_dict().items()]

@@ -18,11 +18,11 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 logging.set_verbosity_error()
 
 class RestaurantClient(NumPyClient):
-	def __init__(self, model_name, metadata, trainloader, testloader) -> None:
+	def __init__(self, model_name, data, trainloader, testloader) -> None:
 		self.device = torch.device("cpu")
 		self.trainloader = trainloader
 		self.testloader = testloader
-		self.net = get_model(model_name, metadata)
+		self.net = get_model(model_name, data)
 		self.net.to(self.device)
 
 	def fit(self, parameters, config) -> tuple[list, int, dict]:
@@ -44,6 +44,6 @@ def client_fn(context: Context) -> Client:
 	model_name = context.run_config["model-name"]
 	print(f"CLIENT:{partition_id}")
 	data, trainloader, testloader = load_data(partition_id, num_partitions, model_name)
-	return RestaurantClient(model_name, data.metadata(), trainloader, testloader).to_client()
+	return RestaurantClient(model_name, data, trainloader, testloader).to_client()
 
 app = ClientApp(client_fn=client_fn)

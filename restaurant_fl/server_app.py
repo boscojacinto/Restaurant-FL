@@ -1,4 +1,5 @@
 import torch
+import os.path as osp
 from typing import List, Tuple, Union, Optional, Dict, Callable
 from flwr.server import ServerApp, ServerAppComponents, ServerConfig
 from flwr.server.strategy import FedAvg
@@ -18,6 +19,7 @@ from flwr.common import (
 )
 from flwr.common.logger import log
 from restaurant_fl.task import get_params, get_model
+from swigg_db import SWGDataset
 
 global_metadata = (['restaurant', 'area', 'customer'],
 				   [('restaurant', 'to', 'restaurant'),
@@ -32,9 +34,11 @@ global_metadata = (['restaurant', 'area', 'customer'],
 				   ])
 
 def get_global_model(model_name, metadata):
-	model = get_model(model_name, metadata)
-	model.load_state_dict(torch.load('./restaurant_fl/swg_state_global.pth'))
-	return model
+    path = osp.join(osp.dirname(osp.realpath(__file__)), '')
+    dataset = SWGDataset(path, 0, force_reload=True)
+    model = get_model(model_name, dataset.data)
+    model.load_state_dict(torch.load('./restaurant_fl/swg_state_global.pth'))
+    return model
 
 def server_fn(context: Context) -> ServerAppComponents:
 	num_rounds = context.run_config["num-server-rounds"]

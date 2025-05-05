@@ -40,15 +40,15 @@ STATUS_BACKEND_BIN = "./restaurant_status/libs/status-backend"
 STATUS_GO_LIB = "./restaurant_status/libs/libstatus.so.0"
 
 AI_MODEL = "swigg1.0-gemma3:1b"
-customer_ids = [{'id': 2, 'name': "Rohan", 'publicKey': "0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4", 'emojiHash': """👨‍✈️ℹ️📛🤘👩🏼‍🎤👨🏿‍🦱🏌🏼‍♀️🪣🐍🅱️👋🏼👱🏿‍♀️🙅🏼‍♂️🤨"""}]
+customer_ids = [{'id': 1, 'name': "Rohan", 'publicKey': "0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4", 'emojiHash': """👨‍✈️ℹ️📛🤘👩🏼‍🎤👨🏿‍🦱🏌🏼‍♀️🪣🐍🅱️👋🏼👱🏿‍♀️🙅🏼‍♂️🤨"""}]
 RESTAURANT_UID = "0xdc9e9199cee1b4686864450961848ca39420931d56080baa2ba196283dfc2682"
 RESTAURANT_PASSWORD = "swigg@12345"
 RESTAURANT_DEVICE = "restaurant-pc-8"
 RESTAURANT_NAME = "Restaurant8"
 MAX_CUSTOMERS = 10000
 MAX_RESTAURANTS = 1277
-CUSTOMER_FEATURES_NUM = 3
-RESTAURANT_FEATURES_NUM = 1
+CUSTOMER_FEATURES_NUM = 1024
+RESTAURANT_FEATURES_NUM = 1024
 CUSTOMER_FEATURES_FILE = 'features_customers.npz'
 RESTAURANT_FEATURES_FILE = 'features_restaurants.npz'
 NEIGHBOR_REST_CUST_FILE = 'neighbor_rest_cust.npy'
@@ -281,31 +281,25 @@ class FLClient:
 	def stop(self):
 		self.thread.stop()
 
-def start_federated_learning():
-	customer_embeds = torch.load('customer_embeddings.pt')
-	customer_feats =coo_matrix(customer_embeds)
-	sp.sparse.save_npz(CUSTOMER_FEATURES_FILE, customer_feats)
-
-	restaurant_embeds = torch.load('restaurant_embeddings.pt')
-	restaurant_feats =coo_matrix(restaurant_embeds)
-	sp.sparse.save_npz(RESTAURANT_FEATURES_FILE, restaurant_feats)
-
 def init_embeddings():
-	customer_embeds = torch.zeros(MAX_CUSTOMERS, CUSTOMER_FEATURES_NUM,
+	customer_embeds = torch.zeros((MAX_CUSTOMERS, CUSTOMER_FEATURES_NUM),
 								 dtype=torch.float)
-	torch.save(customer_embeds, 'restaurant_embeddings.pt')
-	customer_embeds = torch.zeros(MAX_RESTAURANTS, RESTAURANT_FEATURES_NUM,
+	torch.save(customer_embeds, 'customer_embeddings.pt')
+	restaurant_embeds = torch.zeros((MAX_RESTAURANTS, RESTAURANT_FEATURES_NUM),
 								 dtype=torch.float)
-	torch.save(customer_embeds, 'restaurant_embeddings.pt')
-
+	torch.save(restaurant_embeds, 'restaurant_embeddings.pt')
+	os.remove(CUSTOMER_FEATURES_FILE)
+	os.remove(RESTAURANT_FEATURES_FILE)
 
 async def save_customer_embeddings(customer_id, embeds):
-	#customer_embeds = torch.zeros((MAX_CUSTOMERS, 1024), dtype=torch.float)
-	#torch.save(customer_embeds, 'customer_embeddings.pt')
 	customer_embeds = torch.load('customer_embeddings.pt')
 	torch.manual_seed(42)
 	c_id = random.randint(0, MAX_CUSTOMERS - 1)
-	c_id = customer_id
+	print(f"customer_ids[0]['publicKey']:{customer_ids[0]['publicKey']}")
+	print(f"customer_id:{customer_id}")
+	if customer_ids[0]['publicKey'] == customer_id:
+		print("In IF")
+		c_id = customer_ids[0]['id']
 	print(f"c_id:{c_id}")
 	customer_embeds[c_id] = torch.tensor(embeds[0], dtype=torch.float)
 	print(f"customer_embeds.shape:{customer_embeds.shape}")
@@ -316,30 +310,28 @@ async def save_customer_embeddings(customer_id, embeds):
 
 async def save_restaurant_embeddings(customer_id, embeds):
 	#restaurant_embeds = torch.zeros((MAX_RESTAURANTS, 1024), dtype=torch.float)
-	#torch.save(restaurant_embeds, 'restaurant_embeddings.pt')	
+	#torch.save(restaurant_embeds, 'restaurant_embeddings.pt')
 	restaurant_embeds = torch.load('restaurant_embeddings.pt')
 	torch.manual_seed(42)
 	#r_id = random.randint(0, MAX_RESTAURANTS - 1)
 	r_id = 1
+	torch.manual_seed(24)
+	c_id = random.randint(0, MAX_CUSTOMERS - 1)
+	
+	if customer_ids[0]['publicKey'] == customer_id:
+		c_id = customer_ids[0]['id']
 	print(f"r_id:{r_id}")
+	print(f"c_id:{c_id}")
+
 	restaurant_embeds[r_id] = torch.tensor(embeds[0], dtype=torch.float)
 	torch.save(restaurant_embeds, 'restaurant_embeddings.pt')
 	restaurant_feats =coo_matrix(restaurant_embeds)
 	sp.sparse.save_npz(RESTAURANT_FEATURES_FILE, restaurant_feats)
 
 	r_c_adj = torch.zeros((MAX_RESTAURANTS, MAX_CUSTOMERS), dtype=torch.float)
-
-	torch.manual_seed(24)
-	#c_id = random.randint(0, MAX_CUSTOMERS - 1)
-	c_id = 1
-
 	r_c_adj[r_id, c_id] = 1
 	r_c_adj_np = r_c_adj.numpy()
 	np.save(NEIGHBOR_REST_CUST_FILE, r_c_adj_np, allow_pickle=False)
-	x = np.load(os.path.join('/home/boscojacinto/projects/Restaurant-FL/', NEIGHBOR_REST_CUST_FILE))
-	r_c_adj = sp.sparse.coo_matrix(x)
-	row = torch.from_numpy(r_c_adj.row).to(torch.long)
-	col = torch.from_numpy(r_c_adj.col).to(torch.long)
 
 async def restaurant_feedback(customer_id):
 	global restaurant_service
@@ -445,7 +437,8 @@ def main():
 def test():
 	b = bot()
 	embeds = asyncio.run(b.embed("The restaurant is know for its mughlai food"))
-	asyncio.run(save_restaurant_embeddings(1, embeds))
+	init_embeddings()
+	asyncio.run(save_customer_embeddings("0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4", embeds))
 
 if __name__ == '__main__':
-	test()
+	main()

@@ -13,6 +13,7 @@ from torch_geometric.transforms import RandomLinkSplit, ToUndirected
 from client import CUSTOMER_FEATURES_FILE 
 from client import RESTAURANT_FEATURES_FILE 
 from client import NEIGHBOR_REST_CUST_FILE
+from scipy.sparse import coo_matrix
 
 from torch_geometric.data import (
     HeteroData,
@@ -85,9 +86,9 @@ class SWGDatasetLocal(InMemoryDataset):
         r_to_r_mask = r_to_r_mask.unsqueeze(0).expand(2, -1)
         r_to_r_indices = r_to_r.edge_index[r_to_r_mask].reshape(2, -1)
 
-        #print(f"local_restaurants:{local_restaurants}")
-        #print(f"r_to_a_indices:{r_to_a_indices}")
-        #print(f"a_to_r_indices:{a_to_r_indices}")
+        # print(f"local_restaurants:{local_restaurants}")
+        # print(f"r_to_a_indices:{r_to_a_indices}")
+        # print(f"a_to_r_indices:{a_to_r_indices}")
 
         subgraph_filter = {
             ('restaurant', 'to', 'area'): r_to_a_indices,
@@ -95,16 +96,17 @@ class SWGDatasetLocal(InMemoryDataset):
         }
         local_graph = self._data.edge_subgraph(subgraph_filter)
         
-        #print(f"local_graph:{local_graph}")
-        #print(f"{local_graph.to_namedtuple().restaurant.x}")
+        # print(f"local_graph:{local_graph}")
+        # print(f"{local_graph.to_namedtuple().restaurant.x}")
 
         # Customer features
         x = sp.load_npz(osp.join('/home/boscojacinto/projects/Restaurant-FL/', CUSTOMER_FEATURES_FILE))
         customer_attrs = torch.from_numpy(x.todense()).to(torch.float)
         #print(f"customer_attrs.shape:{customer_attrs.shape}")
         customers = torch.nonzero(customer_attrs.any(dim=1)).squeeze()
-        num_customers = customers.shape[0]
         #print(f"customers:{customers}")
+        num_customers = customers.shape[0]
+        #print(f"num_customers:{num_customers}")
 
         r_indices = torch.full((num_customers, ), p_id, dtype=torch.int)
         c_indices = customers.flatten()
@@ -195,8 +197,20 @@ def display_graph(data):
 
     plt.show()
 
+def create_dummy_customers():
+    customer_embeds = torch.rand(10000, 1024)
+    torch.save(customer_embeds, 'customer_embeddings.pt')    
+    customer_embeds[1] = torch.tensor(torch.rand(1024), dtype=torch.float)
+    #print(f"customer_embeds:{customer_embeds[1]}")
+    torch.save(customer_embeds, 'customer_embeddings.pt')
+    customer_feats = coo_matrix(customer_embeds)
+    #print(f"customer_feats:{customer_feats}")
+    sp.save_npz(CUSTOMER_FEATURES_FILE, customer_feats)
+
 def main():
     path = osp.join(osp.dirname(osp.realpath(__file__)), '')
+
+    create_dummy_customers()
 
     # Create dataset instance
     dataset = SWGDatasetLocal(path, 0, force_reload=True)
@@ -223,7 +237,7 @@ def main():
     # print(f"\nval_data:{val_data}")
     # print(f"\ntest_data:{test_data}")
 
-    display_graph(dataset.data)
+    #display_graph(dataset.data)
         
 if __name__ == "__main__":
     main()

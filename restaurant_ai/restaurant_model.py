@@ -43,7 +43,8 @@ TEMPLATE = """{{- range $i, $_ := .Messages }}
 {{- end }}"""
 
 class AIModel:
-    def __init__(self, customer_id, restaurantKey):
+    def __init__(self, customer_id={'emojiHash': DEFAULT_STOP_WORD},
+                 restaurantKey=DEFAULT_FEEDBACK_WORD):
         self.userKey = customer_id['emojiHash']
         self.restaurantKey = restaurantKey
         self.template = TEMPLATE % (self.userKey, SUMMARY_QUERY,
@@ -120,7 +121,7 @@ class AIModel:
 
     async def embed(self, text):
         response = await AsyncClient().embed(
-            model="nomic-embed-text",
+            model="mxbai-embed-large",
             input=text
         )
 
@@ -128,8 +129,12 @@ class AIModel:
         return self.embeddings
 
     async def similarity(self, text1, text2):
+        print(f"text1:{text1}")
+        print(f"text2:{text2}")
+
         embedding1 = await self.embed(text1)
         embedding2 = await self.embed(text2)
+        print(f"embedding1:{len(embedding1[0])}")
 
         dot_prod = np.dot(embedding1[0], embedding2[0])
         norm1 = np.linalg.norm(embedding1[0])
@@ -174,7 +179,7 @@ class AIModel:
 
 
 if __name__ == '__main__':
-    customer_id = {}
-    customer_id['emojiHash'] = DEFAULT_STOP_WORD
-    bot = AIModel(customer_id, DEFAULT_FEEDBACK_WORD)
+    bot = AIModel()
     asyncio.run(bot.create())
+    #print(asyncio.run(bot.embed("The restaurant is know for its mughlai food"))[0])
+    #print(asyncio.run(bot.similarity("I love chinese food", "I hate chinese food")))

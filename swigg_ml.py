@@ -13,16 +13,16 @@ import matplotlib.pyplot as plt
 from swigg_db import SWGDataset
 
 class SWG(torch.nn.Module):
-    def __init__(self, hidden_channels, out_channels, num_heads, num_layers, node_types, metadata):
+    def __init__(self, hidden_channels, out_channels, num_heads, num_layers, node_types, data):
         super().__init__()
 
         self.lin_dict = torch.nn.ModuleDict()
         for node_type in node_types:
-            self.lin_dict[node_type] = Linear(-1, hidden_channels)
+            self.lin_dict[node_type] = Linear(data.x_dict[node_type].size(-1), hidden_channels)
 
         self.convs = torch.nn.ModuleList()
         for _ in range(num_layers):
-            conv = HGTConv(hidden_channels, hidden_channels, metadata,
+            conv = HGTConv(hidden_channels, hidden_channels, data.metadata(),
                            num_heads)
             self.convs.append(conv)
 
@@ -48,17 +48,17 @@ def main():
         num_val=0.1,
         num_test=0.2,
         neg_sampling_ratio=0.0,
-        edge_types=[('restaurant', 'to', 'restaurant'),
-                    ('restaurant', 'to', 'area'),
-                    ('area', 'to', 'restaurant')
-                    ]
+        edge_types=[('restaurant', 'to', 'area'),
+                    ],
+        rev_edge_types=[('area', 'to', 'restaurant'),
+                    ],
     )
 
     train_data, val_data, test_data = transform(dataset.data)
 
     print(f"\n\ndataset.data.metadata():\n{dataset.data.metadata()}")
     model = SWG(hidden_channels=64, out_channels=2, num_heads=2, num_layers=1,
-                node_types=['restaurant', 'area', 'customer'], metadata=dataset.data.metadata())
+                node_types=['restaurant', 'area', 'customer'], data=dataset.data)
 
     device = torch.device('cpu')
     train_data = train_data.to(device)
@@ -100,7 +100,7 @@ def main():
         loss = F.cross_entropy(out, train_data['restaurant'].y)
         return acc, loss
 
-    for epoch in range(1, 6):
+    for epoch in range(1, 30):
         train()
         acc, loss = test()
         print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Acc(train): {acc[0]:.4f}, \n'
