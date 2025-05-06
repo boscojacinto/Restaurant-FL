@@ -19,7 +19,7 @@ import sys
 from torch_geometric.transforms import RandomLinkSplit, ToUndirected
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../'))
 from swigg_db_local import SWGDatasetLocal
-from swigg_ml import SWG
+from swigg_ml_local import SWG, create_loader, train_local, test_local
 import torch.nn.functional as F
 import numpy as np
 
@@ -47,13 +47,16 @@ def load_data(partition_id: int, num_partitions: int, model_name: str) -> tuple[
 					],
 	)
 
-	trainloader, valloader, testloader = transform(fds)
+	train_data, val_data, test_data = transform(fds)
+	train_loader, val_loader, test_loader = create_loader(train_data, val_data, test_data)
 
-	return fds, trainloader, testloader
+	return fds, train_loader, val_loader,test_loader
 
 def get_model(model_name, data):
-	return SWG(hidden_channels=64, out_channels=2, num_heads=2, num_layers=1,
-			node_types=['restaurant', 'area', 'customer'], data=data)
+	return SWG(hidden_channels=64, num_heads=2, num_layers=2,
+                node_types=['restaurant', 'area', 'customer'],
+                mlp_hidden_layers=[128, 64, 32, 1], mlp_dropout=0.4,
+                data=data)
 
 def get_params(model):
 	return [val.cpu().numpy() for _, val in model.state_dict().items()]
@@ -63,24 +66,11 @@ def set_params(model, parameters) -> None:
 	state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
 	model.load_state_dict(state_dict, strict=True)
 
-def train(net, trainloader, epochs, device) -> None:
-	optimizer = torch.optim.Adam(net.parameters(), lr=0.005, weight_decay=0.001)		
+def train(net, train_loader, epochs, device) -> None:
 	for epoch in range(1, epochs):
-		net.train()
-		optimizer.zero_grad()
-		outputs = net(trainloader.x_dict, trainloader.edge_index_dict)
-		loss = F.cross_entropy(outputs, trainloader['restaurant'].y)
-		print(f"l={loss}")
-		loss.backward()
-		optimizer.step()
+		train_local(net, train_loader, epoch)
 
-def test(net, testloader, device) -> tuple[Any | float, Any]:
-	loss = 0
-	net.eval()
-	with torch.no_grad():
-		outputs = net(testloader.x_dict, testloader.edge_index_dict)
-		preds = outputs.argmax(dim=-1)
-
-	accuracy = (preds == testloader['restaurant'].y).sum() / len(testloader['restaurant'].y)
-	loss = 1.0 - accuracy 
-	return loss, accuracy
+def test(net, test_loader, epochs, device) -> tuple[Any | float, Any]:
+	for epoch in range(1, epochs):
+		metric = test_local(net, test_loader, epoch)
+	return metric['loss'], metric['acc']

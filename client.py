@@ -288,8 +288,10 @@ def init_embeddings():
 	restaurant_embeds = torch.zeros((MAX_RESTAURANTS, RESTAURANT_FEATURES_NUM),
 								 dtype=torch.float)
 	torch.save(restaurant_embeds, 'restaurant_embeddings.pt')
-	os.remove(CUSTOMER_FEATURES_FILE)
-	os.remove(RESTAURANT_FEATURES_FILE)
+	if os.path.exists(CUSTOMER_FEATURES_FILE):
+		os.remove(CUSTOMER_FEATURES_FILE)
+	if os.path.exists(RESTAURANT_FEATURES_FILE):
+		os.remove(RESTAURANT_FEATURES_FILE)
 
 async def save_customer_embeddings(customer_id, embeds):
 	customer_embeds = torch.load('customer_embeddings.pt')
