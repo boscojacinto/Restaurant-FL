@@ -1,3 +1,4 @@
 restaurant_status/libs/libstatus.so.0 filter=lfs diff=lfs merge=lfs -text
 restaurant_status/libs/status-backend filter=lfs diff=lfs merge=lfs -text
 restaurant_fl/swg_state_global.pth filter=lfs diff=lfs merge=lfs -text
+restaurant_interactions.csv filter=lfs diff=lfs merge=lfs -text
