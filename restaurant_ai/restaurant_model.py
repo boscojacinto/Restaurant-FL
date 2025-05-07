@@ -2,7 +2,9 @@ import os
 import asyncio
 import torch
 import ollama
+import spacy
 import numpy as np
+from transformers import XLNetTokenizer, XLNetModel
 import csv
 import random
 from ollama import AsyncClient, ListResponse, ProgressResponse
@@ -79,7 +81,8 @@ class AIModel_Customer:
         return response["response"]
 
 class AIModel:
-    def __init__(self, customer_id, restaurantKey):
+    def __init__(self, customer_id={'emojiHash': DEFAULT_STOP_WORD},
+                 restaurantKey=DEFAULT_FEEDBACK_WORD):
         self.userKey = customer_id['emojiHash']
         self.restaurantKey = restaurantKey
         self.template = TEMPLATE % (self.userKey, SUMMARY_QUERY,
@@ -154,11 +157,67 @@ class AIModel:
         
         return response["response"]
 
+    async def embed(self, text):
+        response = await AsyncClient().embed(
+            model="mxbai-embed-large",
+            input=text
+        )
+
+        self.embeddings = response["embeddings"]
+        return self.embeddings[0]
+
+    async def similarity(self, text1, text2):
+        print(f"text1:{text1}")
+        print(f"text2:{text2}")
+
+        embedding1 = await self.embed(text1)
+        embedding2 = await self.embed(text2)
+        print(f"embedding1:{len(embedding1)}")
+
+        dot_prod = np.dot(embedding1, embedding2)
+        norm1 = np.linalg.norm(embedding1)
+        norm2 = np.linalg.norm(embedding2)
+        print(f"norm1:{norm1}")
+        print(f"norm2:{norm2}")
+        print(f"(norm1 * norm2):{(norm1 * norm2)}")
+        print(f"dot_prod:{dot_prod}")
+        sim = dot_prod / (norm1 * norm2)
+        print(f"sim:{sim}")
+        return sim
+
+    async def xlnet_similarity(self, embd1, embd2):
+
+        dot_prod = torch.dot(embd1, embd2)
+        norm1 = torch.linalg.norm(embd1)
+        norm2 = torch.linalg.norm(embd2)
+        sim = dot_prod / (norm1 * norm2)
+        return sim
+
+    async def xlnet_embed(self, text):
+        tokenizer = XLNetTokenizer.from_pretrained('xlnet-base-cased')
+        model = XLNetModel.from_pretrained('xlnet-base-cased',
+                                    output_hidden_states=True,
+                                    output_attentions=True).to("cpu")
+        input_ids = torch.tensor([tokenizer.encode(text)]).to("cpu")
+        all_hidden_states, all_attentions = model(input_ids)[-2:]
+        rep = (all_hidden_states[-2][0] * all_attentions[-2][0].mean(dim=0).mean(dim=0).view(-1, 1)).sum(dim=0)
+        return rep
+
+    def ner(self, text):
+        nlp = spacy.load("en_core_web_sm")
+        doc = nlp(text)
+        keywords = [(ent.text, ent.label_) for ent in doc.ents]
+        print(f"entities:{keywords}")
+
+        keywords = [token.text for token in doc if token.pos_ in ["ADJ"]]
+        print(f"adj:{keywords}")
+
+        keywords = [token.text for token in doc if token.dep_ in ["nsubj", "dobj"]]
+        print(f"sub, obj:{keywords}")
+
 
 if __name__ == '__main__':
-    customer_id = {}
-    customer_id['emojiHash'] = DEFAULT_STOP_WORD
-    bot = AIModel(customer_id, DEFAULT_FEEDBACK_WORD)
+    bot = AIModel()
     customer_bot = AIModel_Customer()
 
     asyncio.run(bot.create())
