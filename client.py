@@ -13,6 +13,7 @@ import requests
 import threading
 import scipy as sp
 import numpy as np
+import pandas as pd
 import multiprocessing
 from ctypes import CDLL
 import restaurant_pb2
@@ -281,10 +282,31 @@ class FLClient:
 	def stop(self):
 		self.thread.stop()
 
-def init_embeddings():
-	customer_embeds = torch.zeros((MAX_CUSTOMERS, CUSTOMER_FEATURES_NUM),
-								 dtype=torch.float)
+async def create_embeddings(file):
+    df = pd.read_csv(file)
+    b = bot()
+
+    async def cust_embed(x):
+        return await b.embed(x)
+
+    async def process_embed(values):
+    	tasks = [cust_embed(x) for x in values]
+    	return await asyncio.gather(*tasks) 
+
+    df["Customer's Description"] = await process_embed(df["Customer's Description"])
+
+    customer_embeds = torch.tensor(
+        df["Customer's Description"].tolist()
+    )
+    print(f"customer_embeds:{customer_embeds}")
+    return customer_embeds
+
+async def init_embeddings():
+	# customer_embeds = torch.zeros((MAX_CUSTOMERS, CUSTOMER_FEATURES_NUM),
+	# 							 dtype=torch.float)
+	customer_embeds = await create_embeddings('./restaurant_interactions.csv')	
 	torch.save(customer_embeds, 'customer_embeddings.pt')
+	
 	restaurant_embeds = torch.zeros((MAX_RESTAURANTS, RESTAURANT_FEATURES_NUM),
 								 dtype=torch.float)
 	torch.save(restaurant_embeds, 'restaurant_embeddings.pt')
@@ -303,7 +325,8 @@ async def save_customer_embeddings(customer_id, embeds):
 		print("In IF")
 		c_id = customer_ids[0]['id']
 	print(f"c_id:{c_id}")
-	customer_embeds[c_id] = torch.tensor(embeds[0], dtype=torch.float)
+
+	customer_embeds[c_id] = torch.tensor(embeds, dtype=torch.float)
 	print(f"customer_embeds.shape:{customer_embeds.shape}")
 	torch.save(customer_embeds, 'customer_embeddings.pt')
 	customer_feats = coo_matrix(customer_embeds)
@@ -311,8 +334,6 @@ async def save_customer_embeddings(customer_id, embeds):
 	sp.sparse.save_npz(CUSTOMER_FEATURES_FILE, customer_feats)
 
 async def save_restaurant_embeddings(customer_id, embeds):
-	#restaurant_embeds = torch.zeros((MAX_RESTAURANTS, 1024), dtype=torch.float)
-	#torch.save(restaurant_embeds, 'restaurant_embeddings.pt')
 	restaurant_embeds = torch.load('restaurant_embeddings.pt')
 	torch.manual_seed(42)
 	#r_id = random.randint(0, MAX_RESTAURANTS - 1)
@@ -325,13 +346,16 @@ async def save_restaurant_embeddings(customer_id, embeds):
 	print(f"r_id:{r_id}")
 	print(f"c_id:{c_id}")
 
-	restaurant_embeds[r_id] = torch.tensor(embeds[0], dtype=torch.float)
+	restaurant_embeds[r_id] = torch.tensor(embeds, dtype=torch.float)
 	torch.save(restaurant_embeds, 'restaurant_embeddings.pt')
 	restaurant_feats =coo_matrix(restaurant_embeds)
 	sp.sparse.save_npz(RESTAURANT_FEATURES_FILE, restaurant_feats)
 
+	customer_embeddings = torch.load('customer_embeddings.pt') 
 	r_c_adj = torch.zeros((MAX_RESTAURANTS, MAX_CUSTOMERS), dtype=torch.float)
-	r_c_adj[r_id, c_id] = 1
+	for i, v in enumerate(customer_embeddings):
+		r_c_adj[r_id, i] = 1
+
 	r_c_adj_np = r_c_adj.numpy()
 	np.save(NEIGHBOR_REST_CUST_FILE, r_c_adj_np, allow_pickle=False)
 
@@ -405,7 +429,7 @@ def main():
 
 	ai_client = AIClient(AI_MODEL)
 
-	init_embeddings()
+	asyncio.run(init_embeddings())
 
 	status_client.initApp(RESTAURANT_PASSWORD, cb=status_client.on_status_cb)
 	time.sleep(0.5)
@@ -436,11 +460,14 @@ def main():
 		ai_client.stop()
 		status_backend.terminate()
 
-def test():
+async def test():
 	b = bot()
-	embeds = asyncio.run(b.embed("The restaurant is know for its mughlai food"))
-	init_embeddings()
-	asyncio.run(save_customer_embeddings("0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4", embeds))
+	await init_embeddings()
+	embeds = await b.embed("The users show great love for mughlai food")
+	await save_customer_embeddings("0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4", embeds)
+	embeds = await b.embed("The restaurant is know for its mughlai food")
+	await save_restaurant_embeddings("0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4", embeds)
 
 if __name__ == '__main__':
 	main()
+	#asyncio.run(test())

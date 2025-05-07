@@ -126,7 +126,7 @@ class AIModel:
         )
 
         self.embeddings = response["embeddings"]
-        return self.embeddings
+        return self.embeddings[0]
 
     async def similarity(self, text1, text2):
         print(f"text1:{text1}")
@@ -134,11 +134,11 @@ class AIModel:
 
         embedding1 = await self.embed(text1)
         embedding2 = await self.embed(text2)
-        print(f"embedding1:{len(embedding1[0])}")
+        print(f"embedding1:{len(embedding1)}")
 
-        dot_prod = np.dot(embedding1[0], embedding2[0])
-        norm1 = np.linalg.norm(embedding1[0])
-        norm2 = np.linalg.norm(embedding2[0])
+        dot_prod = np.dot(embedding1, embedding2)
+        norm1 = np.linalg.norm(embedding1)
+        norm2 = np.linalg.norm(embedding2)
         print(f"norm1:{norm1}")
         print(f"norm2:{norm2}")
         print(f"(norm1 * norm2):{(norm1 * norm2)}")
@@ -181,5 +181,5 @@ class AIModel:
 if __name__ == '__main__':
     bot = AIModel()
     asyncio.run(bot.create())
-    #print(asyncio.run(bot.embed("The restaurant is know for its mughlai food"))[0])
+    #print(asyncio.run(bot.embed("The restaurant is know for its mughlai food")))
     #print(asyncio.run(bot.similarity("I love chinese food", "I hate chinese food")))
