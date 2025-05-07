@@ -105,7 +105,7 @@ class SWGDatasetLocal(InMemoryDataset):
         #print(f"customer_attrs.shape:{customer_attrs.shape}")
         customers = torch.nonzero(customer_attrs.any(dim=1)).squeeze()
         #print(f"customers:{customers}")
-        customers = torch.tensor([customers])
+        #customers = torch.tensor([customers])
         num_customers = customers.shape[0]
         #print(f"num_customers:{num_customers}")
 

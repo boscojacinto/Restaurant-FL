@@ -191,6 +191,24 @@ class SWGDataset(Dataset):
         # sp.sparse.save_npz('adjM.npz', self.adjM)
         np.save('adjM.npy', self.adjM, allow_pickle=False) 
 
+    def create_embeddings(self, file):
+        self.customer_interactions = pd.read_csv(file)
+        bot = AIModel()
+
+        def cust_embed(x):
+            return asyncio.run(bot.embed(x))[0]
+
+        self.customer_interactions["Customer's Description"] = self.customer_interactions["Customer's Description"].apply(
+            lambda x: cust_embed(x) 
+        )
+        customer_embeds = torch.tensor(
+            self.customer_interactions["Customer's Description"].tolist()
+        )
+        print(f"customer_embeds:{customer_embeds}")
+        torch.save(customer_embeds, 'customer_embeddings.pt')
+        customer_feats = coo_matrix(customer_embeds)
+        sp.sparse.save_npz('features_customers.npz', customer_feats)
+
     def create_zip(self):
         with zipfile.ZipFile(f'SWGD_{self.city.replace(" ","-")}.zip',
                              'w', compression=zipfile.ZIP_DEFLATED) as zipf:
@@ -211,13 +229,15 @@ class SWGDataset(Dataset):
         os.remove('labels.npy')
 
 def main():
-    csv_path = './restaurant.csv'
+    restaurant_csv_path = './restaurant.csv'
     city = 'mumbai'
+    customer_csv_path = './restaurant_interactions.csv'
 
-    dataset = SWGDataset(csv_path, city)
+    dataset = SWGDataset(restaurant_csv_path, city)
     dataset.create_features()
     dataset.create_adjacency()
     dataset.create_zip()
+    dataset.create_embeddings(customer_csv_path)
 
 if __name__ == "__main__":
     main()
