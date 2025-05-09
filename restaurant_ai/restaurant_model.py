@@ -216,22 +216,14 @@ class AIModel:
         print(f"sub, obj:{keywords}")
 
 
-if __name__ == '__main__':
-    bot = AIModel()
-    customer_bot = AIModel_Customer()
-
-    asyncio.run(bot.create())
-    asyncio.run(customer_bot.create())
-    
-    # Prepare CSV file
-    csv_file_path = 'restaurant_interactions.csv'
+def restaurant_customer_chat(bot, customer_bot, csv_file_path='restaurant_interactions.csv', rounds=50):
     headers = ["Turns", "Customer's Question", "Restaurant's Bot Response", "Customer's Description", "Is Customer Satisfied?"]
     
     with open(csv_file_path, 'w', newline='', encoding='utf-8') as csvfile:
         csv_writer = csv.writer(csvfile)
         csv_writer.writerow(headers)
         
-        for i in range(50):
+        for i in range(rounds):
             print(f"Round {i+1}")
             print()
             msg = asyncio.run(bot.generate("Hello"))
@@ -262,3 +254,13 @@ if __name__ == '__main__':
             customer_bot.context = None
     
     print(f"\nData saved to {os.path.abspath(csv_file_path)}")
+
+
+if __name__ == '__main__':
+    bot = AIModel()
+    customer_bot = AIModel_Customer()
+
+    asyncio.run(bot.create())
+    asyncio.run(customer_bot.create())
+    
+    restaurant_customer_chat(bot, customer_bot)
