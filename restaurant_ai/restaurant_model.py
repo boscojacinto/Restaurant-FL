@@ -12,6 +12,7 @@ from ollama import AsyncClient, ListResponse, ProgressResponse
 SOURCE_MODEL = "gemma3:4b"
 CUSTOM_MODEL = "swigg1.0-gemma3:4b"
 CUSTOM_MODEL_CUSTOMER = "swigg1.0-gemma3:4b-customer"
+CUSTOM_MODEL_FEEDBACK = "swigg1.0-gemma3:4b-feedback"
 
 SYSTEM_PROMPT = """
 You are a friendly culinary expert with knowledge of food,
@@ -26,6 +27,10 @@ of the user's time.
 SYSTEM_PROMPT_CUSTOMER = """
 You are a curious customer ordering food from a restaurant and is eager to know about cusisines and food related stuff.
 You engage with the restaurant's bot in a short but insightful, enjoyable conversations. Your task is to ask the restaurant's bot about food, cooking techniques, regional cuisines, and global food culture. Please keep your questions short and to the point, like really short.
+"""
+
+SYSTEM_PROMPT_FEEDBACK = """
+You are a customer who is providing feedback about a restaurant. The feedback should be short and straight to the point. Make sure to either keep the feedback positive or negative or neutral (i.e. mix of both). Keep it natural, like a real customer would do.
 """
 
 DEFAULT_STOP_WORD = "zQ3sh"
@@ -49,6 +54,36 @@ TEMPLATE = """{{- range $i, $_ := .Messages }}
 {{ end }}
 {{- end }}
 {{- end }}"""
+
+class AIModel_Feedback:
+    def __init__(self):
+        self.messages = []
+        self.context = None
+    
+    async def create(self) -> int:
+        done: ProgressResponse = await AsyncClient().pull(SOURCE_MODEL)
+
+        if done.status == 'success':
+            await AsyncClient().create(model=CUSTOM_MODEL_FEEDBACK,
+                from_=SOURCE_MODEL, system=SYSTEM_PROMPT_FEEDBACK)
+            return True
+        else:
+            print(f"Failed to pull source model:{SOURCE_MODEL}")
+            return False
+        
+    async def generate(self, prompt) -> str:
+        #self.messages.append({'role': 'user', 'content': msg})
+
+        response = await AsyncClient().generate(
+            model=CUSTOM_MODEL_FEEDBACK,
+            prompt=prompt,
+            context=self.context,
+            options={
+                # "temperature": 1.0,
+            }
+        )
+
+        return response["response"]
 
 class AIModel_Customer:
     def __init__(self):
@@ -255,12 +290,49 @@ def restaurant_customer_chat(bot, customer_bot, csv_file_path='restaurant_intera
     
     print(f"\nData saved to {os.path.abspath(csv_file_path)}")
 
+def restaurant_feedback_chat(bot, csv_file_path='restaurant_feedback.csv', rounds=50):
+    headers = ["Turns", "Customer's Feedback"]
+
+    restaurants = ["McDinner", "Behrouz", "The Urban Food", "La Bella Cucina"]
+    responses_sentiment = ["Positive", "Negative", "Neutral"]
+    restaurant_count = 0
+    sentiment_count = 0
+
+    with open(csv_file_path, 'w', newline='', encoding='utf-8') as csvfile:
+        csv_writer = csv.writer(csvfile)
+        csv_writer.writerow(headers)
+
+        for i in range(rounds):
+            print(f"Round {i + 1}")
+            print()
+            restaurant_index = restaurant_count % len(restaurants)
+            sentiment_index = sentiment_count % len(responses_sentiment)
+            feedback = asyncio.run(bot.generate(f"How was your recent visit to {restaurants[restaurant_index]} Restaurant? Provide a {responses_sentiment[sentiment_index]} feedback."))
+            print(f"Feedback: {feedback}")
+            print("" + "-" * 20)
+            print()
+            restaurant_count += 1
+            sentiment_count += 1
+
+            # Write to CSV
+            csv_writer.writerow([
+                "1",                  # Turns is always 1
+                feedback              # Customer's Feedback
+            ])
+
+            bot.context = None
+            
+    print(f"\nData saved to {os.path.abspath(csv_file_path)}")
 
 if __name__ == '__main__':
     bot = AIModel()
-    customer_bot = AIModel_Customer()
+    feedback_bot = AIModel_Feedback()
+    # customer_bot = AIModel_Customer()
 
     asyncio.run(bot.create())
-    asyncio.run(customer_bot.create())
-    
-    restaurant_customer_chat(bot, customer_bot)
+    asyncio.run(feedback_bot.create())
+    # asyncio.run(customer_bot.create())
+
+    restaurant_feedback_chat(feedback_bot) 
+
+    # restaurant_customer_chat(bot, customer_bot)
