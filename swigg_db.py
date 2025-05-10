@@ -1,8 +1,12 @@
 import os
+import torch
+import asyncio
 import os.path as osp
 import numpy as np
-import torch
+import pandas as pd
 from itertools import product
+from scipy.sparse import coo_matrix, issparse, load_npz
+import scipy as sp
 from typing import Callable, List, Optional
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -11,6 +15,7 @@ from torch_geometric.utils import to_networkx
 from torch_geometric.transforms import RandomLinkSplit, ToUndirected
 
 from torch_geometric.data import (
+    Data,
     HeteroData,
     InMemoryDataset,
     download_url,
@@ -27,11 +32,6 @@ class SWGDataset(InMemoryDataset):
         pre_transform: Optional[Callable] = None,
         force_reload: bool = False,
     ) -> None:
-        # if partition_id == 0:
-        #     self.url = 'https://www.dropbox.com/scl/fi/yunjx1gqni33lonymnk1u/SWGD_mumbai-powai.zip?rlkey=m7oa6092f4cpfo8rmwb1vdg0o&st=zopltm43&dl=1'
-        # elif partition_id == 1:
-        #     self.url = 'https://www.dropbox.com/scl/fi/pi0u8bd94upmxn4qhnty8/SWGD_mumbai-santacruz-east.zip?rlkey=5e8ostffn0s8ve3rqqag1irw4&st=4aj7c48z&dl=1'
-        # else:
         self.url = 'https://www.dropbox.com/scl/fi/oscg6t3utw6z0o6no662q/SWGD_mumbai.zip?rlkey=4cr0v3npt5mjvxysdskjt7p80&st=uiyzr3v8&dl=1'
 
         super().__init__(root, transform, pre_transform,
@@ -99,39 +99,24 @@ class SWGDataset(InMemoryDataset):
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}()'
 
-
-def main():
+async def main():
     path = osp.join(osp.dirname(osp.realpath(__file__)), '')
 
     # Create dataset instance
-    dataset = SWGDataset(path, 3, force_reload=True)
-    print(f"dataset.data['restaurant', 'area']:{dataset.data['restaurant', 'area'].num_edge_features}")
-    print(f"dataset.data['area', 'restaurant']:{dataset.data['area', 'restaurant'].num_edge_features}")
+    dataset = SWGDataset(path, 0, force_reload=True)
     print(f"dataset.data = {dataset.data}")
 
     # transform = RandomLinkSplit(
     #     num_val=0.05,
     #     num_test=0.1,
     #     neg_sampling_ratio=0.0,
-    #     edge_types=[('restaurant', 'to', 'restaurant'),
-    #                 ('restaurant', 'to', 'area'),
-    #                 ('restaurant', 'to', 'customer'),
-    #                 ('area', 'to', 'customer'),
-    #                 ('customer', 'to', 'restaurant'),
-    #                 ('customer', 'to', 'area')]
+    #     edge_types=[('restaurant', 'to', 'area'),
+    #                 ],
+    #     rev_edge_types=[('area', 'to', 'restaurant'),
+    #                 ],
     # )
-
     # train_data, val_data, test_data = transform(dataset.data)
-    # print(f"test_datalen:{len(test_data['restaurant'].y)}")
 
-    # Create a simple graph  
-    # G = to_networkx(dataset.data, node_attrs=['x'])
-    # print(f"Number of nodes: {G.number_of_nodes()}")
-    # print(f"Number of edges: {G.number_of_edges()}")
-
-    # pos = nx.spring_layout(G)  # Layout for visualization
-    # nx.draw(G, pos, with_labels=False, node_color='lightblue', node_size=500, font_size=10)
-    # plt.show()
     
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

@@ -14,6 +14,8 @@ from client import CUSTOMER_FEATURES_FILE
 from client import RESTAURANT_FEATURES_FILE 
 from client import NEIGHBOR_REST_CUST_FILE
 from scipy.sparse import coo_matrix
+from torch_geometric.loader import HGTLoader
+
 
 from torch_geometric.data import (
     HeteroData,
@@ -215,11 +217,6 @@ def main():
 
     # Create dataset instance
     dataset = SWGDatasetLocal(path, 0, force_reload=True)
-    #print(f"\ndataset.data:{dataset.data}")
-    #print(f"\ndataset.stores:{dataset.data.stores}")
-
-    #local_data = dataset.data.to_dict()
-    #print(f"local_data:{local_data}")
 
     # transform = RandomLinkSplit(
     #     num_val=0.1,
@@ -234,11 +231,7 @@ def main():
     # )
 
     # train_data, val_data, test_data = transform(dataset.data)
-    # print(f"\ntrain_data:{train_data}")
-    # print(f"\nval_data:{val_data}")
-    # print(f"\ntest_data:{test_data}")
-
-    #display_graph(dataset.data)
+    #display_graph(batch)
         
 if __name__ == "__main__":
     main()

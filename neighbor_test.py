@@ -14,9 +14,9 @@ from torch_geometric.data import (
 
 def main():
 	data = HeteroData()
-	data['restaurant'].x = torch.normal(mean=0.5, std=0.1, size=(40, 1024))	
-	data['customer'].x = torch.normal(mean=0.1, std=0.2, size=(100, 1024))
-	data['area'].x = torch.normal(mean=0.3, std=0.1, size=(4, 1024))
+	data['restaurant'].x = torch.normal(mean=0.5, std=0.1, size=(4, 1024))	
+	data['customer'].x = torch.normal(mean=0.1, std=0.2, size=(10, 1024))
+	data['area'].x = torch.normal(mean=0.3, std=0.1, size=(2, 1024))
 
 	def create_edges(r, c, n):
 		row = torch.randint(low=0, high=r, size=(n,))
@@ -31,7 +31,7 @@ def main():
 		unique_indices, counts = torch.unique(edge_t, dim=0, return_counts=True, return_inverse=False)
 		#print(f"counts:{counts}")
 		unique_indices = unique_indices.t()
-		#print(f"unique_indices.shape:{unique_indices.shape}")
+		print(f"unique_indices:\n{unique_indices}")
 		# columns = [tuple(edge[:, i].tolist()) for i in range(edge.shape[1])]
 		# seen = set()
 		# unique_indices = [i for i, col in enumerate(columns) if not (col in seen or seen.add(col))]
@@ -39,24 +39,26 @@ def main():
 		# edge = edge[:, unique_indices]
 		return unique_indices
 
-	data['restaurant', 'to', 'customer'].edge_index = create_edges(40, 100, 200)
-	data['restaurant', 'to', 'area'].edge_index = create_edges(40, 4, 100)
-	data['customer', 'to', 'area'].edge_index = create_edges(100, 4, 100)
+	data['restaurant', 'to', 'customer'].edge_index = create_edges(4, 10, 2)
+	data['restaurant', 'to', 'area'].edge_index = create_edges(4, 2, 2)
+	data['customer', 'to', 'area'].edge_index = create_edges(10, 4, 2)
 
 	d = data.to_namedtuple()
 	print(f"d.restaurant__to__customer:{d.restaurant__to__customer}")
 	print(f"d.restaurant__to__area:{d.restaurant__to__area}")
 	print(f"d.customer__to__area:{d.restaurant__to__area}")
 
-	display_graph(data)
+	#display_graph(data)
+	print(f"data:{data}")
+	#data = data.cpu('x', 'edge_index')
 
-	# sample_loader = HGTLoader(
-	# 	data,
-	# 	num_samples={'restaurant': [2], 'customer': [50], 'area': [2]},
-	# 	batch_size=10,
-	# 	input_nodes=['restaurant', 'customer', 'area']
-	# )
-	# print(f"sample_loader:{sample_loader}")
+	sample_loader = HGTLoader(
+		data,
+		num_samples={'restaurant': [1, 1]},
+		batch_size=1,
+		input_nodes=('restaurant', torch.randint(0, 2, (4,), dtype=torch.bool))
+	)
+	print(f"sample_loader:{sample_loader}")
 
 
 def display_graph(data):

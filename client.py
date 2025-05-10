@@ -284,6 +284,7 @@ class FLClient:
 
 async def create_embeddings(file):
     df = pd.read_csv(file)
+    df = df.sample(frac=0.5, random_state=42)
     b = bot()
 
     async def cust_embed(x):
@@ -302,9 +303,15 @@ async def create_embeddings(file):
     return customer_embeds
 
 async def init_embeddings():
-	# customer_embeds = torch.zeros((MAX_CUSTOMERS, CUSTOMER_FEATURES_NUM),
-	# 							 dtype=torch.float)
-	customer_embeds = await create_embeddings('./restaurant_interactions.csv')	
+	customer_embeds = torch.zeros((MAX_CUSTOMERS, CUSTOMER_FEATURES_NUM),
+								 dtype=torch.float)
+	embeds = await create_embeddings('./restaurant_interactions.csv')	
+	#print(f"embeds:{embeds}")
+	random_customer_ids = torch.randperm(MAX_CUSTOMERS)[:25]
+	#print(f"random_customer_ids:{random_customer_ids.shape}")
+	torch.save(random_customer_ids, 'restaurant_customer_ids.pt')
+	customer_embeds[random_customer_ids] = embeds
+	#print(f"customer_embeds:{customer_embeds}")
 	torch.save(customer_embeds, 'customer_embeddings.pt')
 	
 	restaurant_embeds = torch.zeros((MAX_RESTAURANTS, RESTAURANT_FEATURES_NUM),
@@ -319,18 +326,18 @@ async def save_customer_embeddings(customer_id, embeds):
 	customer_embeds = torch.load('customer_embeddings.pt')
 	torch.manual_seed(42)
 	c_id = random.randint(0, MAX_CUSTOMERS - 1)
-	print(f"customer_ids[0]['publicKey']:{customer_ids[0]['publicKey']}")
-	print(f"customer_id:{customer_id}")
+	#print(f"customer_ids[0]['publicKey']:{customer_ids[0]['publicKey']}")
+	#print(f"customer_id:{customer_id}")
 	if customer_ids[0]['publicKey'] == customer_id:
 		print("In IF")
 		c_id = customer_ids[0]['id']
 	print(f"c_id:{c_id}")
 
 	customer_embeds[c_id] = torch.tensor(embeds, dtype=torch.float)
-	print(f"customer_embeds.shape:{customer_embeds.shape}")
+	#print(f"customer_embeds.shape:{customer_embeds.shape}")
 	torch.save(customer_embeds, 'customer_embeddings.pt')
 	customer_feats = coo_matrix(customer_embeds)
-	print(f"customer_feats:{customer_feats}")
+	#print(f"customer_feats:{customer_feats}")
 	sp.sparse.save_npz(CUSTOMER_FEATURES_FILE, customer_feats)
 
 async def save_restaurant_embeddings(customer_id, embeds):
@@ -463,11 +470,11 @@ def main():
 async def test():
 	b = bot()
 	await init_embeddings()
-	embeds = await b.embed("The users show great love for mughlai food")
-	await save_customer_embeddings("0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4", embeds)
-	embeds = await b.embed("The restaurant is know for its mughlai food")
-	await save_restaurant_embeddings("0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4", embeds)
+	# embeds = await b.embed("The users show great love for mughlai food")
+	# await save_customer_embeddings("0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4", embeds)
+	# embeds = await b.embed("The restaurant is know for its mughlai food")
+	# await save_restaurant_embeddings("0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4", embeds)
 
 if __name__ == '__main__':
-	main()
-	#asyncio.run(test())
+	#main()
+	asyncio.run(test())
