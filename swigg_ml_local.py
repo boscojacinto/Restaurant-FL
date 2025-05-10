@@ -243,5 +243,7 @@ def main():
         train_local(model, train_loader, epoch)
         test_local(model, test_loader, epoch)
 
+    torch.save(model.state_dict(), 'swg_state_local_1.pth')
+
 if __name__ == "__main__":
     main()

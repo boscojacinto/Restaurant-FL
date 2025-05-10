@@ -19,15 +19,31 @@ from torch_geometric.data import (
     extract_zip,
 )
 from swigg_db import SWGDataset
+from swigg_ml_local import SWG 
+from swigg_db_local import SWGDatasetLocal
 
 MAX_CUSTOMERS = 10000
 CUSTOMER_FEATURES_NUM = 1024
 
-@torch.no_grad()
-def init_params(loader):
+def predict(model, loader):
     batch = next(iter(loader))
-    print(f"batch:{batch}")
-    display_graph(batch)
+    #display_graph(batch)
+
+    model.to('cpu')
+    model.eval()
+
+    with torch.no_grad():
+        edge_label_index = batch.edge_index_dict[('restaurant', 'to', 'customer')]
+        predictions, _ = model(
+            batch.x_dict,
+            batch.edge_index_dict,
+            edge_label_index,
+        )
+
+        predictions = torch.sigmoid(predictions)
+        print(f"predictions:{predictions}")
+
+    return predictions.cpu()
 
 def display_graph(data):
     # Create a simple graph
@@ -56,7 +72,18 @@ def display_graph(data):
 
     plt.show()
 
+def generate_prediction(p_id, data, test_loader):
+    model = SWG(hidden_channels=64, num_heads=2, num_layers=2,
+                node_types=['restaurant', 'area', 'customer'],
+                mlp_hidden_layers=[128, 64, 32, 1], mlp_dropout=0.4,
+                data=data)
+    model.load_state_dict(torch.load(f'./swg_state_local_{p_id}.pth'))
+    print(f'Loaded model weights')
+
+    predict(model, test_loader)
+
 async def main():
+    p_id = 1
     path = osp.join(osp.dirname(osp.realpath(__file__)), '')
 
     dataset = SWGDataset(path, 0, force_reload=True)
@@ -96,7 +123,6 @@ async def main():
     #print(f"new_customers:{new_customers}")
     #print(f"customer_indices:{customer_indices}")
 
-    p_id = 1
     r_indices = torch.full((len(customer_indices), ), p_id, dtype=torch.int)
     c_indices = customer_indices.flatten()
     #print(f"c_indices:{c_indices}")
@@ -110,7 +136,7 @@ async def main():
         ('customer', 'to', 'restaurant'): { 'edge_index': c_to_r_indices }
     }) 
     local_graph = dataset.data.update(customer_graph)
-    print(f"local_graph = {local_graph}")
+    #print(f"local_graph = {local_graph}")
 
     mask = torch.zeros(10000, dtype=torch.bool)
     mask[customer_indices] =  True
@@ -125,7 +151,8 @@ async def main():
         input_nodes=('customer', mask),
         **kwargs 
     )
-    init_params(test_loader)
+    
+    generate_prediction(p_id, local_graph, test_loader)
     
 if __name__ == "__main__":
     asyncio.run(main())

@@ -476,5 +476,5 @@ async def test():
 	# await save_restaurant_embeddings("0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4", embeds)
 
 if __name__ == '__main__':
-	#main()
-	asyncio.run(test())
+	main()
+	#asyncio.run(test())
