@@ -27,7 +27,7 @@ CUSTOMER_FEATURES_NUM = 1024
 
 def predict(model, loader):
     batch = next(iter(loader))
-    #display_graph(batch)
+    display_graph(batch)
 
     model.to('cpu')
     model.eval()

@@ -29,13 +29,13 @@ class RestaurantClient(NumPyClient):
 
 	def fit(self, parameters, config) -> tuple[list, int, dict]:
 		set_params(self.net, parameters)
-		train(self.net, self.train_loader, epochs=30, device=self.device)
+		train(self.net, self.train_loader, epochs=12, device=self.device)
 		torch.save(self.net.state_dict(), f'swg_state_local_{self.partition_id}.pth')
 		return get_params(self.net), len(self.train_loader), {}
 
 	def evaluate(self, parameters, config) -> tuple[float, int, dict[str, float]]:
 		set_params(self.net, parameters)
-		loss, accuracy = test(self.net, self.test_loader, epochs=30, device=self.device)
+		loss, accuracy = test(self.net, self.test_loader, epochs=12, device=self.device)
 		print(f"loss:{loss} accuracy:{accuracy}")
 		return float(loss), len(self.test_loader), {"accuracy": float(accuracy)}
 
