@@ -16,7 +16,7 @@ def main():
 	@WakuCallBack
 	def wakuCallBack(ret_code, msg: str, user_data):
 		if ret_code != 0:
-			print(f"Error: {ret}")
+			print(f"Error: {ret_code}")
 
 		if not user_data:
 			print("user data is null")
@@ -123,10 +123,10 @@ def main():
 	#peer_str = "/dns4/node-01.gc-us-central1-a.waku.test.status.im/tcp/30303/p2p/16Uiu2HAmDCp8XJ9z1ev18zuv8NHekAsjNyezAvmMfFEJkiharitG"
 	#peer_str = "/dns4/node-01.do-ams3.wakuv2.prod.status.im/tcp/30303/p2p/16Uiu2HAmL5okWopX7NqZWBUKVqW8iUxCEmd5GMHLVPwCgzYzQv3e"
 	#peer_str = "/dns4/node-01.do-ams3.waku.sandbox.status.im/tcp/30303/p2p/16Uiu2HAmNaeL4p3WEYzC9mgXBmBWSgWjPHRvatZTXnp8Jgv3iKsb"
-	# peer_str = ""
-	# peer = ctypes.c_char_p(peer_str.encode('utf-8'))
-	# ret = waku_go.waku_connect(ctx, peer, 20000, wakuCallBack, None)
-	# print(f"connect:{ret}")
+	peer_str = "/ip4/192.168.1.26/tcp/35049/p2p/16Uiu2HAkvRxhwbbg4NdjegLJ1qKYe2yZvrh6qSppWwJiL7YfAgUY"
+	peer = ctypes.c_char_p(peer_str.encode('utf-8'))
+	ret = waku_go.waku_connect(ctx, peer, 20000, wakuCallBack, None)
+	print(f"connect:{ret}")
 
 	# topic = default_pubsub_topic.value.decode('utf-8')
 	# content = content_topic.value.decode('utf-8')
