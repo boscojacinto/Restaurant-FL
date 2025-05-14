@@ -3,7 +3,14 @@ import ctypes
 import time
 from ctypes import CDLL
 
+# Use reference from go-waku https://github.com/waku-org/go-waku/blob/master/examples/c-bindings/main.c 
+# Use PSI repo for reference for messages https://github.com/OpenMined/PSI
+# Use neighbor_restaurant.py for PSI package api references and usuage with customer list
+
 WAKU_GO_LIB = "./libgowaku.so.0"
+HOST = "192.168.1.26"
+PORT = 0
+IS_STORE = False
 
 WakuCallBack = ctypes.CFUNCTYPE(
 	None,
@@ -12,7 +19,7 @@ WakuCallBack = ctypes.CFUNCTYPE(
 	ctypes.c_void_p
 )
 
-def main():
+def main():	
 	@WakuCallBack
 	def wakuCallBack(ret_code, msg: str, user_data):
 		if ret_code != 0:
@@ -42,6 +49,12 @@ def main():
 
 			data_ref[0] = ctypes.cast(msg_ptr, ctypes.c_char_p)
 			data_ptr = data_ref[0]
+
+	@WakuCallBack
+	def eventCallBack(ret_code, msg: str, user_data):
+		if ret_code != 0:
+			print(f"Error: {ret_code}")
+			print(f"\nEvent: {msg}")
 	
 	waku_go = CDLL(WAKU_GO_LIB)
 	waku_go.waku_new.argtypes = [ctypes.c_char_p, WakuCallBack, ctypes.c_void_p]
@@ -66,12 +79,22 @@ def main():
 	waku_go.waku_peer_cnt.restype = ctypes.c_int
 	waku_go.waku_relay_subscribe.argtypes = [ctypes.c_void_p, ctypes.c_char_p, WakuCallBack, ctypes.c_void_p]
 	waku_go.waku_relay_subscribe.restype = ctypes.c_int
+	# waku_go.waku_encode_asymmetric.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, WakuCallBack, ctypes.c_void_p]
+	# waku_go.waku_encode_asymmetric.restype = ctypes.c_int
+	waku_go.waku_relay_publish.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int, WakuCallBack, ctypes.c_void_p]
+	waku_go.waku_relay_publish.restype = ctypes.c_int
 
-	json_config = "{ \"host\": \"%s\", \"port\": %d}" % ("192.168.1.26", int(0))
+	# waku_go.waku_set_event_callback.argtypes = [ctypes.c_void_p, WakuCallBack]
+	# waku_go.waku_set_event_callback.restype = ctypes.c_void
+
+	json_config = "{ \"host\": \"%s\", \"port\": %d, \"store\": %s}" % (HOST, int(PORT), "true" if IS_STORE else "false")
 	json_config = json_config.encode('ascii')
 
 	ctx = waku_go.waku_new(json_config, wakuCallBack, None)
 	time.sleep(2)
+
+	# ret = waku_go.waku_set_event_callback(ctx, eventCallBack)
+	# print(f"setcallback:{ret}")
 
 	ret = waku_go.waku_start(ctx, wakuCallBack, None)
 	print(f"start:{ret}")
@@ -102,11 +125,6 @@ def main():
 	print(f"content topic:{content_topic.value}")
 	time.sleep(2)
 
-	# default_pubsub_topic = ctypes.c_char_p(None)
-	# ret = waku_go.waku_default_pubsub_topic(wakuCallBack, ctypes.byref(default_pubsub_topic))
-	# time.sleep(2)
-	# print(f"default_pubsub_topic:{default_pubsub_topic.value}")
-
 	# # url_str = "enrtree://AOGYWMBYOUIMOENHXCHILPKY3ZRFEULMFI4DOM442QSZ73TT2A7VI@test.waku.nodes.status.im"
 	# url_str = "enrtree://AIRVQ5DDA4FFWLRBCHJWUWOO6X6S4ZTZ5B667LQ6AJU6PEYDLRD5O@sandbox.waku.nodes.status.im"
 	# nameserver_str = ""
@@ -119,35 +137,13 @@ def main():
 	# print(f"discovered_nodes:{discovered_nodes.value}")
 	# time.sleep(2)
 
-	#peer_str = "/dns4/node-01.do-ams3.waku.test.status.im/tcp/30303/p2p/16Uiu2HAkykgaECHswi3YKJ5dMLbq2kPVCo89fcyTd38UcQD6ej5W"
-	#peer_str = "/dns4/node-01.gc-us-central1-a.waku.test.status.im/tcp/30303/p2p/16Uiu2HAmDCp8XJ9z1ev18zuv8NHekAsjNyezAvmMfFEJkiharitG"
-	#peer_str = "/dns4/node-01.do-ams3.wakuv2.prod.status.im/tcp/30303/p2p/16Uiu2HAmL5okWopX7NqZWBUKVqW8iUxCEmd5GMHLVPwCgzYzQv3e"
-	#peer_str = "/dns4/node-01.do-ams3.waku.sandbox.status.im/tcp/30303/p2p/16Uiu2HAmNaeL4p3WEYzC9mgXBmBWSgWjPHRvatZTXnp8Jgv3iKsb"
-	peer_str = "/ip4/192.168.1.26/tcp/35049/p2p/16Uiu2HAkvRxhwbbg4NdjegLJ1qKYe2yZvrh6qSppWwJiL7YfAgUY"
+	peer_str = "/ip4/192.168.1.26/tcp/37541/p2p/16Uiu2HAmNmMtxoYQV48YbuX8RjojaHuFhYyrGfTu6AssgkSzW9M1"
 	peer = ctypes.c_char_p(peer_str.encode('utf-8'))
 	ret = waku_go.waku_connect(ctx, peer, 20000, wakuCallBack, None)
 	print(f"connect:{ret}")
 
-	# topic = default_pubsub_topic.value.decode('utf-8')
-	# content = content_topic.value.decode('utf-8')
-	# print(f"topic:{topic}, content:{content}")
-
-	# content_filter_obj = {"pubsubTopic": topic, "contentTopics": [content]}
-	# print(f"content_filter_obj:{content_filter_obj}")
-
-	# content_filter_str = json.dumps(content_filter_obj)
-	# print(f"content_filter_str:{content_filter_str}")
-
-	# content_filter_bytes = content_filter_str.encode('utf-8')
-	# print(f"content_filter_bytes:{content_filter_bytes}")
-
-	# content_filter = ctypes.c_char_p(content_filter_bytes)
-
-	# ret = waku_go.waku_relay_subscribe(ctx, content_filter, wakuCallBack, None)
-	# print(f"ret:{ret}")
-
-	# ret = waku_go.waku_peer_cnt(ctx, wakuCallBack, user_data)
-	# print(f"peercnt:{ret}")
+	# Publish dummy message over content topic
+	#waku_go.waku_relay_publish(ctx, )
 
 	while True:
 		time.sleep(1)
