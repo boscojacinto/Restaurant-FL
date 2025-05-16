@@ -5,7 +5,7 @@ import warnings
 
 import restaurant_pb2 as restaurant__pb2
 
-GRPC_GENERATED_VERSION = '1.71.0'
+GRPC_GENERATED_VERSION = '1.69.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 

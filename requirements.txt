@@ -28,7 +28,7 @@ duckduckgo_search==7.5.5
 en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl#sha256=1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85
 evaluate==0.4.3
 filelock==3.17.0
-protobuf==5.27.2
+protobuf==5.29.3
 flwr @ https://github.com/boscojacinto/Restaurant-FL/releases/download/v1.0.0/flwr-1.19.0-py3-none-any.whl
 #flwr-datasets==0.5.0
 fonttools==4.56.0
@@ -98,7 +98,7 @@ openai==1.70.0
 openinference-instrumentation==0.1.26
 openinference-instrumentation-smolagents==0.1.8
 openinference-semantic-conventions==0.1.16
-openmined_psi==2.0.5
+openmined_psi @ https://github.com/boscojacinto/Restaurant-FL/releases/download/v1.0.0/openmined_psi-2.0.5-cp312-cp312-manylinux_2_39_x86_64.whl
 opentelemetry-api==1.31.1
 opentelemetry-exporter-otlp==1.31.1
 opentelemetry-exporter-otlp-proto-common==1.31.1
