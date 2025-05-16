@@ -1,7 +1,16 @@
+import os
+import sys
 import json
 import ctypes
 import time
+import asyncio
 from ctypes import CDLL
+import pytz
+from datetime import datetime
+import secrets
+
+# from neighbor_restauarnt import RestaurantNeighbor, restaurant_setup 
+# import restaurant_pb2
 
 # Use reference from go-waku https://github.com/waku-org/go-waku/blob/master/examples/c-bindings/main.c 
 # Use PSI repo for reference for messages https://github.com/OpenMined/PSI
@@ -11,6 +20,7 @@ WAKU_GO_LIB = "./libgowaku.so.0"
 HOST = "192.168.1.26"
 PORT = 0
 IS_STORE = False
+KEY = '0x' + secrets.token_hex(32) #TODO: change later
 
 WakuCallBack = ctypes.CFUNCTYPE(
 	None,
@@ -27,6 +37,10 @@ def main():
 
 		if not user_data:
 			print("user data is null")
+			return
+
+		if not msg:
+			print(f"msg: {msg}")
 			return
 
 		data_ref = ctypes.cast(user_data, ctypes.POINTER(ctypes.c_char_p))
@@ -79,14 +93,14 @@ def main():
 	waku_go.waku_peer_cnt.restype = ctypes.c_int
 	waku_go.waku_relay_subscribe.argtypes = [ctypes.c_void_p, ctypes.c_char_p, WakuCallBack, ctypes.c_void_p]
 	waku_go.waku_relay_subscribe.restype = ctypes.c_int
-	# waku_go.waku_encode_asymmetric.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, WakuCallBack, ctypes.c_void_p]
-	# waku_go.waku_encode_asymmetric.restype = ctypes.c_int
+	waku_go.waku_encode_symmetric.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, WakuCallBack, ctypes.c_void_p]
+	waku_go.waku_encode_symmetric.restype = ctypes.c_int
 	waku_go.waku_relay_publish.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int, WakuCallBack, ctypes.c_void_p]
 	waku_go.waku_relay_publish.restype = ctypes.c_int
-
 	# waku_go.waku_set_event_callback.argtypes = [ctypes.c_void_p, WakuCallBack]
 	# waku_go.waku_set_event_callback.restype = ctypes.c_void
 
+	#restaurant = RestaurantNeighbor()
 	json_config = "{ \"host\": \"%s\", \"port\": %d, \"store\": %s}" % (HOST, int(PORT), "true" if IS_STORE else "false")
 	json_config = json_config.encode('ascii')
 
@@ -110,6 +124,7 @@ def main():
 	print(f"addresses:{addresses.value}")
 	time.sleep(2)
 
+	pubsub_topic = '/tastbot/1/neighbor/proto'
 	app_name_str = "tastebot"
 	app_version_str = "1"
 	topic_name_str = "customer-list"
@@ -137,13 +152,28 @@ def main():
 	# print(f"discovered_nodes:{discovered_nodes.value}")
 	# time.sleep(2)
 
-	peer_str = "/ip4/192.168.1.26/tcp/37541/p2p/16Uiu2HAmNmMtxoYQV48YbuX8RjojaHuFhYyrGfTu6AssgkSzW9M1"
+	peer_str = "/ip4/192.168.1.26/tcp/38739/p2p/16Uiu2HAkx2izy1yJZ1qerYgYrnUt8UVA55ejetxPAyJP172zRAi5"
 	peer = ctypes.c_char_p(peer_str.encode('utf-8'))
 	ret = waku_go.waku_connect(ctx, peer, 20000, wakuCallBack, None)
 	print(f"connect:{ret}")
 
-	# Publish dummy message over content topic
-	#waku_go.waku_relay_publish(ctx, )
+	#request = restaurant_pb2.SetupRequest(num_customers=1)
+
+	# msg_payload = asyncio.run(restaurant.Setup(request)) #"Hello"
+	# waku_msg_str = "{ \"payload\":\"%s\",\"contentTopic\":\"%s\", \"timestamp\":%d }" % (msg_payload, content_topic.value.decode('utf-8'), int(datetime.now().minute))
+	# waku_msg_ptr = waku_msg_str.encode('ascii')
+	# print(f"waku_msg_ptr:{waku_msg_ptr}")
+	# pubsub_topic_ptr = ctypes.c_char_p(pubsub_topic.encode('utf-8'))
+	# print(f"pubsub_topic_ptr:{pubsub_topic.encode('utf-8')}")
+	# key = ctypes.c_char_p(KEY.encode('utf-8'))
+	# print(f"key:{KEY.encode('utf-8')}")
+
+	# ret = waku_go.waku_encode_symmetric(waku_msg_ptr, key, ctypes.c_char_p(None), wakuCallBack, None)
+	# print(f"encoding:{ret}")
+
+    #Publish dummy message over content topic
+	# ret = waku_go.waku_relay_publish(ctx, wakuMsg, pubsub_topic_ptr, 20000, wakuCallBack, None)
+	# print(f"publish:{ret}")
 
 	while True:
 		time.sleep(1)
