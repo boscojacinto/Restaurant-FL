@@ -1,0 +1,3 @@
+[submodule "restaurant_waku/waku-proto"]
+	path = restaurant_waku/waku-proto
+	url = git@github.com:waku-org/waku-proto.git

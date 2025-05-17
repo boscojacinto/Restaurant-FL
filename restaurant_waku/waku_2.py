@@ -4,13 +4,15 @@ import json
 import ctypes
 import time
 import asyncio
+import base64
 from ctypes import CDLL
 import pytz
 from datetime import datetime
 import secrets
-
-# from neighbor_restauarnt import RestaurantNeighbor, restaurant_setup 
-# import restaurant_pb2
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../'))
+from neighbor_restauarnt import RestaurantNeighbor, restaurant_setup 
+import restaurant_pb2
+import message_pb2
 
 # Use reference from go-waku https://github.com/waku-org/go-waku/blob/master/examples/c-bindings/main.c 
 # Use PSI repo for reference for messages https://github.com/OpenMined/PSI
@@ -100,7 +102,9 @@ def main():
 	# waku_go.waku_set_event_callback.argtypes = [ctypes.c_void_p, WakuCallBack]
 	# waku_go.waku_set_event_callback.restype = ctypes.c_void
 
-	#restaurant = RestaurantNeighbor()
+	restaurant = RestaurantNeighbor()
+	restaurant_setup()
+
 	json_config = "{ \"host\": \"%s\", \"port\": %d, \"store\": %s}" % (HOST, int(PORT), "true" if IS_STORE else "false")
 	json_config = json_config.encode('ascii')
 
@@ -152,28 +156,40 @@ def main():
 	# print(f"discovered_nodes:{discovered_nodes.value}")
 	# time.sleep(2)
 
-	peer_str = "/ip4/192.168.1.26/tcp/38739/p2p/16Uiu2HAkx2izy1yJZ1qerYgYrnUt8UVA55ejetxPAyJP172zRAi5"
+	peer_str = "/ip4/192.168.1.26/tcp/38799/p2p/16Uiu2HAmPGZLNJs8Qfj41mPjdg8SZ7Peh5VQwjSibZDZ38wgahe2"
 	peer = ctypes.c_char_p(peer_str.encode('utf-8'))
 	ret = waku_go.waku_connect(ctx, peer, 20000, wakuCallBack, None)
 	print(f"connect:{ret}")
 
-	#request = restaurant_pb2.SetupRequest(num_customers=1)
+	# setup_request = restaurant_pb2.SetupRequest(num_customers=1)
+	# print(f"setup_request:{setup_request}")
+	# setup_msg = asyncio.run(restaurant.Setup(setup_request)) 
+	# print(f"setup_msg:{setup_msg}")
 
-	# msg_payload = asyncio.run(restaurant.Setup(request)) #"Hello"
-	# waku_msg_str = "{ \"payload\":\"%s\",\"contentTopic\":\"%s\", \"timestamp\":%d }" % (msg_payload, content_topic.value.decode('utf-8'), int(datetime.now().minute))
-	# waku_msg_ptr = waku_msg_str.encode('ascii')
-	# print(f"waku_msg_ptr:{waku_msg_ptr}")
-	# pubsub_topic_ptr = ctypes.c_char_p(pubsub_topic.encode('utf-8'))
-	# print(f"pubsub_topic_ptr:{pubsub_topic.encode('utf-8')}")
-	# key = ctypes.c_char_p(KEY.encode('utf-8'))
-	# print(f"key:{KEY.encode('utf-8')}")
+	setup_request = restaurant_pb2.SetupRequest(num_customers=1)
+	setup_msg = asyncio.run(restaurant.Setup(setup_request))
+	payload = base64.b64encode(setup_msg).decode()
+	print(f"payload:{payload}")
 
-	# ret = waku_go.waku_encode_symmetric(waku_msg_ptr, key, ctypes.c_char_p(None), wakuCallBack, None)
-	# print(f"encoding:{ret}")
+	waku_msg_str = "{ \"payload\":\"%s\",\"contentTopic\":\"%s\",\"timestamp\":%d}" % (payload, content_topic.value.decode('utf-8'), int(0))
+	waku_msg_ptr = waku_msg_str.encode('utf-8')
+	print(f"waku_msg_ptr:{waku_msg_ptr}")
 
-    #Publish dummy message over content topic
-	# ret = waku_go.waku_relay_publish(ctx, wakuMsg, pubsub_topic_ptr, 20000, wakuCallBack, None)
-	# print(f"publish:{ret}")
+	pubsub_topic_ptr = ctypes.c_char_p(pubsub_topic.encode('utf-8'))
+	print(f"pubsub_topic_ptr:{pubsub_topic_ptr}")
+	
+	key = ctypes.c_char_p(KEY.encode('utf-8'))
+	print(f"key:{KEY.encode('utf-8')}")
+
+	encoded_msg = ctypes.c_char_p(None)
+	ret = waku_go.waku_encode_symmetric(waku_msg_ptr, key, None, wakuCallBack, ctypes.byref(encoded_msg))
+	print(f"encoding:{ret}")
+	print(f"encoded_msg:{encoded_msg.value}")
+	print(f"encoded_msg1:{encoded_msg}")
+
+	message_id = ctypes.c_char_p(None)
+	ret = waku_go.waku_relay_publish(ctx, encoded_msg, pubsub_topic_ptr, 0, wakuCallBack, ctypes.byref(message_id))
+	print(f"publish:{ret}")
 
 	while True:
 		time.sleep(1)
