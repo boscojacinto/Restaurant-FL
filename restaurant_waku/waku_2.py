@@ -5,12 +5,13 @@ import ctypes
 import time
 import asyncio
 import base64
+import ecdsa
 from ctypes import CDLL
 import pytz
 from datetime import datetime
 import secrets
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../'))
-from neighbor_restauarnt import RestaurantNeighbor, restaurant_setup 
+from neighbor_restauarnt import RestaurantNeighbor, restaurant_setup, restaurant_key, signing_key 
 import restaurant_pb2
 import message_pb2
 
@@ -21,8 +22,7 @@ import message_pb2
 WAKU_GO_LIB = "./libgowaku.so.0"
 HOST = "192.168.1.26"
 PORT = 0
-IS_STORE = False
-KEY = '0x' + secrets.token_hex(32) #TODO: change later
+IS_STORE = True
 
 WakuCallBack = ctypes.CFUNCTYPE(
 	None,
@@ -35,7 +35,7 @@ def main():
 	@WakuCallBack
 	def wakuCallBack(ret_code, msg: str, user_data):
 		if ret_code != 0:
-			print(f"Error: {ret_code}")
+			print(f"Error: {ret_code}, msg:{msg}")
 
 		if not user_data:
 			print("user data is null")
@@ -99,13 +99,17 @@ def main():
 	waku_go.waku_encode_symmetric.restype = ctypes.c_int
 	waku_go.waku_relay_publish.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int, WakuCallBack, ctypes.c_void_p]
 	waku_go.waku_relay_publish.restype = ctypes.c_int
+	waku_go.waku_relay_topics.argtypes = [ctypes.c_void_p, WakuCallBack, ctypes.c_void_p]
+	waku_go.waku_relay_topics.restype = ctypes.c_int
+
 	# waku_go.waku_set_event_callback.argtypes = [ctypes.c_void_p, WakuCallBack]
 	# waku_go.waku_set_event_callback.restype = ctypes.c_void
 
 	restaurant = RestaurantNeighbor()
 	restaurant_setup()
 
-	json_config = "{ \"host\": \"%s\", \"port\": %d, \"store\": %s}" % (HOST, int(PORT), "true" if IS_STORE else "false")
+	json_config = "{ \"host\": \"%s\", \"port\": %d, \"store\": %s, \"clusterID\": %d, \"shards\": [%d]}" % (HOST, int(PORT), "true" if IS_STORE else "false", int(87), int(1))
+	#json_config = "{ \"host\": \"%s\", \"port\": %d, \"store\": %s}" % (HOST, int(PORT), "true" if IS_STORE else "false")
 	json_config = json_config.encode('ascii')
 
 	ctx = waku_go.waku_new(json_config, wakuCallBack, None)
@@ -128,7 +132,11 @@ def main():
 	print(f"addresses:{addresses.value}")
 	time.sleep(2)
 
-	pubsub_topic = '/tastbot/1/neighbor/proto'
+	default_pubsub_topic = ctypes.c_char_p(None)
+	waku_go.waku_default_pubsub_topic(wakuCallBack, ctypes.byref(default_pubsub_topic))
+	print(f"default_pubsub_topic:{default_pubsub_topic.value}")
+
+	pubsub_topic = '/tastbot/1/neighbor-1/proto'
 	app_name_str = "tastebot"
 	app_version_str = "1"
 	topic_name_str = "customer-list"
@@ -156,30 +164,43 @@ def main():
 	# print(f"discovered_nodes:{discovered_nodes.value}")
 	# time.sleep(2)
 
-	peer_str = "/ip4/192.168.1.26/tcp/38799/p2p/16Uiu2HAmPGZLNJs8Qfj41mPjdg8SZ7Peh5VQwjSibZDZ38wgahe2"
+	peer_str = "/ip4/192.168.1.26/tcp/33525/p2p/16Uiu2HAmPnqB2GKoZBKpGwUFjtCzUdmXm3wtZF4CcJP4cjb1yzj6"
 	peer = ctypes.c_char_p(peer_str.encode('utf-8'))
 	ret = waku_go.waku_connect(ctx, peer, 20000, wakuCallBack, None)
 	print(f"connect:{ret}")
+	time.sleep(2)
 
-	# setup_request = restaurant_pb2.SetupRequest(num_customers=1)
-	# print(f"setup_request:{setup_request}")
-	# setup_msg = asyncio.run(restaurant.Setup(setup_request)) 
-	# print(f"setup_msg:{setup_msg}")
+	subscription = "{ \"pubsubTopic\": \"%s\", \"contentTopics\":[\"%s\"]}" % (pubsub_topic, content_topic.value.decode('utf-8'))
+	subscription = subscription.encode('ascii')
+	print(f"subscription:{subscription}")
+
+	ret = waku_go.waku_relay_subscribe(ctx, subscription, wakuCallBack, None)
+	print(f"ret:{ret}")
+	time.sleep(2)
+
+	stopics = ctypes.c_char_p(None)
+	waku_go.waku_relay_topics(ctx, wakuCallBack, ctypes.byref(stopics))
+	print(f"stopics:{stopics.value}")
+	time.sleep(2)
 
 	setup_request = restaurant_pb2.SetupRequest(num_customers=1)
 	setup_msg = asyncio.run(restaurant.Setup(setup_request))
+	print(f"\nsetup_msg:{setup_msg}")
+	setup_reply = restaurant_pb2.SetupReply()
+	setup_reply.ParseFromString(setup_msg)
+	print(f"restaurantKey:{setup_reply.restaurantKey}")
 	payload = base64.b64encode(setup_msg).decode()
 	print(f"payload:{payload}")
 
-	waku_msg_str = "{ \"payload\":\"%s\",\"contentTopic\":\"%s\",\"timestamp\":%d}" % (payload, content_topic.value.decode('utf-8'), int(0))
+	waku_msg_str = "{ \"payload\":\"%s\",\"contentTopic\":\"%s\",\"timestamp\":%d, \"meta\":\"%s\"}" % (payload, content_topic.value.decode('utf-8'), int(0), setup_reply.restaurantKey)
 	waku_msg_ptr = waku_msg_str.encode('utf-8')
 	print(f"waku_msg_ptr:{waku_msg_ptr}")
 
 	pubsub_topic_ptr = ctypes.c_char_p(pubsub_topic.encode('utf-8'))
 	print(f"pubsub_topic_ptr:{pubsub_topic_ptr}")
 	
-	key = ctypes.c_char_p(KEY.encode('utf-8'))
-	print(f"key:{KEY.encode('utf-8')}")
+	key = ctypes.c_char_p(signing_key.encode('utf-8'))
+	print(f"key:{key})")
 
 	encoded_msg = ctypes.c_char_p(None)
 	ret = waku_go.waku_encode_symmetric(waku_msg_ptr, key, None, wakuCallBack, ctypes.byref(encoded_msg))

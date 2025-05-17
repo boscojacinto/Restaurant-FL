@@ -1,12 +1,18 @@
+import os
+import sys
 import json
 import ctypes
 import time
 from ctypes import CDLL
+import base64
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../'))
+import restaurant_pb2
 
 WAKU_GO_LIB = "./libgowaku.so.0"
 HOST = "192.168.1.26"
 PORT = 0
 IS_STORE = True
+SIGNING_KEY = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef' #TODO: change later
 
 WakuCallBack = ctypes.CFUNCTYPE(
 	None,
@@ -48,12 +54,37 @@ def main():
 
 	@WakuCallBack
 	def eventCallBack(ret_code, msg: str, user_data):
+		print(f"user_data:{user_data}")
 		if ret_code != 0:
 			print(f"Error: {ret_code}")
 			print(f"\nEvent: {msg}")
+			return
 			#parse waku message header for type("message") and
 			# content topic and the parse payload for our 
-			# PSI messages			
+			# PSI messages
+
+		print(f"msg:{msg}")
+		event_str = msg.decode('utf-8')
+		print(f"event_str:{event_str}")
+		event = json.loads(event_str)
+		print(f"event:{event}")
+		if event['type'] == "message":
+			msgId = event['event']['messageId']
+			pubsub_topic = event['event']['pubsubTopic']
+			waku_message = event['event']['wakuMessage']
+			print(f"messageId:{msgId}")
+			if pubsub_topic == "/tastbot/1/neighbor-1/proto":
+				content_topic = waku_message['contentTopic']
+				payload_b64 = waku_message['payload']
+				if content_topic == "/tastebot/1/customer-list/proto":
+					print(f"Setup (server) -- instore")
+					print(f"payload:{waku_message['payload']}")
+					# payload_bytes = base64.b64decode(payload_b64)
+					# print(f"payload_bytes:{payload_bytes}")
+					# waku_message_ptr = ctypes.c_char_p(payload_bytes)
+				else:
+					print(f"Other")
+
 	
 	waku_go = CDLL(WAKU_GO_LIB)
 	waku_go.waku_new.argtypes = [ctypes.c_char_p, WakuCallBack, ctypes.c_void_p]
@@ -79,8 +110,11 @@ def main():
 	waku_go.waku_relay_subscribe.argtypes = [ctypes.c_void_p, ctypes.c_char_p, WakuCallBack, ctypes.c_void_p]
 	waku_go.waku_relay_subscribe.restype = ctypes.c_int
 	waku_go.waku_set_event_callback.argtypes = [ctypes.c_void_p, WakuCallBack]
+	waku_go.waku_relay_topics.argtypes = [ctypes.c_void_p, WakuCallBack, ctypes.c_void_p]
+	waku_go.waku_relay_topics.restype = ctypes.c_int
 
-	json_config = "{ \"host\": \"%s\", \"port\": %d, \"store\": %s}" % (HOST, int(PORT), "true" if IS_STORE else "false")
+	json_config = "{ \"host\": \"%s\", \"port\": %d, \"store\": %s, \"clusterID\": %d, \"shards\": [%d]}" % (HOST, int(PORT), "true" if IS_STORE else "false", int(87), int(1))
+	#json_config = "{ \"host\": \"%s\", \"port\": %d, \"store\": %s}" % (HOST, int(PORT), "true" if IS_STORE else "false")
 	json_config = json_config.encode('ascii')
 
 	ctx = waku_go.waku_new(json_config, wakuCallBack, None)
@@ -103,7 +137,11 @@ def main():
 	print(f"addresses:{addresses.value}")
 	time.sleep(2)
 
-	pubsub_topic = '/tastbot/1/neighbor/proto'
+	default_pubsub_topic = ctypes.c_char_p(None)
+	waku_go.waku_default_pubsub_topic(wakuCallBack, ctypes.byref(default_pubsub_topic))
+	print(f"default_pubsub_topic:{default_pubsub_topic.value}")
+
+	pubsub_topic = '/tastbot/1/neighbor-1/proto'
 	app_name_str = "tastebot"
 	app_version_str = "1"
 	topic_name_str = "customer-list"
@@ -119,12 +157,18 @@ def main():
 	print(f"content topic:{content_topic.value}")
 	time.sleep(2)
 
-	subscription = "{ \"pubsubTopic\": \"%s\", \"contentTopics\": [\"%s\"]}" % (pubsub_topic, content_topic.value.decode('utf-8'))
+	subscription = "{ \"pubsubTopic\": \"%s\", \"contentTopics\":[\"%s\"]}" % (pubsub_topic, content_topic.value.decode('utf-8'))
 	subscription = subscription.encode('ascii')
 	print(f"subscription:{subscription}")
 
 	ret = waku_go.waku_relay_subscribe(ctx, subscription, wakuCallBack, None)
 	print(f"ret:{ret}")
+	time.sleep(2)
+
+	stopics = ctypes.c_char_p(None)
+	waku_go.waku_relay_topics(ctx, wakuCallBack, ctypes.byref(stopics))
+	print(f"stopics:{stopics.value}")
+	time.sleep(2)
 
 	# ret = waku_go.waku_peer_cnt(ctx, wakuCallBack, user_data)
 	# print(f"peercnt:{ret}")
