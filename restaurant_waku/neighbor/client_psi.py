@@ -10,7 +10,7 @@ from ctypes import CDLL
 import pytz
 from datetime import datetime
 import secrets
-sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../../'))
 from neighbor_restauarnt import RestaurantNeighbor, restaurant_setup, restaurant_key, signing_key 
 import restaurant_pb2
 import message_pb2
@@ -19,10 +19,14 @@ import message_pb2
 # Use PSI repo for reference for messages https://github.com/OpenMined/PSI
 # Use neighbor_restaurant.py for PSI package api references and usuage with customer list
 
-WAKU_GO_LIB = "./libgowaku.so.0"
+WAKU_GO_LIB = "../libgowaku.so.0"
 HOST = "192.168.1.26"
 PORT = 0
 IS_STORE = True
+PEER_ID = "16Uiu2HAm85Z14GrGtobwAD48wcazYXiuRMCjmjMHLFU7W6UCnfsr"
+PEER_PORT = "42267"
+CLUSTER_ID = 89
+SHARD_ID = 1
 
 WakuCallBack = ctypes.CFUNCTYPE(
 	None,
@@ -101,15 +105,13 @@ def main():
 	waku_go.waku_relay_publish.restype = ctypes.c_int
 	waku_go.waku_relay_topics.argtypes = [ctypes.c_void_p, WakuCallBack, ctypes.c_void_p]
 	waku_go.waku_relay_topics.restype = ctypes.c_int
-
 	# waku_go.waku_set_event_callback.argtypes = [ctypes.c_void_p, WakuCallBack]
 	# waku_go.waku_set_event_callback.restype = ctypes.c_void
 
 	restaurant = RestaurantNeighbor()
 	restaurant_setup()
 
-	json_config = "{ \"host\": \"%s\", \"port\": %d, \"store\": %s, \"clusterID\": %d, \"shards\": [%d]}" % (HOST, int(PORT), "true" if IS_STORE else "false", int(87), int(1))
-	#json_config = "{ \"host\": \"%s\", \"port\": %d, \"store\": %s}" % (HOST, int(PORT), "true" if IS_STORE else "false")
+	json_config = "{ \"host\": \"%s\", \"port\": %d, \"store\": %s, \"clusterID\": %d, \"shards\": [%d]}" % (HOST, int(PORT), "true" if IS_STORE else "false", int(CLUSTER_ID), int(SHARD_ID))
 	json_config = json_config.encode('ascii')
 
 	ctx = waku_go.waku_new(json_config, wakuCallBack, None)
@@ -164,11 +166,11 @@ def main():
 	# print(f"discovered_nodes:{discovered_nodes.value}")
 	# time.sleep(2)
 
-	peer_str = "/ip4/192.168.1.26/tcp/33525/p2p/16Uiu2HAmPnqB2GKoZBKpGwUFjtCzUdmXm3wtZF4CcJP4cjb1yzj6"
-	peer = ctypes.c_char_p(peer_str.encode('utf-8'))
-	ret = waku_go.waku_connect(ctx, peer, 20000, wakuCallBack, None)
-	print(f"connect:{ret}")
-	time.sleep(2)
+	# peer_str = f"/ip4/192.168.1.26/tcp/{PEER_PORT}/p2p/{PEER_ID}"
+	# peer = ctypes.c_char_p(peer_str.encode('utf-8'))
+	# ret = waku_go.waku_connect(ctx, peer, 20000, wakuCallBack, None)
+	# print(f"connect:{ret}")
+	# time.sleep(2)
 
 	subscription = "{ \"pubsubTopic\": \"%s\", \"contentTopics\":[\"%s\"]}" % (pubsub_topic, content_topic.value.decode('utf-8'))
 	subscription = subscription.encode('ascii')
@@ -192,8 +194,8 @@ def main():
 	payload = base64.b64encode(setup_msg).decode()
 	print(f"payload:{payload}")
 
-	waku_msg_str = "{ \"payload\":\"%s\",\"contentTopic\":\"%s\",\"timestamp\":%d, \"meta\":\"%s\"}" % (payload, content_topic.value.decode('utf-8'), int(0), setup_reply.restaurantKey)
-	waku_msg_ptr = waku_msg_str.encode('utf-8')
+	waku_msg_str = "{ \"payload\":\"%s\",\"contentTopic\":\"%s\",\"timestamp\":%d}" % (payload, content_topic.value.decode('utf-8'), int(0))
+	waku_msg_ptr = waku_msg_str.encode('ascii')
 	print(f"waku_msg_ptr:{waku_msg_ptr}")
 
 	pubsub_topic_ptr = ctypes.c_char_p(pubsub_topic.encode('utf-8'))
@@ -211,6 +213,20 @@ def main():
 	message_id = ctypes.c_char_p(None)
 	ret = waku_go.waku_relay_publish(ctx, encoded_msg, pubsub_topic_ptr, 0, wakuCallBack, ctypes.byref(message_id))
 	print(f"publish:{ret}")
+
+
+	time.sleep(10)
+
+	store_query = '{ "pubsubTopic": "%s", "pagingOptions": {"pageSize": 40, "forward":false}}' % pubsub_topic
+	#store_query = "{ \"pubsubTopic\": \"%s\"}" % (pubsub_topic)
+	#store_query = store_query.encode('utf-8')
+	store_query_ptr = ctypes.c_char_p(store_query.encode('utf-8'))
+	print(f"\nstore_query_ptr:{store_query_ptr}")
+	local_store = ctypes.c_char_p(None)
+	print(f"ctx:{ctx}") 
+	ret = waku_go.waku_store_local_query(ctx, store_query_ptr, wakuCallBack, ctypes.byref(local_store))
+	print(f"RET:{ret}")
+	print(f"local_store:{local_store.value}")
 
 	while True:
 		time.sleep(1)
