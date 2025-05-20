@@ -9,7 +9,7 @@ sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../')
 import restaurant_pb2
 
 WAKU_GO_LIB = "./libgowaku.so.0"
-HOST = "192.168.1.26"
+HOST = "127.0.0.60"
 SIGNING_KEY = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef' #TODO: change later
 
 SETUP_PORT = 60001
@@ -112,10 +112,10 @@ def main():
 	 setup_address, setup_content_topic) = init_setup_node()
 	print(f"Started PSI node: {setup_peer_id}, {setup_address}, {setup_content_topic}")
 
-	time.sleep(4)
+	# time.sleep(4)
 
-	(psi_ctx, psi_connected, psi_address) = init_psi_node()
-	print(f"Started PSI node: {psi_address}")
+	# (psi_ctx, psi_connected, psi_address) = init_psi_node()
+	# print(f"Started PSI node: {psi_address}")
 
 	while True:
 		time.sleep(1)
@@ -136,6 +136,18 @@ def init_setup_node():
 
 	address = ctypes.c_char_p(None)
 	ret = waku_go.waku_listen_addresses(ctx, wakuCallBack, ctypes.byref(address))
+
+	# url_str = "enrtree://AOGYWMBYOUIMOENHXCHILPKY3ZRFEULMFI4DOM442QSZ73TT2A7VI@test.waku.nodes.status.im"
+	url_str = "enrtree://AKRU4HIYKQMOAKI73MNOTUNKKFH7VNX4TAQU7ULDGK5MNX5EDDSRU@nodes.restaurants.com"
+	nameserver_str = ""
+	timeout = 20000
+	url = ctypes.c_char_p(url_str.encode('utf-8'))
+	nameserver = ctypes.c_char_p(nameserver_str.encode('utf-8'))
+
+	discovered_nodes = ctypes.c_char_p(None)
+	waku_go.waku_dns_discovery(ctx, url, nameserver, timeout, wakuCallBack, ctypes.byref(discovered_nodes))
+	print(f"discovered_nodes:{discovered_nodes.value}")
+	time.sleep(2)
 
 	peer_str = f"/ip4/{HOST}/tcp/{PEER_PORT}/p2p/{PEER_ID}"
 	peer = ctypes.c_char_p(peer_str.encode('utf-8'))
