@@ -138,8 +138,8 @@ def init_setup_node():
 	ret = waku_go.waku_listen_addresses(ctx, wakuCallBack, ctypes.byref(address))
 
 	# url_str = "enrtree://AOGYWMBYOUIMOENHXCHILPKY3ZRFEULMFI4DOM442QSZ73TT2A7VI@test.waku.nodes.status.im"
-	url_str = "enrtree://AKRU4HIYKQMOAKI73MNOTUNKKFH7VNX4TAQU7ULDGK5MNX5EDDSRU@nodes.restaurants.com"
-	nameserver_str = ""
+	url_str = "enrtree://ANXEZXZA6FE7C56VORF77F2ZLCD72U3QST4XD27EWBOSXVKLIDLRC@nodes.restaurants.com"
+	nameserver_str = "nodes.restaurants.com"
 	timeout = 20000
 	url = ctypes.c_char_p(url_str.encode('utf-8'))
 	nameserver = ctypes.c_char_p(nameserver_str.encode('utf-8'))
@@ -149,7 +149,10 @@ def init_setup_node():
 	print(f"discovered_nodes:{discovered_nodes.value}")
 	time.sleep(2)
 
-	peer_str = f"/ip4/{HOST}/tcp/{PEER_PORT}/p2p/{PEER_ID}"
+	peer_list = json.loads(discovered_nodes.value.decode('utf-8'))
+	
+	peer_str = f"{peer_list[1]['multiaddrs'][0]}/p2p/{peer_list[1]['peerID']}"
+	print(f"\n\npeer_str:{peer_str}")
 	peer = ctypes.c_char_p(peer_str.encode('utf-8'))
 	connected = waku_go.waku_connect(ctx, peer, 20000, wakuCallBack, None)
 
