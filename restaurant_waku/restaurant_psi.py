@@ -9,16 +9,21 @@ sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../')
 import restaurant_pb2
 
 WAKU_GO_LIB = "./libgowaku.so.0"
-HOST = "127.0.0.60"
-SIGNING_KEY = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef' #TODO: change later
+DISC_URL = "enrtree://AKP74RJLRUIRLPUD3KHFKX23B5LKQYSTWE4KPXZUMJQZSLG4LYMY2@nodes.restaurants.com"
+DISC_NAMESERVER = "nodes.restaurants.com"
+DISC_ENABLE = True
 
-SETUP_PORT = 60001
+HOST = "192.168.1.26"
+SIGNING_KEY = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef' #TODO: change later
+NODE_KEY = '0cc3ac3071d6da231a1e43849afed349ed00c3b9e289147598b653eb7092c52c'
+
+SETUP_PORT = 60000
 SETUP_STORE = True
 SETUP_STORE_TIME = (30*24*60*60) # 30 days
 SETUP_CLUSTER_ID = 89
 SETUP_SHARD_ID = 1
 
-PSI_PORT = 60002
+PSI_PORT = 70000
 PSI_STORE = True
 PSI_STORE_TIME = (5*60) # 5 minutes
 PSI_CLUSTER_ID = 89
@@ -121,8 +126,8 @@ def main():
 		time.sleep(1)
 
 def init_setup_node():
-	node_config = "{ \"host\": \"%s\", \"port\": %d, \"store\": %s, \"clusterID\": %d, \"shards\": [%d]}" \
-				   % (HOST, int(SETUP_PORT), "true" if SETUP_STORE else "false", int(SETUP_CLUSTER_ID), int(SETUP_SHARD_ID))
+	node_config = "{ \"host\": \"%s\", \"port\": %d, \"nodeKey\": \"%s\", \"store\": %s, \"clusterID\": %d, \"shards\": [%d], \"dnsDiscoveryURLs\": [\"%s\"], \"dnsDiscoveryNameServer\": \"%s\", \"discV5\": %s}" \
+				   % (HOST, int(SETUP_PORT), NODE_KEY, "true" if SETUP_STORE else "false", int(SETUP_CLUSTER_ID), int(SETUP_SHARD_ID), DISC_URL, DISC_NAMESERVER, "true" if DISC_ENABLE else "false")
 	node_config = node_config.encode('ascii')
 
 	ctx = waku_go.waku_new(node_config, wakuCallBack, None)
@@ -134,36 +139,37 @@ def init_setup_node():
 	peer_id = ctypes.c_char_p(None)
 	ret = waku_go.waku_peerid(ctx, wakuCallBack, ctypes.byref(peer_id))
 
-	address = ctypes.c_char_p(None)
-	ret = waku_go.waku_listen_addresses(ctx, wakuCallBack, ctypes.byref(address))
-
-	# url_str = "enrtree://AOGYWMBYOUIMOENHXCHILPKY3ZRFEULMFI4DOM442QSZ73TT2A7VI@test.waku.nodes.status.im"
-	url_str = "enrtree://ANXEZXZA6FE7C56VORF77F2ZLCD72U3QST4XD27EWBOSXVKLIDLRC@nodes.restaurants.com"
-	nameserver_str = "nodes.restaurants.com"
-	timeout = 20000
-	url = ctypes.c_char_p(url_str.encode('utf-8'))
-	nameserver = ctypes.c_char_p(nameserver_str.encode('utf-8'))
+	# address = ctypes.c_char_p(None)
+	# ret = waku_go.waku_listen_addresses(ctx, wakuCallBack, ctypes.byref(address))
 
 	discovered_nodes = ctypes.c_char_p(None)
 	waku_go.waku_dns_discovery(ctx, url, nameserver, timeout, wakuCallBack, ctypes.byref(discovered_nodes))
 	print(f"discovered_nodes:{discovered_nodes.value}")
 	time.sleep(2)
 
-	peer_list = json.loads(discovered_nodes.value.decode('utf-8'))
+	peers_list = ctypes.c_char_p(None)
+	waku_go.waku_peers(ctx, wakuCallBack, ctypes.byref(peers_list))
+	print(f"peers_list:{peers_list.value}")
+
+	# peer_list = json.loads(discovered_nodes.value.decode('utf-8'))
 	
-	peer_str = f"{peer_list[1]['multiaddrs'][0]}/p2p/{peer_list[1]['peerID']}"
-	print(f"\n\npeer_str:{peer_str}")
-	peer = ctypes.c_char_p(peer_str.encode('utf-8'))
-	connected = waku_go.waku_connect(ctx, peer, 20000, wakuCallBack, None)
+	# peer_str = f"{peer_list[1]['multiaddrs'][0]}/p2p/{peer_list[1]['peerID']}"
+	# print(f"\n\npeer_str:{peer_str}")
+	# peer = ctypes.c_char_p(peer_str.encode('utf-8'))
+	# connected = waku_go.waku_connect(ctx, peer, 20000, wakuCallBack, None)
 
-	topic = get_setup_content_topic()
+	# topic = get_setup_content_topic()
 
-	subscription = "{ \"pubsubTopic\": \"%s\", \"contentTopics\":[\"%s\"]}" % (TASTEBOT_PUBSUB_TOPIC, topic.decode('utf-8'))
-	subscription = subscription.encode('ascii')
+	# subscription = "{ \"pubsubTopic\": \"%s\", \"contentTopics\":[\"%s\"]}" % (TASTEBOT_PUBSUB_TOPIC, topic.decode('utf-8'))
+	# subscription = subscription.encode('ascii')
 
-	ret = waku_go.waku_relay_subscribe(ctx, subscription, wakuCallBack, None)
+	# ret = waku_go.waku_relay_subscribe(ctx, subscription, wakuCallBack, None)
 
-	return ctx, connected, peer_id, address.value, topic
+	connected = True
+	peer_id = 1
+	address = 1 
+	topic = 1
+	return ctx, connected, peer_id, address, topic
 
 def init_psi_node():
 	node_config = "{ \"host\": \"%s\", \"port\": %d, \"store\": %s, \"clusterID\": %d, \"shards\": [%d]}" \
@@ -228,6 +234,8 @@ def waku_lib_init():
 	waku_go.waku_dns_discovery.restype = ctypes.c_int
 	waku_go.waku_connect.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int, WakuCallBack, ctypes.c_void_p]
 	waku_go.waku_connect.restype = ctypes.c_int
+	waku_go.waku_peers.argtypes = [ctypes.c_void_p, WakuCallBack, ctypes.c_void_p]
+	waku_go.waku_peers.restype = ctypes.c_int
 	waku_go.waku_peer_cnt.argtypes = [ctypes.c_void_p, WakuCallBack, ctypes.c_void_p]
 	waku_go.waku_peer_cnt.restype = ctypes.c_int
 	waku_go.waku_relay_subscribe.argtypes = [ctypes.c_void_p, ctypes.c_char_p, WakuCallBack, ctypes.c_void_p]

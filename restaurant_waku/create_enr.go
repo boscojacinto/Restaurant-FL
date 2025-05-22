@@ -4,40 +4,31 @@ import (
     "fmt"
     "net"
     "bytes"
-    "encoding/base64"
-    "encoding/hex"
     "crypto/ecdsa"
+    "encoding/hex"
+    "encoding/base64"
+    "github.com/libp2p/go-libp2p/core/peer"
+    p2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
+    "github.com/decred/dcrd/dcrec/secp256k1/v4"
     "github.com/ethereum/go-ethereum/p2p/enr"
     "github.com/ethereum/go-ethereum/p2p/enode"
     "github.com/ethereum/go-ethereum/crypto"
     "github.com/ethereum/go-ethereum/p2p/dnsdisc"
-    "github.com/libp2p/go-libp2p/core/peer"
-    "github.com/decred/dcrd/dcrec/secp256k1/v4"
-    p2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
 )
 
-/*hostAddr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", *config.Host, *config.Port))
-params.hostAddr = hostAddr
-hostAddrMA, err := manet.FromNetAddr(hostAddr)
-params.multiAddr = append(params.multiAddr, hostAddrMA)
-*/
 func createENR(privateKey *ecdsa.PrivateKey, ip net.IP, udpPort, tcpPort uint16) (*enr.Record, error) {
     var flags uint8
     record := &enr.Record{}
-    fmt.Println("ip:", ip)
     record.Set(enr.IPv4(ip))
-    //record.Set(enr.TCP(udpPort))
     record.Set(enr.TCP(tcpPort))
+    //record.Set(enr.UDP(0))
+
     //flags |= (1 << 3) // lightpush
     //flags |= (1 << 2) // filter
     flags |= (1 << 1) // store
     flags |= (1 << 0) // relay
     record.Set(enr.WithEntry("waku2", flags))
-    
-/*    // Set the public key in the record
-    pubkey := &privateKey.PublicKey
-    record.Set(enr.WithEntry("secp256k1", base64.RawURLEncoding.EncodeToString(crypto.CompressPubkey(pubkey))))
-*/
+
     // Sign the record
     enode.SignV4(record, privateKey)
     
@@ -49,6 +40,28 @@ func createENR(privateKey *ecdsa.PrivateKey, ip net.IP, udpPort, tcpPort uint16)
     }
 
     return record, nil
+}
+
+func createLocalNode(privateKey *ecdsa.PrivateKey, ip net.IP, udpPort, tcpPort int) (*enode.Node, error) {
+    ipAddr := &net.TCPAddr{
+        IP:   ip,
+        Port: tcpPort,
+    }
+    
+    db, _ := enode.OpenDB("")
+    
+    localnode := enode.NewLocalNode(db, privateKey)
+    localnode.SetStaticIP(ipAddr.IP)
+    localnode.Set(enr.TCP(uint16(ipAddr.Port)))
+    localnode.SetFallbackIP(net.IP{127, 0, 0, 1})
+    localnode.SetFallbackUDP(0)
+
+    var flags uint8
+    flags |= (1 << 1) // store
+    flags |= (1 << 0) // relay    
+    localnode.Set(enr.WithEntry("waku2", flags))
+
+    return localnode.Node(), nil
 }
 
 func encodeENRToLeaf(record *enr.Record) (string, error) {
@@ -76,8 +89,8 @@ func createNodes(rec []string) []*enode.Node {
 func main() {
     type Node struct {
         ip string
-        udpPort uint16
-        tcpPort uint16
+        udpPort int
+        tcpPort int
     }
 
     nodes := []Node{
@@ -91,25 +104,24 @@ func main() {
 
     signingKey, _ := crypto.GenerateKey()
 
-    var leafRecords []string
+    var eNodes [](*enode.Node)
 
     for _, node := range nodes {
 
-        key, _ := crypto.GenerateKey()        
-        record, _ := createENR(key, net.ParseIP(node.ip), node.udpPort, node.tcpPort)
+        key, _ := crypto.GenerateKey()
+        leaf, _ := createLocalNode(key, net.ParseIP(node.ip), node.udpPort, node.tcpPort)
         p2pKey := (*p2pcrypto.Secp256k1PrivateKey)(secp256k1.PrivKeyFromBytes(key.D.Bytes()))
         peerId, _ := peer.IDFromPublicKey(p2pKey.GetPublic())
-
-        leaf, _ := encodeENRToLeaf(record)
         fmt.Println("\nnode:", node)
-        fmt.Println("PrivateKey:" + "0x" + hex.EncodeToString(crypto.FromECDSA(key)))
+        fmt.Println("PrivateKey:" + "0x" + hex.EncodeToString(crypto.FromECDSA(signingKey)))
         fmt.Println("PeerId:", peerId)
         fmt.Println("Enr:", leaf)
-
-        leafRecords = append(leafRecords, leaf)
+ 
+        eNodes = append(eNodes, leaf)
     }
 
-    eNodes := createNodes(leafRecords)
+    //eNodes := createNodes(leafRecords)
+    
     tree, err := dnsdisc.MakeTree(seq, eNodes, nil)
     if err != nil {
         fmt.Println("Error making tree:", err)

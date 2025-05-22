@@ -138,21 +138,21 @@ def main():
 	waku_go.waku_default_pubsub_topic(wakuCallBack, ctypes.byref(default_pubsub_topic))
 	print(f"default_pubsub_topic:{default_pubsub_topic.value}")
 
-	pubsub_topic = '/tastbot/1/neighbor-1/proto'
-	app_name_str = "tastebot"
-	app_version_str = "1"
-	topic_name_str = "customer-list"
-	encoding_str = "proto"
-	app_name = ctypes.c_char_p(app_name_str.encode('utf-8'))
-	app_version = ctypes.c_char_p(app_version_str.encode('utf-8'))
-	topic_name = ctypes.c_char_p(topic_name_str.encode('utf-8'))
-	encoding = ctypes.c_char_p(encoding_str.encode('utf-8'))
+	# pubsub_topic = '/tastbot/1/neighbor-1/proto'
+	# app_name_str = "tastebot"
+	# app_version_str = "1"
+	# topic_name_str = "customer-list"
+	# encoding_str = "proto"
+	# app_name = ctypes.c_char_p(app_name_str.encode('utf-8'))
+	# app_version = ctypes.c_char_p(app_version_str.encode('utf-8'))
+	# topic_name = ctypes.c_char_p(topic_name_str.encode('utf-8'))
+	# encoding = ctypes.c_char_p(encoding_str.encode('utf-8'))
 
-	content_topic = ctypes.c_char_p(None)
-	ret = waku_go.waku_content_topic(app_name, app_version, topic_name,
-									 encoding, wakuCallBack, ctypes.byref(content_topic))
-	print(f"content topic:{content_topic.value}")
-	time.sleep(2)
+	# content_topic = ctypes.c_char_p(None)
+	# ret = waku_go.waku_content_topic(app_name, app_version, topic_name,
+	# 								 encoding, wakuCallBack, ctypes.byref(content_topic))
+	# print(f"content topic:{content_topic.value}")
+	# time.sleep(2)
 
 	# # url_str = "enrtree://AOGYWMBYOUIMOENHXCHILPKY3ZRFEULMFI4DOM442QSZ73TT2A7VI@test.waku.nodes.status.im"
 	# url_str = "enrtree://AIRVQ5DDA4FFWLRBCHJWUWOO6X6S4ZTZ5B667LQ6AJU6PEYDLRD5O@sandbox.waku.nodes.status.im"
@@ -172,61 +172,61 @@ def main():
 	# print(f"connect:{ret}")
 	# time.sleep(2)
 
-	subscription = "{ \"pubsubTopic\": \"%s\", \"contentTopics\":[\"%s\"]}" % (pubsub_topic, content_topic.value.decode('utf-8'))
-	subscription = subscription.encode('ascii')
-	print(f"subscription:{subscription}")
+	# subscription = "{ \"pubsubTopic\": \"%s\", \"contentTopics\":[\"%s\"]}" % (pubsub_topic, content_topic.value.decode('utf-8'))
+	# subscription = subscription.encode('ascii')
+	# print(f"subscription:{subscription}")
 
-	ret = waku_go.waku_relay_subscribe(ctx, subscription, wakuCallBack, None)
-	print(f"ret:{ret}")
-	time.sleep(2)
+	# ret = waku_go.waku_relay_subscribe(ctx, subscription, wakuCallBack, None)
+	# print(f"ret:{ret}")
+	# time.sleep(2)
 
-	stopics = ctypes.c_char_p(None)
-	waku_go.waku_relay_topics(ctx, wakuCallBack, ctypes.byref(stopics))
-	print(f"stopics:{stopics.value}")
-	time.sleep(2)
+	# stopics = ctypes.c_char_p(None)
+	# waku_go.waku_relay_topics(ctx, wakuCallBack, ctypes.byref(stopics))
+	# print(f"stopics:{stopics.value}")
+	# time.sleep(2)
 
-	setup_request = restaurant_pb2.SetupRequest(num_customers=1)
-	setup_msg = asyncio.run(restaurant.Setup(setup_request))
-	print(f"\nsetup_msg:{setup_msg}")
-	setup_reply = restaurant_pb2.SetupReply()
-	setup_reply.ParseFromString(setup_msg)
-	print(f"restaurantKey:{setup_reply.restaurantKey}")
-	payload = base64.b64encode(setup_msg).decode()
-	print(f"payload:{payload}")
+	# setup_request = restaurant_pb2.SetupRequest(num_customers=1)
+	# setup_msg = asyncio.run(restaurant.Setup(setup_request))
+	# print(f"\nsetup_msg:{setup_msg}")
+	# setup_reply = restaurant_pb2.SetupReply()
+	# setup_reply.ParseFromString(setup_msg)
+	# print(f"restaurantKey:{setup_reply.restaurantKey}")
+	# payload = base64.b64encode(setup_msg).decode()
+	# print(f"payload:{payload}")
 
-	waku_msg_str = "{ \"payload\":\"%s\",\"contentTopic\":\"%s\",\"timestamp\":%d}" % (payload, content_topic.value.decode('utf-8'), int(0))
-	waku_msg_ptr = waku_msg_str.encode('ascii')
-	print(f"waku_msg_ptr:{waku_msg_ptr}")
+	# waku_msg_str = "{ \"payload\":\"%s\",\"contentTopic\":\"%s\",\"timestamp\":%d}" % (payload, content_topic.value.decode('utf-8'), int(0))
+	# waku_msg_ptr = waku_msg_str.encode('ascii')
+	# print(f"waku_msg_ptr:{waku_msg_ptr}")
 
-	pubsub_topic_ptr = ctypes.c_char_p(pubsub_topic.encode('utf-8'))
-	print(f"pubsub_topic_ptr:{pubsub_topic_ptr}")
+	# pubsub_topic_ptr = ctypes.c_char_p(pubsub_topic.encode('utf-8'))
+	# print(f"pubsub_topic_ptr:{pubsub_topic_ptr}")
 	
-	key = ctypes.c_char_p(signing_key.encode('utf-8'))
-	print(f"key:{key})")
+	# key = ctypes.c_char_p(signing_key.encode('utf-8'))
+	# print(f"key:{key})")
 
-	encoded_msg = ctypes.c_char_p(None)
-	ret = waku_go.waku_encode_symmetric(waku_msg_ptr, key, None, wakuCallBack, ctypes.byref(encoded_msg))
-	print(f"encoding:{ret}")
-	print(f"encoded_msg:{encoded_msg.value}")
-	print(f"encoded_msg1:{encoded_msg}")
+	# encoded_msg = ctypes.c_char_p(None)
+	# ret = waku_go.waku_encode_symmetric(waku_msg_ptr, key, None, wakuCallBack, ctypes.byref(encoded_msg))
+	# print(f"encoding:{ret}")
+	# print(f"encoded_msg:{encoded_msg.value}")
+	# print(f"encoded_msg1:{encoded_msg}")
 
-	message_id = ctypes.c_char_p(None)
-	ret = waku_go.waku_relay_publish(ctx, encoded_msg, pubsub_topic_ptr, 0, wakuCallBack, ctypes.byref(message_id))
-	print(f"publish:{ret}")
+	# message_id = ctypes.c_char_p(None)
+	# ret = waku_go.waku_relay_publish(ctx, encoded_msg, pubsub_topic_ptr, 0, wakuCallBack, ctypes.byref(message_id))
+	# print(f"publish:{ret}")
 
 
-	time.sleep(10)
+	# time.sleep(10)
 
-	store_query = '{ "pubsubTopic": "%s", "pagingOptions": {"pageSize": 40, "forward":false}}' % pubsub_topic
-	#store_query = "{ \"pubsubTopic\": \"%s\"}" % (pubsub_topic)
-	#store_query = store_query.encode('utf-8')
-	store_query_ptr = ctypes.c_char_p(store_query.encode('utf-8'))
-	print(f"\nstore_query_ptr:{store_query_ptr}")
-	local_store = ctypes.c_char_p(None)
-	print(f"ctx:{ctx}") 
-	ret = waku_go.waku_store_local_query(ctx, store_query_ptr, wakuCallBack, ctypes.byref(local_store))
-	print(f"RET:{ret}")
-	print(f"local_store:{local_store.value}")
+	# store_query = '{ "pubsubTopic": "%s", "pagingOptions": {"pageSize": 40, "forward":false}}' % pubsub_topic
+	# #store_query = "{ \"pubsubTopic\": \"%s\"}" % (pubsub_topic)
+	# #store_query = store_query.encode('utf-8')
+	# store_query_ptr = ctypes.c_char_p(store_query.encode('utf-8'))
+	# print(f"\nstore_query_ptr:{store_query_ptr}")
+	# local_store = ctypes.c_char_p(None)
+	# print(f"ctx:{ctx}") 
+	# ret = waku_go.waku_store_local_query(ctx, store_query_ptr, wakuCallBack, ctypes.byref(local_store))
+	# print(f"RET:{ret}")
+	# print(f"local_store:{local_store.value}")
 
 	while True:
 		time.sleep(1)
