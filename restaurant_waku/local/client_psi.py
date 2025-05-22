@@ -77,9 +77,10 @@ class PSIClient:
 
     	peers_list = ctypes.c_char_p(None)
     	waku_go.waku_peers(ctx, wakuCallBack, ctypes.byref(peers_list))
-    	print(f"peers_list:{peers_list.value}")
 
-    	peer_str = "/ip4/192.168.1.26/tcp/60010/p2p/16Uiu2HAmHk5rdpnfYGDh2XchPsQxvqB3j4zb9owzfFjV7fMWbQNs"
+    	peer = json.loads(peers_list.value.decode('utf-8'))[0]
+
+    	peer_str = f"{peer['addrs'][0]}/p2p/{peer['peerID']}"
     	peer = ctypes.c_char_p(peer_str.encode('utf-8'))
     	connected = waku_go.waku_connect(ctx, peer, 20000, wakuCallBack, None)
 
@@ -111,7 +112,12 @@ class PSIClient:
     	ret = waku_go.waku_listen_addresses(ctx, wakuCallBack, ctypes.byref(address))
     	address = address.value.decode('utf-8')
 
-    	peer_str = "/ip4/192.168.1.26/tcp/60020/p2p/16Uiu2HAm4vuRBjEzZ82WP44gbY6B1qBvPPun5r2eWBfe4EhmYTFQ"
+    	peers_list = ctypes.c_char_p(None)
+    	waku_go.waku_peers(ctx, wakuCallBack, ctypes.byref(peers_list))
+
+    	peer = json.loads(peers_list.value.decode('utf-8'))[0]
+
+    	peer_str = f"{peer['addrs'][0]}/p2p/{peer['peerID']}"
     	peer = ctypes.c_char_p(peer_str.encode('utf-8'))
     	connected = waku_go.waku_connect(ctx, peer, 20000, wakuCallBack, None)
 
@@ -248,7 +254,7 @@ def waku_lib_init():
 if __name__ == "__main__":
 	setup_bs_enr = "-Jq4QJfs2uKrvjdhRyuHfB8JxBv-AxzXLAKIwJOoaz9k0sb_ZWLB0sKQJaqHYyAucAoUD3P36q8BRPitOvutyZpj7u2GAZb3wmK0gmlkgnY0gmlwhMCoARqCcnOFAFgBAAGJc2VjcDI1NmsxoQNLmJB1Pj72eUSZQnMof-AJdmltBsVrqCSzGa_k_YI8UIN0Y3CC6mqFd2FrdTID"
 	psi_bs_enr = "-Jq4QCeXiHyMKcbWSA5F-NWp4PiHDMcfukz3irHoIwKMePJzJwOKSrB1IwGeHWFL7mIr5kwGuvYcqwcovcEeeqbq3VyGAZb3wmq3gmlkgnY0gmlwhMCoARqCcnOFAFkBAAGJc2VjcDI1NmsxoQKNNjhPvRAVb8pSV4ssOmKJ7xncEJn69ztPqazHXT01Q4N0Y3CC6nSFd2FrdTID"
-	node_key = '4ddecde332eff9353c8a7df4b429299af13bbfe2f5baa7f4474c93faf2fea0b5'
+	node_key = 'c0d2293bafb30c34d4373f3893b665707efb9b2f381b965e11c6b77e005c6f70'
 	host = "192.168.1.26"
 	client = PSIClient(setup_bs_enr, psi_bs_enr, node_key, host)
 	client.start()

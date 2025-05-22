@@ -26,7 +26,8 @@ PSI_STORE_TIME = (5*60) # 5 minutes
 PSI_CLUSTER_ID = 89
 PSI_SHARD_ID = 1
 
-TASTEBOT_PUBSUB_TOPIC = '/tastbot/1/customer-intersect/proto'
+TASTEBOT_PUBSUB_TOPIC_1 = '/tastbot/1/customer-intersect-1/proto'
+TASTEBOT_PUBSUB_TOPIC_2 = '/tastbot/1/customer-intersect-2/proto'
 
 WakuCallBack = ctypes.CFUNCTYPE(
 	None,
@@ -57,11 +58,12 @@ class PSIClient:
     	print(f"Started PSI node: {psi_peer_id}, {psi_address}, {psi_content_topic}")
 
     def init_setup_node(self):
-    	node_config = "{ \"host\": \"%s\", \"port\": %d, \"nodeKey\": \"%s\", \"store\": %s, \"clusterID\": %d, \"shards\": [%d], \"discV5BootstrapNodes\": [\"%s\"]}" \
-    					% (self.host, int(SETUP_PORT), self.node_key, "true" if SETUP_STORE else "false", int(SETUP_CLUSTER_ID), int(SETUP_SHARD_ID), self.setup_bs_enr)
+    	node_config = "{ \"host\": \"%s\", \"port\": %d, \"nodeKey\": \"%s\", \"store\": %s, \"clusterID\": %d, \"shards\": [%d]}" \
+    					% (self.host, int(SETUP_PORT), self.node_key, "true" if SETUP_STORE else "false", int(SETUP_CLUSTER_ID), int(SETUP_SHARD_ID))
     	node_config = node_config.encode('ascii')
 
     	ctx = waku_go.waku_new(node_config, wakuCallBack, None)
+    	print(f"ctx:{ctx}")
 
     	ret = waku_go.waku_set_event_callback(ctx, setupEventCallBack)
 
@@ -75,25 +77,34 @@ class PSIClient:
     	ret = waku_go.waku_listen_addresses(ctx, wakuCallBack, ctypes.byref(address))
     	address = address.value.decode('utf-8')
 
+    	b_peer_str = self.setup_bs_enr.encode('utf-8')
+    	b_peer = ctypes.c_char_p(b_peer_str)
+    	protocol_id_str = TASTEBOT_PUBSUB_TOPIC_1.encode('utf-8')
+    	protocol_id = ctypes.c_char_p(protocol_id_str)
+    	ret = waku_go.waku_add_peer(ctx, b_peer, protocol_id, wakuCallBack, None)
+    	print(f"\nRET:{ret}")
+
     	peers_list = ctypes.c_char_p(None)
     	waku_go.waku_peers(ctx, wakuCallBack, ctypes.byref(peers_list))
-    	print(f"peers_list:{peers_list.value}")
+    	print(f"\n\npeers_list:{peers_list.value}")
 
-    	peer_str = "/ip4/192.168.1.26/tcp/60010/p2p/16Uiu2HAmHk5rdpnfYGDh2XchPsQxvqB3j4zb9owzfFjV7fMWbQNs"
+    	peer = json.loads(peers_list.value.decode('utf-8'))[1]
+
+    	peer_str = f"{peer['addrs'][0]}/p2p/{peer['peerID']}"
     	peer = ctypes.c_char_p(peer_str.encode('utf-8'))
     	connected = waku_go.waku_connect(ctx, peer, 20000, wakuCallBack, None)
 
     	topic = self.get_setup_content_topic()
 
-    	subscription = "{ \"pubsubTopic\": \"%s\", \"contentTopics\":[\"%s\"]}" % (TASTEBOT_PUBSUB_TOPIC, topic.decode('utf-8'))
+    	subscription = "{ \"pubsubTopic\": \"%s\", \"contentTopics\":[\"%s\"]}" % (TASTEBOT_PUBSUB_TOPIC_1, topic.decode('utf-8'))
     	subscription = subscription.encode('ascii')
     	ret = waku_go.waku_relay_subscribe(ctx, subscription, wakuCallBack, None)
 
     	return ctx, connected, peer_id, address, topic
 
     def init_psi_node(self):
-    	node_config = "{ \"host\": \"%s\", \"port\": %d, \"nodeKey\": \"%s\", \"store\": %s, \"clusterID\": %d, \"shards\": [%d], \"discV5BootstrapNodes\": [\"%s\"]}" \
-    					% (self.host, int(PSI_PORT), self.node_key, "true" if PSI_STORE else "false", int(PSI_CLUSTER_ID), int(PSI_SHARD_ID), self.psi_bs_enr)
+    	node_config = "{ \"host\": \"%s\", \"port\": %d, \"nodeKey\": \"%s\", \"store\": %s, \"clusterID\": %d, \"shards\": [%d]}" \
+    					% (self.host, int(PSI_PORT), self.node_key, "true" if PSI_STORE else "false", int(PSI_CLUSTER_ID), int(PSI_SHARD_ID))
 
     	node_config = node_config.encode('ascii')
 
@@ -111,14 +122,26 @@ class PSIClient:
     	ret = waku_go.waku_listen_addresses(ctx, wakuCallBack, ctypes.byref(address))
     	address = address.value.decode('utf-8')
 
-    	peer_str = "/ip4/192.168.1.26/tcp/60020/p2p/16Uiu2HAm4vuRBjEzZ82WP44gbY6B1qBvPPun5r2eWBfe4EhmYTFQ"
+    	b_peer_str = self.setup_bs_enr.encode('utf-8')
+    	b_peer = ctypes.c_char_p(b_peer_str)
+    	protocol_id_str = TASTEBOT_PUBSUB_TOPIC_2.encode('utf-8')
+    	protocol_id = ctypes.c_char_p(protocol_id_str)
+    	ret = waku_go.waku_add_peer(ctx, b_peer, protocol_id, wakuCallBack, None)
+    	print(f"\nRET:{ret}")
+
+    	peers_list = ctypes.c_char_p(None)
+    	waku_go.waku_peers(ctx, wakuCallBack, ctypes.byref(peers_list))
+
+    	peer = json.loads(peers_list.value.decode('utf-8'))[1]
+
+    	peer_str = f"{peer['addrs'][0]}/p2p/{peer['peerID']}"
     	peer = ctypes.c_char_p(peer_str.encode('utf-8'))
     	connected = waku_go.waku_connect(ctx, peer, 20000, wakuCallBack, None)
 
-    	current_time = datetime.now().strftime("%H:%M:%S")	
-    	topic = self.get_psi_content_topic(current_time)
+    	#current_time = datetime.now().strftime("%H:%M:%S")	
+    	topic = self.get_psi_content_topic(1)
 
-    	subscription = "{ \"pubsubTopic\": \"%s\", \"contentTopics\":[\"%s\"]}" % (TASTEBOT_PUBSUB_TOPIC, topic.decode('utf-8'))
+    	subscription = "{ \"pubsubTopic\": \"%s\", \"contentTopics\":[\"%s\"]}" % (TASTEBOT_PUBSUB_TOPIC_2, topic.decode('utf-8'))
     	subscription = subscription.encode('ascii')
     	ret = waku_go.waku_relay_subscribe(ctx, subscription, wakuCallBack, None)
 
@@ -182,7 +205,7 @@ def setupEventCallBack(ret_code, msg: str, user_data):
 		pubsub_topic = event['event']['pubsubTopic']
 		waku_message = event['event']['wakuMessage']
 		print(f"messageId:{msgId}")
-		if pubsub_topic == TASTEBOT_PUBSUB_TOPIC:
+		if pubsub_topic == TASTEBOT_PUBSUB_TOPIC_1:
 			content_topic = waku_message['contentTopic']
 			payload_b64 = waku_message['payload']
 			if content_topic == "/tastebot/1/customer-list/proto":
@@ -203,7 +226,7 @@ def psiEventCallBack(ret_code, msg: str, user_data):
 		pubsub_topic = event['event']['pubsubTopic']
 		waku_message = event['event']['wakuMessage']
 		print(f"messageId:{msgId}")
-		if pubsub_topic == TASTEBOT_PUBSUB_TOPIC:
+		if pubsub_topic == TASTEBOT_PUBSUB_TOPIC_2:
 			content_topic = waku_message['contentTopic']
 			payload_b64 = waku_message['payload']
 			if content_topic == "/tastebot/1/customer-list/proto":
@@ -246,9 +269,12 @@ def waku_lib_init():
 	waku_go.waku_store_local_query.restype = ctypes.c_int
 
 if __name__ == "__main__":
-	setup_bs_enr = "-Jq4QJfs2uKrvjdhRyuHfB8JxBv-AxzXLAKIwJOoaz9k0sb_ZWLB0sKQJaqHYyAucAoUD3P36q8BRPitOvutyZpj7u2GAZb3wmK0gmlkgnY0gmlwhMCoARqCcnOFAFgBAAGJc2VjcDI1NmsxoQNLmJB1Pj72eUSZQnMof-AJdmltBsVrqCSzGa_k_YI8UIN0Y3CC6mqFd2FrdTID"
-	psi_bs_enr = "-Jq4QCeXiHyMKcbWSA5F-NWp4PiHDMcfukz3irHoIwKMePJzJwOKSrB1IwGeHWFL7mIr5kwGuvYcqwcovcEeeqbq3VyGAZb3wmq3gmlkgnY0gmlwhMCoARqCcnOFAFkBAAGJc2VjcDI1NmsxoQKNNjhPvRAVb8pSV4ssOmKJ7xncEJn69ztPqazHXT01Q4N0Y3CC6nSFd2FrdTID"
+	setup_bs_enr = "/ip4/192.168.1.26/tcp/60010/p2p/16Uiu2HAmHk5rdpnfYGDh2XchPsQxvqB3j4zb9owzfFjV7fMWbQNs"
+	psi_bs_enr = "/ip4/192.168.1.26/tcp/60020/p2p/16Uiu2HAmN1UteyZaT8ZYKygsVrx4xmQQCx7vWQ3dXEayisCNThkp"
+
 	node_key = '4ddecde332eff9353c8a7df4b429299af13bbfe2f5baa7f4474c93faf2fea0b5'
 	host = "192.168.1.26"
 	client = PSIClient(setup_bs_enr, psi_bs_enr, node_key, host)
 	client.start()
+	while True:
+		time.sleep(0.2)

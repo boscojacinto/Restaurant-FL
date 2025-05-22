@@ -10,6 +10,7 @@ WAKU_GO_LIB = "../libgowaku.so.0"
 
 HOST = "192.168.1.26"
 NODE_KEY = '0cc3ac3071d6da231a1e43849afed349ed00c3b9e289147598b653eb7092c52c'
+DISC_ENABLE = True
 
 SETUP_PORT = 60010
 SETUP_STORE = True
@@ -23,7 +24,8 @@ PSI_STORE_TIME = (5*60) # 5 minutes
 PSI_CLUSTER_ID = 89
 PSI_SHARD_ID = 1
 
-TASTEBOT_PUBSUB_TOPIC = '/tastbot/1/customer-intersect/proto'
+TASTEBOT_PUBSUB_TOPIC_1 = '/tastbot/1/customer-intersect-1/proto'
+TASTEBOT_PUBSUB_TOPIC_2 = '/tastbot/1/customer-intersect-2/proto'
 
 WakuCallBack = ctypes.CFUNCTYPE(
 	None,
@@ -72,7 +74,7 @@ def setupEventCallBack(ret_code, msg: str, user_data):
 		pubsub_topic = event['event']['pubsubTopic']
 		waku_message = event['event']['wakuMessage']
 		print(f"messageId:{msgId}")
-		if pubsub_topic == TASTEBOT_PUBSUB_TOPIC:
+		if pubsub_topic == TASTEBOT_PUBSUB_TOPIC_1:
 			content_topic = waku_message['contentTopic']
 			payload_b64 = waku_message['payload']
 			if content_topic == "/tastebot/1/customer-list/proto":
@@ -93,7 +95,7 @@ def psiEventCallBack(ret_code, msg: str, user_data):
 		pubsub_topic = event['event']['pubsubTopic']
 		waku_message = event['event']['wakuMessage']
 		print(f"messageId:{msgId}")
-		if pubsub_topic == TASTEBOT_PUBSUB_TOPIC:
+		if pubsub_topic == TASTEBOT_PUBSUB_TOPIC_2:
 			content_topic = waku_message['contentTopic']
 			payload_b64 = waku_message['payload']
 			if content_topic == "/tastebot/1/customer-list/proto":
@@ -106,19 +108,19 @@ def main():
 	waku_lib_init()
 
 	(setup_ctx, setup_peer_id, setup_address) = init_setup_node()
-	print(f"Started PSI node: {setup_peer_id}, {setup_address}, {TASTEBOT_PUBSUB_TOPIC}")
+	print(f"Started PSI node: {setup_peer_id}, {setup_address}, {TASTEBOT_PUBSUB_TOPIC_1}")
 
 	time.sleep(2)
 
 	(psi_ctx, psi_peer_id, psi_address) = init_psi_node()
-	print(f"Started PSI node: {psi_peer_id}, {psi_address}, {TASTEBOT_PUBSUB_TOPIC}")
+	print(f"Started PSI node: {psi_peer_id}, {psi_address}, {TASTEBOT_PUBSUB_TOPIC_2}")
 
 	while True:
 		time.sleep(1)
 
 def init_setup_node():
-	node_config = "{ \"host\": \"%s\", \"port\": %d, \"nodeKey\": \"%s\", \"store\": %s, \"clusterID\": %d, \"shards\": [%d]}" \
-				   % (HOST, int(SETUP_PORT), NODE_KEY, "true" if SETUP_STORE else "false", int(SETUP_CLUSTER_ID), int(SETUP_SHARD_ID))
+	node_config = "{ \"host\": \"%s\", \"port\": %d, \"nodeKey\": \"%s\", \"store\": %s, \"clusterID\": %d, \"shards\": [%d], \"discV5\": %s, \"discV5UDPPort\": 9999}" \
+				   % (HOST, int(SETUP_PORT), NODE_KEY, "true" if SETUP_STORE else "false", int(SETUP_CLUSTER_ID), int(SETUP_SHARD_ID), "true" if DISC_ENABLE else "false")
 	node_config = node_config.encode('ascii')
 
 	ctx = waku_go.waku_new(node_config, wakuCallBack, None)
@@ -135,7 +137,9 @@ def init_setup_node():
 	ret = waku_go.waku_listen_addresses(ctx, wakuCallBack, ctypes.byref(address))
 	address = address.value.decode('utf-8')
 
-	subscription = "{ \"pubsubTopic\": \"%s\"}" % TASTEBOT_PUBSUB_TOPIC
+	topic = get_setup_content_topic()
+
+	subscription = "{ \"pubsubTopic\": \"%s\", \"contentTopics\":[\"%s\"]}" % (TASTEBOT_PUBSUB_TOPIC_1, topic.decode('utf-8'))
 	subscription = subscription.encode('ascii')
 	ret = waku_go.waku_relay_subscribe(ctx, subscription, wakuCallBack, None)
 
@@ -160,11 +164,35 @@ def init_psi_node():
 	ret = waku_go.waku_listen_addresses(ctx, wakuCallBack, ctypes.byref(address))
 	address = address.value.decode('utf-8')
 
-	subscription = "{ \"pubsubTopic\": \"%s\"}" % TASTEBOT_PUBSUB_TOPIC
+	topic = get_psi_content_topic(1)
+
+	subscription = "{ \"pubsubTopic\": \"%s\", \"contentTopics\":[\"%s\"]}" % (TASTEBOT_PUBSUB_TOPIC_2, topic.decode('utf-8'))
 	subscription = subscription.encode('ascii')
 	ret = waku_go.waku_relay_subscribe(ctx, subscription, wakuCallBack, None)
 
 	return ctx, peer_id, address 
+
+def get_setup_content_topic():
+	app_name = ctypes.c_char_p("tastebot".encode('utf-8'))
+	app_version = ctypes.c_char_p("1".encode('utf-8'))
+	topic_name = ctypes.c_char_p("setup".encode('utf-8'))
+	encoding = ctypes.c_char_p('proto'.encode('utf-8'))
+
+	content_topic = ctypes.c_char_p(None)
+	ret = waku_go.waku_content_topic(app_name, app_version, topic_name,
+		encoding, wakuCallBack, ctypes.byref(content_topic))
+	return content_topic.value
+
+def get_psi_content_topic(timestamp):
+	app_name = ctypes.c_char_p("tastebot".encode('utf-8'))
+	app_version = ctypes.c_char_p("1".encode('utf-8'))
+	topic_name = ctypes.c_char_p(f"psi-{timestamp}".encode('utf-8'))
+	encoding = ctypes.c_char_p('proto'.encode('utf-8'))
+
+	content_topic = ctypes.c_char_p(None)
+	ret = waku_go.waku_content_topic(app_name, app_version, topic_name,
+		encoding, wakuCallBack, ctypes.byref(content_topic))
+	return content_topic.value
 
 def waku_lib_init():
 	global waku_go
