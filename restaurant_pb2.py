@@ -12,15 +12,14 @@ from google.protobuf.internal import builder as _builder
 _runtime_version.ValidateProtobufRuntimeVersion(
     _runtime_version.Domain.PUBLIC,
     5,
-    27,
-    2,
+    29,
+    0,
     '',
     'restaurant.proto'
 )
 # @@protoc_insertion_point(imports)
 
 _sym_db = _symbol_database.Default()
-
 
 import private_set_intersection.proto.psi_python_proto_pb.private_set_intersection.proto.psi_pb2 as psi__pb2
 #import psi_pb2 as psi__pb2

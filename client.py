@@ -136,14 +136,15 @@ class StatusClient:
     	global ai_client
     	signal = json.loads(signal)
     	if signal["type"] == "node.login":
-    		key_uid = signal["event"]["settings"]["key-uid"]
-    		public_key = signal["event"]["settings"]["current-user-status"]["publicKey"]
-    		print(f"Node Login: uid:{key_uid} publicKey:{public_key}")
-    		#print(f"type:{signal["type"]} \n\nevent:{signal["event"]}")
+    		try :
+    			key_uid = signal["event"]["settings"]["key-uid"]
+    			public_key = signal["event"]["settings"]["current-user-status"]["publicKey"]
+    			print(f"Node Login: uid:{key_uid} publicKey:{public_key}")
+    		except KeyError:
+    			pass
     	elif signal["type"] == "message.delivered":
     		print("Message delivered!")
     	elif signal["type"] == "messages.new":
-    		#print(f"type:{signal["type"]} \n\nevent:{signal["event"]}")
     		try:
     			new_msg = signal["event"]["chats"][0]["lastMessage"]["parsedText"][0]["children"][0]["literal"]
     			c_id = signal["event"]["chats"][0]["lastMessage"]["from"]
@@ -156,7 +157,6 @@ class StatusClient:
     		pass
     	else:
     		pass
-    		#print(f"type:{signal["type"]} \n\nevent:{signal["event"]}")
     	return
 
     def run(self):
