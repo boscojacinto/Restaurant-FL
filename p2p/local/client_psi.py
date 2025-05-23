@@ -6,7 +6,6 @@ import ctypes
 import base64
 from ctypes import CDLL
 from datetime import datetime
-sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../../'))
 import restaurant_pb2
 
 WAKU_GO_LIB = "../libgowaku.so.0"
