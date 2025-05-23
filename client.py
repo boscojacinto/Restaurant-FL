@@ -16,8 +16,8 @@ import numpy as np
 import pandas as pd
 import multiprocessing
 from ctypes import CDLL
-import restaurant_pb2
-import restaurant_pb2_grpc
+import p2p.restaurant_pb2
+import p2p.restaurant_pb2_grpc
 from math import ceil, floor
 from subprocess import Popen, PIPE 
 from scipy.sparse import coo_matrix
