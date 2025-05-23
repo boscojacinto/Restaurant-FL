@@ -1,2 +1,2 @@
 #!/bin/bash
-rm -rf store.db*  
+rm -rf setup_store.db* && rm -rf psi_store.db*

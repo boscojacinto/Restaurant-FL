@@ -13,19 +13,23 @@ NODE_KEY = '0cc3ac3071d6da231a1e43849afed349ed00c3b9e289147598b653eb7092c52c'
 DISC_ENABLE = True
 
 SETUP_PORT = 60010
+SETUP_DISCV5_PORT = 9910
 SETUP_STORE = True
 SETUP_STORE_TIME = (30*24*60*60) # 30 days
 SETUP_CLUSTER_ID = 88
-SETUP_SHARD_ID = 1
+SETUP_SHARD_ID = [0]
+SETUP_STORE_DB = "sqlite3://setup_store.db"
 
 PSI_PORT = 60020
+PSI_DISCV5_PORT = 9920
 PSI_STORE = True
 PSI_STORE_TIME = (5*60) # 5 minutes
 PSI_CLUSTER_ID = 89
-PSI_SHARD_ID = 1
+PSI_SHARD_ID = [0]
+PSI_STORE_DB = "sqlite3://psi_store.db"
 
-TASTEBOT_PUBSUB_TOPIC_1 = '/tastbot/1/customer-intersect-1/proto'
-TASTEBOT_PUBSUB_TOPIC_2 = '/tastbot/1/customer-intersect-2/proto'
+TASTEBOT_PUBSUB_TOPIC_1 = '/tastbot/1/rs/88/0' #'/waku/2/rs/88/0'
+TASTEBOT_PUBSUB_TOPIC_2 = '/tastbot/1/rs/89/0' #'/waku/2/rs/89/0'
 
 WakuCallBack = ctypes.CFUNCTYPE(
 	None,
@@ -119,8 +123,8 @@ def main():
 		time.sleep(1)
 
 def init_setup_node():
-	node_config = "{ \"host\": \"%s\", \"port\": %d, \"nodeKey\": \"%s\", \"store\": %s, \"clusterID\": %d, \"shards\": [%d], \"discV5\": %s, \"discV5UDPPort\": 9999}" \
-				   % (HOST, int(SETUP_PORT), NODE_KEY, "true" if SETUP_STORE else "false", int(SETUP_CLUSTER_ID), int(SETUP_SHARD_ID), "true" if DISC_ENABLE else "false")
+	node_config = "{ \"host\": \"%s\", \"port\": %d, \"nodeKey\": \"%s\", \"store\": %s, \"clusterID\": %d, \"shards\": [%d], \"discV5\": %s, \"databaseURL\": \"%s\", \"discV5UDPPort\": %d}" \
+				   % (HOST, int(SETUP_PORT), NODE_KEY, "true" if SETUP_STORE else "false", int(SETUP_CLUSTER_ID), *map(int, SETUP_SHARD_ID), "true" if DISC_ENABLE else "false", SETUP_STORE_DB, int(SETUP_DISCV5_PORT))
 	node_config = node_config.encode('ascii')
 
 	ctx = waku_go.waku_new(node_config, wakuCallBack, None)
@@ -146,8 +150,8 @@ def init_setup_node():
 	return ctx, peer_id, address
 
 def init_psi_node():
-	node_config = "{ \"host\": \"%s\", \"port\": %d, \"store\": %s, \"clusterID\": %d, \"shards\": [%d]}" \
-				   % (HOST, int(PSI_PORT), "true" if PSI_STORE else "false", int(PSI_CLUSTER_ID), int(PSI_SHARD_ID))
+	node_config = "{ \"host\": \"%s\", \"port\": %d, \"nodeKey\": \"%s\", \"store\": %s, \"clusterID\": %d, \"shards\": [%d], \"discV5\": %s, \"databaseURL\": \"%s\", \"discV5UDPPort\": %d}" \
+				   % (HOST, int(PSI_PORT), NODE_KEY, "true" if PSI_STORE else "false", int(PSI_CLUSTER_ID), *map(int, PSI_SHARD_ID), "true" if DISC_ENABLE else "false", PSI_STORE_DB, int(PSI_DISCV5_PORT))
 	node_config = node_config.encode('ascii')
 
 	ctx = waku_go.waku_new(node_config, wakuCallBack, None)
@@ -165,6 +169,7 @@ def init_psi_node():
 	address = address.value.decode('utf-8')
 
 	topic = get_psi_content_topic(1)
+	print(f"\ntopic:{topic.decode('utf-8')}")
 
 	subscription = "{ \"pubsubTopic\": \"%s\", \"contentTopics\":[\"%s\"]}" % (TASTEBOT_PUBSUB_TOPIC_2, topic.decode('utf-8'))
 	subscription = subscription.encode('ascii')
