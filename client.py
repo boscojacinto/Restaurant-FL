@@ -22,8 +22,8 @@ from math import ceil, floor
 from subprocess import Popen, PIPE 
 from scipy.sparse import coo_matrix
 from flwr.client.supernode.app import run_supernode
-from restaurant_ai.restaurant_model import AIModel as bot
-from restaurant_ai.restaurant_model import CUSTOM_MODEL
+from ai.restaurant_model import AIModel as bot
+from ai.restaurant_model import CUSTOM_MODEL
 import private_set_intersection.python as psi
 
 status_go = None
@@ -37,8 +37,8 @@ customer_embeddings = None
 restaurant_service = None
 
 STATUS_BACKEND_PORT = 0
-STATUS_BACKEND_BIN = "./restaurant_status/libs/status-backend"
-STATUS_GO_LIB = "./restaurant_status/libs/libstatus.so.0"
+STATUS_BACKEND_BIN = "im/libs/status-backend"
+STATUS_GO_LIB = "im/libs/libstatus.so.0"
 
 AI_MODEL = "swigg1.0-gemma3:1b"
 customer_ids = [{'id': 1, 'name': "Rohan", 'publicKey': "0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4", 'emojiHash': """👨‍✈️ℹ️📛🤘👩🏼‍🎤👨🏿‍🦱🏌🏼‍♀️🪣🐍🅱️👋🏼👱🏿‍♀️🙅🏼‍♂️🤨"""}]

@@ -18,7 +18,7 @@ from flwr.common import (
     parameters_to_ndarrays,
 )
 from flwr.common.logger import log
-from restaurant_fl.task import get_params, get_model
+from fl.task import get_params, get_model
 from swigg_db import SWGDataset
 
 global_metadata = (['restaurant', 'area', 'customer'],
@@ -37,7 +37,7 @@ def get_global_model(model_name, metadata):
     path = osp.join(osp.dirname(osp.realpath(__file__)), '')
     dataset = SWGDataset(path, 0, force_reload=True)
     model = get_model(model_name, dataset.data)
-    model.load_state_dict(torch.load('./restaurant_fl/swg_state_global.pth'))
+    model.load_state_dict(torch.load('./fl/swg_state_global.pth'))
     return model
 
 def server_fn(context: Context) -> ServerAppComponents:

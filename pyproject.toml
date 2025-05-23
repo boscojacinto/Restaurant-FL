@@ -27,8 +27,8 @@ packages = ["."]
 publisher = "boscojacinto"
 
 [tool.flwr.app.components]
-serverapp = "restaurant_fl.server_app:app"
-clientapp = "restaurant_fl.client_app:app"
+serverapp = "fl.server_app:app"
+clientapp = "fl.client_app:app"
 
 [tool.flwr.app.config]
 num-server-rounds = 1

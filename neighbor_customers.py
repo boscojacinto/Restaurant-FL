@@ -9,7 +9,7 @@ from scipy.sparse import coo_matrix, issparse, load_npz
 import torch_geometric.transforms as T
 from torch_geometric.utils import to_networkx
 from torch_geometric.loader import HGTLoader
-from restaurant_ai.restaurant_model import AIModel
+from ai.restaurant_model import AIModel
 import networkx as nx
 import matplotlib.pyplot as plt
 from torch_geometric.data import (

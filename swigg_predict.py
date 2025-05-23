@@ -16,7 +16,7 @@ def generate_prediction(data):
                 node_types=['restaurant', 'area', 'customer'],
                 mlp_hidden_layers=[128, 64, 32, 1], mlp_dropout=0.4,
                 data=data)
-    model = load_state_dict(torch.load('./restaurant_fl/swg_state_global.pth'))
+    model = load_state_dict(torch.load('./fl/swg_state_global.pth'))
     print(f'Loaded model weights')
 
 

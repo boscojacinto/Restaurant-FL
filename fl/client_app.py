@@ -4,7 +4,7 @@ import torch
 from flwr.client import Client, ClientApp, NumPyClient
 from flwr.common import Context
 from transformers import logging
-from restaurant_fl.task import (
+from fl.task import (
 	train,
 	test,
 	load_data,

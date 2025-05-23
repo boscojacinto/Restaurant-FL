@@ -9,7 +9,7 @@ import scipy as sp
 from torch.utils.data import Dataset, DataLoader
 from torch_geometric.data import Data
 from scipy.sparse import coo_matrix, issparse, load_npz
-from restaurant_ai.restaurant_model import AIModel
+from ai.restaurant_model import AIModel
 
 # 1. First, create a custom Dataset class
 class SWGDataset(Dataset):
