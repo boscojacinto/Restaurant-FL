@@ -1,0 +1,6 @@
+[submodule "restaurant_waku/waku-proto"]
+	path = restaurant_waku/waku-proto
+	url = git@github.com:waku-org/waku-proto.git
+[submodule "restaurant_waku/enr-decoder"]
+	path = restaurant_waku/enr-decoder
+	url = https://github.com/waku-org/enr-decoder.git
