@@ -6,10 +6,10 @@ import ctypes
 import base64
 from ctypes import CDLL
 from datetime import datetime
-sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../../'))
 import restaurant_pb2
 
-WAKU_GO_LIB = "./libgowaku.so.0"
+WAKU_GO_LIB = "../libgowaku.so.0"
 DISC_URL = "enrtree://AKP74RJLRUIRLPUD3KHFKX23B5LKQYSTWE4KPXZUMJQZSLG4LYMY2@nodes.restaurants.com"
 DISC_NAMESERVER = "nodes.restaurants.com"
 DISC_ENABLE = True
