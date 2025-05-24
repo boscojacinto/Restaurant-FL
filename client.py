@@ -16,8 +16,8 @@ import numpy as np
 import pandas as pd
 import multiprocessing
 from ctypes import CDLL
-import p2p.restaurant_pb2
-import p2p.restaurant_pb2_grpc
+import p2p.restaurant_pb2 as psi_proto
+import p2p.restaurant_pb2_grpc as r_psi
 from math import ceil, floor
 from subprocess import Popen, PIPE 
 from scipy.sparse import coo_matrix
@@ -40,7 +40,7 @@ STATUS_BACKEND_PORT = 0
 STATUS_BACKEND_BIN = "im/libs/status-backend"
 STATUS_GO_LIB = "im/libs/libstatus.so.0"
 
-AI_MODEL = "swigg1.0-gemma3:1b"
+AI_MODEL = "swigg1.0-gemma3:4b"
 customer_ids = [{'id': 1, 'name': "Rohan", 'publicKey': "0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4", 'emojiHash': """👨‍✈️ℹ️📛🤘👩🏼‍🎤👨🏿‍🦱🏌🏼‍♀️🪣🐍🅱️👋🏼👱🏿‍♀️🙅🏼‍♂️🤨"""}]
 RESTAURANT_UID = "0xdc9e9199cee1b4686864450961848ca39420931d56080baa2ba196283dfc2682"
 RESTAURANT_PASSWORD = "swigg@12345"
@@ -135,6 +135,7 @@ class StatusClient:
     def on_status_cb(self, signal: str):
     	global ai_client
     	signal = json.loads(signal)
+    	print(f"signal received!:{signal["type"]}")
     	if signal["type"] == "node.login":
     		try :
     			key_uid = signal["event"]["settings"]["key-uid"]
@@ -145,6 +146,7 @@ class StatusClient:
     	elif signal["type"] == "message.delivered":
     		print("Message delivered!")
     	elif signal["type"] == "messages.new":
+    		print(f"event!:{signal["event"]}")
     		try:
     			new_msg = signal["event"]["chats"][0]["lastMessage"]["parsedText"][0]["children"][0]["literal"]
     			c_id = signal["event"]["chats"][0]["lastMessage"]["from"]
@@ -154,8 +156,10 @@ class StatusClient:
     		except KeyError:
     			pass
     	elif signal["type"] == "wakuv2.peerstats":
+    		print(f"stats!:{signal["event"]}")
     		pass
     	else:
+    		print(f"other!:{signal["type"]}")
     		pass
     	return
 
@@ -299,7 +303,6 @@ async def create_embeddings(file):
     customer_embeds = torch.tensor(
         df["Customer's Description"].tolist()
     )
-    print(f"customer_embeds:{customer_embeds}")
     return customer_embeds
 
 async def init_embeddings():
@@ -372,10 +375,9 @@ async def restaurant_feedback(customer_id):
 
 	client_key = bytes(range(32))
 	psi_client = psi.client.CreateFromKey(client_key, False)
-
 	try:
 		async with grpc.aio.insecure_channel('[::]:50051') as channel:
-			restaurant_service = restaurant_pb2_grpc.RestaurantNeighborStub(channel)
+			restaurant_service = r_psi.RestaurantNeighborStub(channel)
 			return await restaurant_setup_and_fetch(customer_id)
 
 	except grpc.RpcError as e:
@@ -386,7 +388,7 @@ async def restaurant_feedback(customer_id):
 async def restaurant_setup_and_fetch(customer_id):
 	global psi_client
 
-	setup_request = restaurant_pb2.SetupRequest(num_customers=1)
+	setup_request = psi_proto.SetupRequest(num_customers=1)
 	setup_reply = await restaurant_service.Setup(setup_request)
 	print(f"setup_reply.restaurantKey:{setup_reply.restaurantKey}")
 
@@ -395,7 +397,7 @@ async def restaurant_setup_and_fetch(customer_id):
 	request.ParseFromString(psi_client.CreateRequest(
 							items).SerializeToString())
 
-	customer_request = restaurant_pb2.CustomerRequest(request=request)
+	customer_request = psi_proto.CustomerRequest(request=request)
 	customer_reply = await restaurant_service.Fetch(request=customer_request)
 
 	intersection = psi_client.GetIntersectionSize(setup_reply.setup,

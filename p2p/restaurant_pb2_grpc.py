@@ -2,7 +2,9 @@
 """Client and server classes corresponding to protobuf-defined services."""
 import grpc
 import warnings
-
+import os
+import sys
+sys.path.append(os.path.dirname(__file__))
 import restaurant_pb2 as restaurant__pb2
 
 GRPC_GENERATED_VERSION = '1.69.0'
