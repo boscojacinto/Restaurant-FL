@@ -21,6 +21,7 @@ import (
  "github.com/tendermint/tendermint/proxy"
 )
 
+const Version = "1.0.0"
 var configFile string
 
 func init() {
@@ -34,7 +35,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
-	app := NewKVStoreApplication(db)
+	app := NewInferSyncApp(db)
 
 	flag.Parse()
 

@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package main;
+option go_package = "./;main";
+
+message Proof {
+    bytes buf = 1;    
+}
+
+message Timestamp {
+    string now = 1;    
+}
+
+message Order {
+    Proof proof = 1;
+    Timestamp timestamp = 2;
+}

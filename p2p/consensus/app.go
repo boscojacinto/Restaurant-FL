@@ -2,49 +2,68 @@ package main
 
 import (
 	"bytes"
+	//"time"
 	"github.com/dgraph-io/badger"
 	abcitypes "github.com/tendermint/tendermint/abci/types"
+	"google.golang.org/protobuf/proto"
 )
 
-type KVStoreApplication struct {
-	db           *badger.DB
+const AppVersion = 1
+
+type InferSyncApp struct {
+	db *badger.DB
 	currentBatch *badger.Txn
 }
 
-var _ abcitypes.Application = (*KVStoreApplication)(nil)
+var _ abcitypes.Application = (*InferSyncApp)(nil)
 
-func NewKVStoreApplication(db *badger.DB) *KVStoreApplication {
-	return &KVStoreApplication{
+func NewInferSyncApp(db *badger.DB) *InferSyncApp {
+	return &InferSyncApp{
 		db: db,
 	}
 }
 
-func (KVStoreApplication) Info(req abcitypes.RequestInfo) abcitypes.ResponseInfo {
-	return abcitypes.ResponseInfo{}
+func (InferSyncApp) Info(req abcitypes.RequestInfo) abcitypes.ResponseInfo {
+	return abcitypes.ResponseInfo{
+		Version: Version,
+		AppVersion: AppVersion,
+	}
 }
 
-func (KVStoreApplication) SetOption(req abcitypes.RequestSetOption) abcitypes.ResponseSetOption {
+func (InferSyncApp) SetOption(req abcitypes.RequestSetOption) abcitypes.ResponseSetOption {
 	return abcitypes.ResponseSetOption{}
 }
 
-func (app *KVStoreApplication) DeliverTx(req abcitypes.RequestDeliverTx) abcitypes.ResponseDeliverTx {
+func (app *InferSyncApp) DeliverTx(req abcitypes.RequestDeliverTx) abcitypes.ResponseDeliverTx {
 	code := app.isValid(req.Tx)
 	if code != 0 {
 		return abcitypes.ResponseDeliverTx{Code: code}
 	}
 
+	msg := &Order{}
+
+	if err := proto.Unmarshal(req.Tx, msg); err != nil {
+		panic(err)
+	}
+
+	proof := msg.GetProof()
+	
 	parts := bytes.Split(req.Tx, []byte("="))
 	key, value := parts[0], parts[1]
+
+	if string(key) != "order-proof" {
+		code = 3
+	}
 
 	err := app.currentBatch.Set(key, value)
 	if err != nil {
 		panic(err)
 	}
 
-	return abcitypes.ResponseDeliverTx{Code: 0}
+	return abcitypes.ResponseDeliverTx{Code: code}
 }
 
-func (app *KVStoreApplication) isValid(tx []byte) (code uint32) {
+func (app *InferSyncApp) isValid(tx []byte) (code uint32) {
 	// check format
 	parts := bytes.Split(tx, []byte("="))
 	if len(parts) != 2 {
@@ -52,6 +71,11 @@ func (app *KVStoreApplication) isValid(tx []byte) (code uint32) {
 	}
 
 	key, value := parts[0], parts[1]
+
+	// check if key = "order-proof"
+	if string(key) != "order-proof" {
+		code = 3
+	}
 
 	// check if the same key=value already exists
 	err := app.db.View(func(txn *badger.Txn) error {
@@ -76,17 +100,17 @@ func (app *KVStoreApplication) isValid(tx []byte) (code uint32) {
 	return code
 }
 
-func (app *KVStoreApplication) CheckTx(req abcitypes.RequestCheckTx) abcitypes.ResponseCheckTx {
+func (app *InferSyncApp) CheckTx(req abcitypes.RequestCheckTx) abcitypes.ResponseCheckTx {
 	code := app.isValid(req.Tx)
 	return abcitypes.ResponseCheckTx{Code: code, GasWanted: 1}
 }
 
-func (app *KVStoreApplication) Commit() abcitypes.ResponseCommit {
+func (app *InferSyncApp) Commit() abcitypes.ResponseCommit {
 	app.currentBatch.Commit()
 	return abcitypes.ResponseCommit{Data: []byte{}}
 }
 
-func (app *KVStoreApplication) Query(reqQuery abcitypes.RequestQuery) (resQuery abcitypes.ResponseQuery) {
+func (app *InferSyncApp) Query(reqQuery abcitypes.RequestQuery) (resQuery abcitypes.ResponseQuery) {
 	resQuery.Key = reqQuery.Data
 	err := app.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(reqQuery.Data)
@@ -110,31 +134,31 @@ func (app *KVStoreApplication) Query(reqQuery abcitypes.RequestQuery) (resQuery 
 	return
 }
 
-func (KVStoreApplication) InitChain(req abcitypes.RequestInitChain) abcitypes.ResponseInitChain {
+func (InferSyncApp) InitChain(req abcitypes.RequestInitChain) abcitypes.ResponseInitChain {
 	return abcitypes.ResponseInitChain{}
 }
 
-func (app *KVStoreApplication) BeginBlock(req abcitypes.RequestBeginBlock) abcitypes.ResponseBeginBlock {
+func (app *InferSyncApp) BeginBlock(req abcitypes.RequestBeginBlock) abcitypes.ResponseBeginBlock {
 	app.currentBatch = app.db.NewTransaction(true)
 	return abcitypes.ResponseBeginBlock{}
 }
 
-func (KVStoreApplication) EndBlock(req abcitypes.RequestEndBlock) abcitypes.ResponseEndBlock {
+func (InferSyncApp) EndBlock(req abcitypes.RequestEndBlock) abcitypes.ResponseEndBlock {
 	return abcitypes.ResponseEndBlock{}
 }
 
-func (KVStoreApplication) ListSnapshots(abcitypes.RequestListSnapshots) abcitypes.ResponseListSnapshots {
+func (InferSyncApp) ListSnapshots(abcitypes.RequestListSnapshots) abcitypes.ResponseListSnapshots {
 	return abcitypes.ResponseListSnapshots{}
 }
 
-func (KVStoreApplication) OfferSnapshot(abcitypes.RequestOfferSnapshot) abcitypes.ResponseOfferSnapshot {
+func (InferSyncApp) OfferSnapshot(abcitypes.RequestOfferSnapshot) abcitypes.ResponseOfferSnapshot {
 	return abcitypes.ResponseOfferSnapshot{}
 }
 
-func (KVStoreApplication) LoadSnapshotChunk(abcitypes.RequestLoadSnapshotChunk) abcitypes.ResponseLoadSnapshotChunk {
+func (InferSyncApp) LoadSnapshotChunk(abcitypes.RequestLoadSnapshotChunk) abcitypes.ResponseLoadSnapshotChunk {
 	return abcitypes.ResponseLoadSnapshotChunk{}
 }
 
-func (KVStoreApplication) ApplySnapshotChunk(abcitypes.RequestApplySnapshotChunk) abcitypes.ResponseApplySnapshotChunk {
+func (InferSyncApp) ApplySnapshotChunk(abcitypes.RequestApplySnapshotChunk) abcitypes.ResponseApplySnapshotChunk {
 	return abcitypes.ResponseApplySnapshotChunk{}
 }
