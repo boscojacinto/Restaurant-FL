@@ -11,3 +11,17 @@ accounts.*
 *.db
 *.db-shm
 *.db-wal
+p2p/*.db
+p2p/*.db-shm
+p2p/*.db-wal
+p2p/bootstrap/*.db
+p2p/bootstrap/*.db-shm
+p2p/bootstrap/*.db-wal
+p2p/local/*.db
+p2p/local/*.db-shm
+p2p/local/*.db-wal
+p2p/neighbor/*.db
+p2p/neighbor/*.db-shm
+p2p/neighbor/*.db-wal
+p2p/consensus/data/
+p2p/consensus/consensus

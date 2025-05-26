@@ -1,4 +1,4 @@
-package main
+package rsenr
 
 import (
     "fmt"
@@ -8,7 +8,7 @@ import (
     "github.com/ethereum/go-ethereum/p2p/dnsdisc"
 )
 
-func main() {
+func main2() {
     fmt.Println("hello")
 
     resolver := &net.Resolver{

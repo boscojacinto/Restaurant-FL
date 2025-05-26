@@ -1,4 +1,4 @@
-package main
+package rsenr
 
 import (
     "fmt"
@@ -86,7 +86,7 @@ func createNodes(rec []string) []*enode.Node {
     return ns
 }
 
-func main() {
+func main1() {
     type Node struct {
         ip string
         udpPort int
