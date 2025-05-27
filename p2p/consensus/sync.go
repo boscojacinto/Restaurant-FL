@@ -34,11 +34,11 @@ func main() {}
 
 //export sync_init
 func sync_init() {
-	flag.StringVar(&configFile, "config", "./config/config.toml", "Path to config.toml")
+	flag.StringVar(&configFile, "config", "/home/boscojacinto/projects/TasteBot/Restaurant-FL/p2p/consensus/config/config.toml", "Path to config.toml")
 }
 
 //export sync_start
-func sync_start(configFile string) {
+func sync_start() {
 	db, err := badger.Open(badger.DefaultOptions("/tmp/badger"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to open badger db: %v", err)
