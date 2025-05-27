@@ -109,28 +109,27 @@ func (x *Timestamp) GetNow() string {
 	return ""
 }
 
-type Order struct {
+type Identity struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Proof         *Proof                 `protobuf:"bytes,1,opt,name=proof,proto3" json:"proof,omitempty"`
-	Timestamp     *Timestamp             `protobuf:"bytes,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	PublicKey     string                 `protobuf:"bytes,1,opt,name=publicKey,proto3" json:"publicKey,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *Order) Reset() {
-	*x = Order{}
+func (x *Identity) Reset() {
+	*x = Identity{}
 	mi := &file_order_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Order) String() string {
+func (x *Identity) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Order) ProtoMessage() {}
+func (*Identity) ProtoMessage() {}
 
-func (x *Order) ProtoReflect() protoreflect.Message {
+func (x *Identity) ProtoReflect() protoreflect.Message {
 	mi := &file_order_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -142,21 +141,74 @@ func (x *Order) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Order.ProtoReflect.Descriptor instead.
-func (*Order) Descriptor() ([]byte, []int) {
+// Deprecated: Use Identity.ProtoReflect.Descriptor instead.
+func (*Identity) Descriptor() ([]byte, []int) {
 	return file_order_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *Order) GetProof() *Proof {
+func (x *Identity) GetPublicKey() string {
+	if x != nil {
+		return x.PublicKey
+	}
+	return ""
+}
+
+type OrderRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Proof         *Proof                 `protobuf:"bytes,1,opt,name=proof,proto3" json:"proof,omitempty"`
+	Timestamp     *Timestamp             `protobuf:"bytes,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Identity      *Identity              `protobuf:"bytes,3,opt,name=identity,proto3" json:"identity,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OrderRequest) Reset() {
+	*x = OrderRequest{}
+	mi := &file_order_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OrderRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OrderRequest) ProtoMessage() {}
+
+func (x *OrderRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_order_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OrderRequest.ProtoReflect.Descriptor instead.
+func (*OrderRequest) Descriptor() ([]byte, []int) {
+	return file_order_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *OrderRequest) GetProof() *Proof {
 	if x != nil {
 		return x.Proof
 	}
 	return nil
 }
 
-func (x *Order) GetTimestamp() *Timestamp {
+func (x *OrderRequest) GetTimestamp() *Timestamp {
 	if x != nil {
 		return x.Timestamp
+	}
+	return nil
+}
+
+func (x *OrderRequest) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
 	}
 	return nil
 }
@@ -169,10 +221,13 @@ const file_order_proto_rawDesc = "" +
 	"\x05Proof\x12\x10\n" +
 	"\x03buf\x18\x01 \x01(\fR\x03buf\"\x1d\n" +
 	"\tTimestamp\x12\x10\n" +
-	"\x03now\x18\x01 \x01(\tR\x03now\"Y\n" +
-	"\x05Order\x12!\n" +
+	"\x03now\x18\x01 \x01(\tR\x03now\"(\n" +
+	"\bIdentity\x12\x1c\n" +
+	"\tpublicKey\x18\x01 \x01(\tR\tpublicKey\"\x8c\x01\n" +
+	"\fOrderRequest\x12!\n" +
 	"\x05proof\x18\x01 \x01(\v2\v.main.ProofR\x05proof\x12-\n" +
-	"\ttimestamp\x18\x02 \x01(\v2\x0f.main.TimestampR\ttimestampB\tZ\a./;mainb\x06proto3"
+	"\ttimestamp\x18\x02 \x01(\v2\x0f.main.TimestampR\ttimestamp\x12*\n" +
+	"\bidentity\x18\x03 \x01(\v2\x0e.main.IdentityR\bidentityB\tZ\a./;mainb\x06proto3"
 
 var (
 	file_order_proto_rawDescOnce sync.Once
@@ -186,20 +241,22 @@ func file_order_proto_rawDescGZIP() []byte {
 	return file_order_proto_rawDescData
 }
 
-var file_order_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_order_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_order_proto_goTypes = []any{
-	(*Proof)(nil),     // 0: main.Proof
-	(*Timestamp)(nil), // 1: main.Timestamp
-	(*Order)(nil),     // 2: main.Order
+	(*Proof)(nil),        // 0: main.Proof
+	(*Timestamp)(nil),    // 1: main.Timestamp
+	(*Identity)(nil),     // 2: main.Identity
+	(*OrderRequest)(nil), // 3: main.OrderRequest
 }
 var file_order_proto_depIdxs = []int32{
-	0, // 0: main.Order.proof:type_name -> main.Proof
-	1, // 1: main.Order.timestamp:type_name -> main.Timestamp
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	0, // 0: main.OrderRequest.proof:type_name -> main.Proof
+	1, // 1: main.OrderRequest.timestamp:type_name -> main.Timestamp
+	2, // 2: main.OrderRequest.identity:type_name -> main.Identity
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_order_proto_init() }
@@ -213,7 +270,7 @@ func file_order_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_order_proto_rawDesc), len(file_order_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

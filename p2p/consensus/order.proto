@@ -11,7 +11,12 @@ message Timestamp {
     string now = 1;    
 }
 
-message Order {
+message Identity {
+    string publicKey = 1;    
+}
+
+message OrderRequest {
     Proof proof = 1;
     Timestamp timestamp = 2;
+    Identity identity = 3;
 }

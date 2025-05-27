@@ -3,12 +3,15 @@ package main
 import (
 	"bytes"
 	//"time"
+	"fmt"
 	"github.com/dgraph-io/badger"
 	abcitypes "github.com/tendermint/tendermint/abci/types"
 	"google.golang.org/protobuf/proto"
+	"golang.org/x/crypto/sha3"
 )
 
 const AppVersion = 1
+const PUBLIC_KEY = "4ddecde332eff9353c8a7df4b429299af13bbfe2f5baa7f4474c93faf2fea0b5"
 
 type InferSyncApp struct {
 	db *badger.DB
@@ -16,6 +19,7 @@ type InferSyncApp struct {
 }
 
 var _ abcitypes.Application = (*InferSyncApp)(nil)
+var idleState = false
 
 func NewInferSyncApp(db *badger.DB) *InferSyncApp {
 	return &InferSyncApp{
@@ -35,46 +39,69 @@ func (InferSyncApp) SetOption(req abcitypes.RequestSetOption) abcitypes.Response
 }
 
 func (app *InferSyncApp) DeliverTx(req abcitypes.RequestDeliverTx) abcitypes.ResponseDeliverTx {
-	code := app.isValid(req.Tx)
-	if code != 0 {
-		return abcitypes.ResponseDeliverTx{Code: code}
+	reqType, valid := app.isValid(req.Tx)
+	if valid == false {
+		return abcitypes.ResponseDeliverTx{Code: 3, Codespace: "sync"}
 	}
-
-	msg := &Order{}
-
-	if err := proto.Unmarshal(req.Tx, msg); err != nil {
-		panic(err)
-	}
-
-	proof := msg.GetProof()
 	
-	parts := bytes.Split(req.Tx, []byte("="))
-	key, value := parts[0], parts[1]
+	switch t := reqType.(type) {
+		case *SyncRequest_Order: {
 
-	if string(key) != "order-proof" {
-		code = 3
+			// Check if order proof belongs to us
+			order := t.Order
+			identity := order.GetIdentity()
+			publicKey := identity.GetPublicKey()
+			if publicKey == PUBLIC_KEY {
+				idleState = true
+			}		
+		}
+
+		case *SyncRequest_Dummy: {
+		}	
 	}
 
-	err := app.currentBatch.Set(key, value)
+/*	err := app.currentBatch.Set(key, value)
 	if err != nil {
 		panic(err)
 	}
-
-	return abcitypes.ResponseDeliverTx{Code: code}
+*/
+	return abcitypes.ResponseDeliverTx{Code: 3, Codespace: "sync"}
 }
 
-func (app *InferSyncApp) isValid(tx []byte) (code uint32) {
-	// check format
-	parts := bytes.Split(tx, []byte("="))
-	if len(parts) != 2 {
-		return 1
+func getOrderHash(req *OrderRequest) (hash string) {
+	proof := req.GetProof()
+	keccak := sha3.NewLegacyKeccak256()
+	keccak.Write(proof.GetBuf())
+	hash = fmt.Sprintf("%x", keccak.Sum(nil))
+	return hash
+}
+
+func (app *InferSyncApp) isValid(tx []byte) (reqType isSyncRequest_Type, valid bool) {
+	
+	valid = false
+	var key []byte
+	var value []byte
+
+	req := &SyncRequest{}
+
+	if err := proto.Unmarshal(tx, req); err != nil {
+		panic(err)
 	}
 
-	key, value := parts[0], parts[1]
-
-	// check if key = "order-proof"
-	if string(key) != "order-proof" {
-		code = 3
+    switch d := req.Type.(type) {
+	    case *SyncRequest_Order:{
+	    	fmt.Printf("Order:%s\n", d.Order)
+			valid = true
+			copy(key, "order-hash")
+			copy(value, getOrderHash(req.GetOrder()))    	
+	    }
+	    case *SyncRequest_Dummy:{
+	    	fmt.Printf("Dummy:%s\n", d.Dummy)
+			valid = true
+			copy(key, "dummy-hash")			
+		}
+		default:
+			valid = false
 	}
 
 	// check if the same key=value already exists
@@ -85,8 +112,8 @@ func (app *InferSyncApp) isValid(tx []byte) (code uint32) {
 		}
 		if err == nil {
 			return item.Value(func(val []byte) error {
-				if bytes.Equal(val, value) {
-					code = 2
+				if !bytes.Equal(val, value) {
+					valid = true 
 				}
 				return nil
 			})
@@ -97,12 +124,18 @@ func (app *InferSyncApp) isValid(tx []byte) (code uint32) {
 		panic(err)
 	}
 
-	return code
+	return req.Type, valid
 }
 
 func (app *InferSyncApp) CheckTx(req abcitypes.RequestCheckTx) abcitypes.ResponseCheckTx {
-	code := app.isValid(req.Tx)
-	return abcitypes.ResponseCheckTx{Code: code, GasWanted: 1}
+	code := uint32(0)
+	
+	_, valid := app.isValid(req.Tx)
+	if valid == false {
+		code = uint32(3)
+	}
+
+	return abcitypes.ResponseCheckTx{Code: code, Codespace: "sync", GasWanted: 1}
 }
 
 func (app *InferSyncApp) Commit() abcitypes.ResponseCommit {

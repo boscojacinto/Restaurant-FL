@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package main;
+option go_package = "./;main";
+
+import "order.proto";
+
+message DummyRequest {
+    string state = 1;
+}
+
+message SyncRequest {
+    oneof type {
+        OrderRequest order = 1;
+        DummyRequest dummy = 2;
+    } 
+}
+
