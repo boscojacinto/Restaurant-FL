@@ -24,6 +24,7 @@ typedef struct { const char *p; ptrdiff_t n; } _GoString_;
 
 #include <stdlib.h>
 #include <stddef.h>
+#include <string.h>
 
 // The possible returned values for the functions that return int
 static const int RET_OK = 0;
@@ -91,6 +92,7 @@ extern "C" {
 extern void* Init();
 extern int Start(void* ctx, ConsensusCallBack onErr, void* userData);
 extern int Stop(void* ctx, ConsensusCallBack onErr, void* userData);
+extern int SendOrder(void* ctx, char* proof, ConsensusCallBack onErr, void* userData);
 
 #ifdef __cplusplus
 }

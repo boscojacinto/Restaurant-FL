@@ -4,6 +4,7 @@ package main
 #include <cgo_utils.h>
 #include <stdlib.h>
 #include <stddef.h>
+#include <string.h>
 
 // The possible returned values for the functions that return int
 static const int RET_OK = 0;
@@ -17,6 +18,7 @@ import (
  "os"
  "fmt"
  "flag"
+ "time"
  "sync"
  "unsafe"
  "errors"
@@ -33,6 +35,8 @@ import (
  "github.com/tendermint/tendermint/p2p"
  "github.com/tendermint/tendermint/privval"
  "github.com/tendermint/tendermint/proxy"
+ rpclocal "github.com/tendermint/tendermint/rpc/client/local"
+ "google.golang.org/protobuf/proto"
 )
 
 type ConsensusInstance struct {
@@ -42,6 +46,7 @@ type ConsensusInstance struct {
 	configFile string
 	db *badger.DB 
 	node *nm.Node
+	rpc *rpclocal.Local	
 }
 
 const Version = "1.0.0"
@@ -80,6 +85,7 @@ func Start(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointe
 	}
 
 	instance.ctx, instance.cancel = context.WithCancel(context.Background())
+	
 	db, err := badger.Open(badger.DefaultOptions("/tmp/badger"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to open badger db: %v", err)
@@ -99,6 +105,7 @@ func Start(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointe
 	}
 
 	instance.node = node 
+	instance.rpc = rpclocal.New(node)	
 	instance.node.Start()
 	return onError(nil, onErr, userData)
 }
@@ -134,6 +141,54 @@ func getInstance(ctx unsafe.Pointer) (*ConsensusInstance, error) {
 	}
 
 	return instance, nil
+}
+
+func makeTxOrder(proof []byte, time string, identity string) ([]byte, error) {
+	
+	req := &SyncRequest{
+		Type: &SyncRequest_Order{
+				Order: &OrderRequest{
+					Proof: &Proof{Buf: proof},
+					Timestamp: &Timestamp{Now: time},
+					Identity: &Identity{PublicKey: identity},
+				},
+			},
+		}
+	tx, err := proto.Marshal(req)
+
+	return tx, err
+}
+
+//export SendOrder
+func SendOrder(ctx unsafe.Pointer, proof *C.char, onErr C.ConsensusCallBack, userData unsafe.Pointer) C.int {
+
+	instance, err := getInstance(ctx)
+	if err != nil {
+		return onError(errors.New("Cannot stop"), onErr, userData)
+	}
+
+	c := context.Background()
+
+	len := C.strlen(proof)
+	proofBytes := C.GoBytes(unsafe.Pointer(proof), C.int(len))
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	identity := "4ddecde332eff9353c8a7df4b429299af13bbfe2f5baa7f4474c93faf2fea0b5"
+
+	tx, err := makeTxOrder(proofBytes, timestamp, identity)
+	if err != nil {
+		return onError(errors.New("Cannot create order "), onErr, userData)
+	}
+
+	bres, err := instance.rpc.BroadcastTxCommit(c, tx)
+	if !bres.CheckTx.IsOK() {
+		err = errors.New("Tx commit error") 
+	}
+
+	if !bres.DeliverTx.IsOK() {
+		err = errors.New("Tx deliver error") 
+	}
+
+	return onError(nil, onErr, userData)
 }
 
 func newTendermint(app abci.Application, configFile string) (*nm.Node, error) {

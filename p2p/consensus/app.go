@@ -1,13 +1,12 @@
 package main
 
 import (
-	"bytes"
-	//"time"
 	"fmt"
-	"github.com/dgraph-io/badger"
-	abcitypes "github.com/tendermint/tendermint/abci/types"
-	"google.golang.org/protobuf/proto"
+	"bytes"
 	"golang.org/x/crypto/sha3"
+	"github.com/dgraph-io/badger"
+	"google.golang.org/protobuf/proto"
+	abcitypes "github.com/tendermint/tendermint/abci/types"
 )
 
 const AppVersion = 1
@@ -19,7 +18,7 @@ type InferSyncApp struct {
 }
 
 var _ abcitypes.Application = (*InferSyncApp)(nil)
-var idleState = false
+var localOrderFound = false
 
 func NewInferSyncApp(db *badger.DB) *InferSyncApp {
 	return &InferSyncApp{
@@ -39,40 +38,60 @@ func (InferSyncApp) SetOption(req abcitypes.RequestSetOption) abcitypes.Response
 }
 
 func (app *InferSyncApp) DeliverTx(req abcitypes.RequestDeliverTx) abcitypes.ResponseDeliverTx {
+
 	reqType, valid := app.isValid(req.Tx)
 	if valid == false {
 		return abcitypes.ResponseDeliverTx{Code: 3, Codespace: "sync"}
 	}
-	
+
+/*	var key []byte
+	var value []byte
+*/
 	switch t := reqType.(type) {
 		case *SyncRequest_Order: {
-
+			fmt.Println("DeliverTX:SyncRequest_Order")
+			
 			// Check if order proof belongs to us
 			order := t.Order
 			identity := order.GetIdentity()
 			publicKey := identity.GetPublicKey()
+
+/*			key = "order"
+			value = []byte(hash)
+*/
 			if publicKey == PUBLIC_KEY {
-				idleState = true
-			}		
+				fmt.Println("\nMatch")
+				localOrderFound = true
+			}
 		}
 
 		case *SyncRequest_Dummy: {
+			fmt.Println("DeliverTX:SyncRequest_Dummy")			
+		}
+
+		default: {
+			fmt.Println("DeliverTX:default")			
 		}	
 	}
 
-/*	err := app.currentBatch.Set(key, value)
-	if err != nil {
-		panic(err)
-	}
-*/
-	return abcitypes.ResponseDeliverTx{Code: 3, Codespace: "sync"}
+/*	if key && value {
+		err := app.currentBatch.Set(key, value)
+		fmt.Println("Added key")
+		if err != nil {
+			panic(err)
+		}		
+	}*/
+
+	return abcitypes.ResponseDeliverTx{Code: 0, Codespace: "sync"}
 }
 
-func getOrderHash(req *OrderRequest) (hash string) {
+func parseOrder(req *OrderRequest) (hash string) {
 	proof := req.GetProof()
+	fmt.Println("\nPROOF:", string(proof.GetBuf()))
 	keccak := sha3.NewLegacyKeccak256()
 	keccak.Write(proof.GetBuf())
 	hash = fmt.Sprintf("%x", keccak.Sum(nil))
+	fmt.Println("\nHASH:", hash)
 	return hash
 }
 
@@ -92,16 +111,17 @@ func (app *InferSyncApp) isValid(tx []byte) (reqType isSyncRequest_Type, valid b
 	    case *SyncRequest_Order:{
 	    	fmt.Printf("Order:%s\n", d.Order)
 			valid = true
-			copy(key, "order-hash")
-			copy(value, getOrderHash(req.GetOrder()))    	
+			hash := parseOrder(req.GetOrder())
+			key = []byte("order")
+			value = []byte(hash)
 	    }
 	    case *SyncRequest_Dummy:{
 	    	fmt.Printf("Dummy:%s\n", d.Dummy)
 			valid = true
-			copy(key, "dummy-hash")			
 		}
 		default:
 			valid = false
+			return req.Type, valid
 	}
 
 	// check if the same key=value already exists
@@ -131,9 +151,11 @@ func (app *InferSyncApp) CheckTx(req abcitypes.RequestCheckTx) abcitypes.Respons
 	code := uint32(0)
 	
 	_, valid := app.isValid(req.Tx)
+	fmt.Println("Here1.0")
 	if valid == false {
 		code = uint32(3)
 	}
+	fmt.Println("Here1.1")
 
 	return abcitypes.ResponseCheckTx{Code: code, Codespace: "sync", GasWanted: 1}
 }
