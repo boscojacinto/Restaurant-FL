@@ -4,16 +4,24 @@ package main
 #include <cgo_utils.h>
 #include <stdlib.h>
 #include <stddef.h>
+
+// The possible returned values for the functions that return int
+static const int RET_OK = 0;
+static const int RET_ERR = 1;
+static const int RET_MISSING_CALLBACK = 2;
+
+typedef void (*ConsensusCallBack) (int ret_code, const char* msg, void * user_data);
 */
 import "C"
 import (
- "flag"
- "fmt"
  "os"
- //"os/signal"
+ "fmt"
+ "flag"
+ "sync"
+ "unsafe"
+ "errors"
+ "context"
  "path/filepath"
- //"syscall"
-
  "github.com/dgraph-io/badger"
  "github.com/spf13/viper"
 
@@ -27,45 +35,106 @@ import (
  "github.com/tendermint/tendermint/proxy"
 )
 
+type ConsensusInstance struct {
+	ctx context.Context
+	cancel context.CancelFunc
+	ID uint
+	configFile string
+	db *badger.DB 
+	node *nm.Node
+}
+
 const Version = "1.0.0"
-var configFile string
+
+var cInstances map[uint]*ConsensusInstance
+var cInstanceMutex sync.RWMutex
 
 func main() {}
 
-//export sync_init
-func sync_init() {
-	flag.StringVar(&configFile, "config", "/home/boscojacinto/projects/TasteBot/Restaurant-FL/p2p/consensus/config/config.toml", "Path to config.toml")
+//export Init
+func Init() unsafe.Pointer {
+	cInstanceMutex.Lock()
+	defer cInstanceMutex.Unlock()
+
+	cid := C.malloc(C.size_t(unsafe.Sizeof(uintptr(0))))
+	pid := (*uint)(cid)
+	cInstances = make(map[uint]*ConsensusInstance)
+	cInstance := &ConsensusInstance{
+		ID: uint(0),
+	}
+	flag.StringVar(&cInstance.configFile, "config", "/home/boscojacinto/projects/TasteBot/Restaurant-FL/p2p/consensus/config/config.toml", "Path to config.toml")
+	cInstances[0] = cInstance
+	
+	fmt.Println("Config File:", cInstance.configFile)
+	*pid = cInstance.ID
+	return cid
 }
 
-//export sync_start
-func sync_start() {
+//export Start
+func Start(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointer) C.int {
+
+	instance, err := getInstance(ctx)
+
+	if err != nil {
+		return onError(errors.New("Cannot start"), onErr, userData)
+	}
+
+	instance.ctx, instance.cancel = context.WithCancel(context.Background())
 	db, err := badger.Open(badger.DefaultOptions("/tmp/badger"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to open badger db: %v", err)
 		os.Exit(1)
 	}
-	defer db.Close()
+
+	instance.db = db
+
 	app := NewInferSyncApp(db)
 
 	flag.Parse()
 
-	node, err := newTendermint(app, configFile)
+	node, err := newTendermint(app, instance.configFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		os.Exit(2)
 	}
 
-	node.Start()
-	/*defer func() {
-		node.Stop()
-		node.Wait()
-	}()
+	instance.node = node 
+	instance.node.Start()
+	return onError(nil, onErr, userData)
+}
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	<-c
-	os.Exit(0)
-*/}
+//export Stop
+func Stop(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointer) C.int {
+
+	instance, err := getInstance(ctx)
+	if err != nil {
+		return onError(errors.New("Cannot stop"), onErr, userData)
+	}
+
+	instance.db.Close()
+
+	instance.node.Stop()
+	instance.node.Wait()
+
+	return onError(nil, onErr, userData)
+}
+
+func getInstance(ctx unsafe.Pointer) (*ConsensusInstance, error) {
+	cInstanceMutex.RLock()
+	defer cInstanceMutex.RUnlock()
+
+	pid := (*uint)(ctx)
+	if pid == nil {
+		return nil, errors.New("invalid context")
+	}
+
+	instance, ok := cInstances[*pid]
+	if !ok {
+		return nil, errors.New("instance not found")
+	}
+
+	return instance, nil
+}
 
 func newTendermint(app abci.Application, configFile string) (*nm.Node, error) {
 	// read config

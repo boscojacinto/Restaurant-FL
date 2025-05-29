@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.6
 // 	protoc        v3.21.12
-// source: sync.proto
+// source: consensus.proto
 
 package main
 
@@ -30,7 +30,7 @@ type DummyRequest struct {
 
 func (x *DummyRequest) Reset() {
 	*x = DummyRequest{}
-	mi := &file_sync_proto_msgTypes[0]
+	mi := &file_consensus_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -42,7 +42,7 @@ func (x *DummyRequest) String() string {
 func (*DummyRequest) ProtoMessage() {}
 
 func (x *DummyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sync_proto_msgTypes[0]
+	mi := &file_consensus_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55,7 +55,7 @@ func (x *DummyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DummyRequest.ProtoReflect.Descriptor instead.
 func (*DummyRequest) Descriptor() ([]byte, []int) {
-	return file_sync_proto_rawDescGZIP(), []int{0}
+	return file_consensus_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *DummyRequest) GetState() string {
@@ -78,7 +78,7 @@ type SyncRequest struct {
 
 func (x *SyncRequest) Reset() {
 	*x = SyncRequest{}
-	mi := &file_sync_proto_msgTypes[1]
+	mi := &file_consensus_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -90,7 +90,7 @@ func (x *SyncRequest) String() string {
 func (*SyncRequest) ProtoMessage() {}
 
 func (x *SyncRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sync_proto_msgTypes[1]
+	mi := &file_consensus_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -103,7 +103,7 @@ func (x *SyncRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncRequest.ProtoReflect.Descriptor instead.
 func (*SyncRequest) Descriptor() ([]byte, []int) {
-	return file_sync_proto_rawDescGZIP(), []int{1}
+	return file_consensus_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *SyncRequest) GetType() isSyncRequest_Type {
@@ -147,12 +147,11 @@ func (*SyncRequest_Order) isSyncRequest_Type() {}
 
 func (*SyncRequest_Dummy) isSyncRequest_Type() {}
 
-var File_sync_proto protoreflect.FileDescriptor
+var File_consensus_proto protoreflect.FileDescriptor
 
-const file_sync_proto_rawDesc = "" +
+const file_consensus_proto_rawDesc = "" +
 	"\n" +
-	"\n" +
-	"sync.proto\x12\x04main\x1a\vorder.proto\"$\n" +
+	"\x0fconsensus.proto\x12\x04main\x1a\vorder.proto\"$\n" +
 	"\fDummyRequest\x12\x14\n" +
 	"\x05state\x18\x01 \x01(\tR\x05state\"m\n" +
 	"\vSyncRequest\x12*\n" +
@@ -161,24 +160,24 @@ const file_sync_proto_rawDesc = "" +
 	"\x04typeB\tZ\a./;mainb\x06proto3"
 
 var (
-	file_sync_proto_rawDescOnce sync.Once
-	file_sync_proto_rawDescData []byte
+	file_consensus_proto_rawDescOnce sync.Once
+	file_consensus_proto_rawDescData []byte
 )
 
-func file_sync_proto_rawDescGZIP() []byte {
-	file_sync_proto_rawDescOnce.Do(func() {
-		file_sync_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_sync_proto_rawDesc), len(file_sync_proto_rawDesc)))
+func file_consensus_proto_rawDescGZIP() []byte {
+	file_consensus_proto_rawDescOnce.Do(func() {
+		file_consensus_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_consensus_proto_rawDesc), len(file_consensus_proto_rawDesc)))
 	})
-	return file_sync_proto_rawDescData
+	return file_consensus_proto_rawDescData
 }
 
-var file_sync_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_sync_proto_goTypes = []any{
+var file_consensus_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_consensus_proto_goTypes = []any{
 	(*DummyRequest)(nil), // 0: main.DummyRequest
 	(*SyncRequest)(nil),  // 1: main.SyncRequest
 	(*OrderRequest)(nil), // 2: main.OrderRequest
 }
-var file_sync_proto_depIdxs = []int32{
+var file_consensus_proto_depIdxs = []int32{
 	2, // 0: main.SyncRequest.order:type_name -> main.OrderRequest
 	0, // 1: main.SyncRequest.dummy:type_name -> main.DummyRequest
 	2, // [2:2] is the sub-list for method output_type
@@ -188,13 +187,13 @@ var file_sync_proto_depIdxs = []int32{
 	0, // [0:2] is the sub-list for field type_name
 }
 
-func init() { file_sync_proto_init() }
-func file_sync_proto_init() {
-	if File_sync_proto != nil {
+func init() { file_consensus_proto_init() }
+func file_consensus_proto_init() {
+	if File_consensus_proto != nil {
 		return
 	}
 	file_order_proto_init()
-	file_sync_proto_msgTypes[1].OneofWrappers = []any{
+	file_consensus_proto_msgTypes[1].OneofWrappers = []any{
 		(*SyncRequest_Order)(nil),
 		(*SyncRequest_Dummy)(nil),
 	}
@@ -202,17 +201,17 @@ func file_sync_proto_init() {
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sync_proto_rawDesc), len(file_sync_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_consensus_proto_rawDesc), len(file_consensus_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_sync_proto_goTypes,
-		DependencyIndexes: file_sync_proto_depIdxs,
-		MessageInfos:      file_sync_proto_msgTypes,
+		GoTypes:           file_consensus_proto_goTypes,
+		DependencyIndexes: file_consensus_proto_depIdxs,
+		MessageInfos:      file_consensus_proto_msgTypes,
 	}.Build()
-	File_sync_proto = out.File
-	file_sync_proto_goTypes = nil
-	file_sync_proto_depIdxs = nil
+	File_consensus_proto = out.File
+	file_consensus_proto_goTypes = nil
+	file_consensus_proto_depIdxs = nil
 }

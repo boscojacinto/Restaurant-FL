@@ -8,9 +8,6 @@ all: build
 
 deps: lint-install
 
-build:
-	${GOCMD} build -o build/waku ./cmd/waku
-
 vendor:
 	${GOCMD} mod tidy
 
@@ -19,15 +16,15 @@ generate:
 
 dynamic-library:
 	@echo "Building shared library..."
-	rm -f ./build/lib/libgosync.so
-	CGO_LDFLAGS="-Wl,-soname,libgosync.so.0" ${GOCMD} build \
+	rm -f ./build/lib/libconsensus.so
+	CGO_LDFLAGS="-Wl,-soname,libconsensus.so.0" ${GOCMD} build \
 		-buildmode=c-shared \
-		-o ./build/lib/libgosync.so \
+		-o ./build/lib/libconsensus.so \
 		./
-	sed -i "s/#include <cgo_utils.h>//gi" ./build/lib/libgosync.h
+	sed -i "s/#include <cgo_utils.h>//gi" ./build/lib/libconsensus.h
 
 	cd ./build/lib && \
-	mv ./libgosync.so ./libgosync.so.0 && \
-	ln -s ./libgosync.so.0 ./libgosync.so
+	mv ./libconsensus.so ./libconsensus.so.0 && \
+	ln -s ./libconsensus.so.0 ./libconsensus.so
 	@echo "Shared library built:"
-	@ls -la ./build/lib/libgosync.*
+	@ls -la ./build/lib/libconsensus.*
