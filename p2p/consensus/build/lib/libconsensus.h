@@ -25,12 +25,14 @@ typedef struct { const char *p; ptrdiff_t n; } _GoString_;
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
+#include <stdbool.h>
 
 // The possible returned values for the functions that return int
 static const int RET_OK = 0;
 static const int RET_ERR = 1;
 static const int RET_MISSING_CALLBACK = 2;
 
+extern bool ConsensusSendSignal(void *cb, const char *jsonEvent);
 typedef void (*ConsensusCallBack) (int ret_code, const char* msg, void * user_data);
 
 #line 1 "cgo-generated-wrapper"
@@ -91,6 +93,7 @@ extern "C" {
 
 extern void* Init(char* configPath);
 extern int Start(void* ctx, ConsensusCallBack onErr, void* userData);
+extern int SetEventCallback(void* ctx, ConsensusCallBack cb);
 extern int Stop(void* ctx, ConsensusCallBack onErr, void* userData);
 extern int SendOrder(void* ctx, char* proof, ConsensusCallBack onErr, void* userData);
 

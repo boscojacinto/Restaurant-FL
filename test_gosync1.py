@@ -1,6 +1,5 @@
 import os
 import time
-import json
 import ctypes
 from ctypes import CDLL
 from datetime import datetime 
@@ -25,6 +24,7 @@ consensus_go = None
 
 @ConsensusCallBack
 def consensusCallBack(ret_code, msg: str, user_data):
+	print("RETURN")
 	if ret_code != 0:
 		print(f"Error: {ret_code}, msg:{msg}")
 
@@ -46,35 +46,22 @@ def consensusCallBack(ret_code, msg: str, user_data):
 		data_ref[0] = ctypes.cast(msg_ptr, ctypes.c_char_p)
 		data_ptr = data_ref[0]
 
-@ConsensusCallBack
-def eventconsensusCallBack(ret_code, msg: str, user_data):
-	print(f"EVENT ret: {ret_code}, msg: {msg}, user_data:{user_data}")
-	if ret_code != 0:
-		return
-
-	event_str = msg.decode('utf-8')
-	event = json.loads(event_str)
 
 def main():
 	global consensus_go
 	consensus_go = CDLL(CONSENSUS_LIB)
-	consensus_go.Init.argtypes = [ctypes.c_char_p]
+	consensus_go.Init.argtypes = []
 	consensus_go.Init.restype = ctypes.c_void_p
 	consensus_go.Start.argtypes = [ctypes.c_void_p, ConsensusCallBack, ctypes.c_void_p]
 	consensus_go.Start.restype = ctypes.c_int
 	consensus_go.Stop.argtypes = [ctypes.c_void_p, ConsensusCallBack, ctypes.c_void_p]
 	consensus_go.Stop.restype = ctypes.c_int
-	consensus_go.SetEventCallback.argtypes = [ctypes.c_void_p, ConsensusCallBack]
-	consensus_go.SetEventCallback.restype = ctypes.c_int
 	consensus_go.SendOrder.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ConsensusCallBack, ctypes.c_void_p]
 	consensus_go.SendOrder.restype = ctypes.c_int
 
-	config_path_str = "/home/boscojacinto/projects/TasteBot/Restaurant-FL/p2p/consensus/config"
-	config_path = ctypes.c_char_p(config_path_str.encode('utf-8'))
+	config_path = "/home/boscojacinto/projects/TasteBot/Restaurant-FL/tmp/config"
 	ctx = consensus_go.Init(config_path)
 	#p2p_client = P2PClient(WAKU_GO_LIB, SETUP_BS_ENR, MSG_BS_ENR, NODE_KEY, HOST)
-
-	consensus_go.SetEventCallback(ctx, eventconsensusCallBack)
 
 	consensus_go.Start(ctx, consensusCallBack, None)
 	print(f"Consensus Started")
@@ -83,14 +70,14 @@ def main():
 	#p2p_client.start()
 	print(f"P2P Started")
 
-	# #time.sleep(20)
+	#time.sleep(20)
 
 	proofStr = "thisistheproof"
 	proof = ctypes.c_char_p(proofStr.encode('utf-8'))
 	consensus_go.SendOrder(ctx, proof, consensusCallBack, None)
 	print(f"Send Order1")	
 
-	# #time.sleep(5)
+	time.sleep(5)
 
 	proofStr = "thisistheproof2"
 	proof = ctypes.c_char_p(proofStr.encode('utf-8'))

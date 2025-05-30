@@ -5,12 +5,14 @@ package main
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
+#include <stdbool.h>
 
 // The possible returned values for the functions that return int
 static const int RET_OK = 0;
 static const int RET_ERR = 1;
 static const int RET_MISSING_CALLBACK = 2;
 
+extern bool ConsensusSendSignal(void *cb, const char *jsonEvent);
 typedef void (*ConsensusCallBack) (int ret_code, const char* msg, void * user_data);
 */
 import "C"
@@ -24,12 +26,14 @@ import (
  "errors"
  "context"
  "path/filepath"
+ "encoding/json"
  "github.com/dgraph-io/badger"
  "github.com/spf13/viper"
 
  abci "github.com/tendermint/tendermint/abci/types"
  cfg "github.com/tendermint/tendermint/config"
  tmflags "github.com/tendermint/tendermint/libs/cli/flags"
+ ctypes "github.com/tendermint/tendermint/rpc/core/types"
  "github.com/tendermint/tendermint/libs/log"
  nm "github.com/tendermint/tendermint/node"
  "github.com/tendermint/tendermint/p2p"
@@ -37,6 +41,7 @@ import (
  "github.com/tendermint/tendermint/proxy"
  rpclocal "github.com/tendermint/tendermint/rpc/client/local"
  "google.golang.org/protobuf/proto"
+ "github.com/tendermint/tendermint/types"
 )
 
 type ConsensusInstance struct {
@@ -46,7 +51,23 @@ type ConsensusInstance struct {
 	configFile string
 	db *badger.DB 
 	node *nm.Node
-	rpc *rpclocal.Local	
+	rpc *rpclocal.Local
+	cb unsafe.Pointer	
+	subscription EventListener
+}
+
+type EventListener struct {
+	ctx context.Context
+	eventCh <-chan ctypes.ResultEvent
+}
+
+type SignalData struct {
+	Type  string      `json:"type"`
+	Event interface{} `json:"event"`
+}
+
+type SignalNewBlock struct {
+	Height int64 `json:"height"`
 }
 
 const Version = "1.0.0"
@@ -70,9 +91,8 @@ func Init(configPath *C.char) unsafe.Pointer {
 	
 	flag.StringVar(&cInstance.configFile, "config", C.GoString(configPath) + "/config.toml", "Path to config.toml")
 	cInstances[0] = cInstance
-	///home/boscojacinto/projects/TasteBot/Restaurant-FL/p2p/consensus/config/config.toml
-	fmt.Println("Config File:", cInstance.configFile)
 	*pid = cInstance.ID
+
 	return cid
 }
 
@@ -108,9 +128,28 @@ func Start(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointe
 
 	instance.node = node 
 	instance.rpc = rpclocal.New(node)
-	//			   instance.rpc.Subscribe(instance.ctx, "tm.event = 'NewBlock'")	
+	eventCh, _ := instance.rpc.Subscribe(instance.ctx, "tastebot-subscribe", "tm.event='NewBlock'")
+	
+	instance.subscription = EventListener{
+		ctx: instance.ctx,
+		eventCh: eventCh,
+	}	
+	
+	go instance.listenOnEvents()
 	instance.node.Start()
 	return onError(nil, onErr, userData)
+}
+
+//export SetEventCallback
+func SetEventCallback(ctx unsafe.Pointer, cb C.ConsensusCallBack) C.int {
+	instance, err := getInstance(ctx)
+	if err != nil {
+		return 1
+	}
+	
+	instance.cb = unsafe.Pointer(cb)
+
+	return 0
 }
 
 //export Stop
@@ -127,39 +166,6 @@ func Stop(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointer
 	instance.node.Wait()
 
 	return onError(nil, onErr, userData)
-}
-
-func getInstance(ctx unsafe.Pointer) (*ConsensusInstance, error) {
-	cInstanceMutex.RLock()
-	defer cInstanceMutex.RUnlock()
-
-	pid := (*uint)(ctx)
-	if pid == nil {
-		return nil, errors.New("invalid context")
-	}
-
-	instance, ok := cInstances[*pid]
-	if !ok {
-		return nil, errors.New("instance not found")
-	}
-
-	return instance, nil
-}
-
-func makeTxOrder(proof []byte, time string, identity string) ([]byte, error) {
-	
-	req := &SyncRequest{
-		Type: &SyncRequest_Order{
-				Order: &OrderRequest{
-					Proof: &Proof{Buf: proof},
-					Timestamp: &Timestamp{Now: time},
-					Identity: &Identity{PublicKey: identity},
-				},
-			},
-		}
-	tx, err := proto.Marshal(req)
-
-	return tx, err
 }
 
 //export SendOrder
@@ -182,7 +188,7 @@ func SendOrder(ctx unsafe.Pointer, proof *C.char, onErr C.ConsensusCallBack, use
 		return onError(errors.New("Cannot create order "), onErr, userData)
 	}
 
-	code, err := instance.rpc.BroadcastTxAsync(c, tx) //BroadcastTxCommit(c, tx)
+	code, err := instance.rpc.BroadcastTxAsync(c, tx)
 	fmt.Println("After BroadcastTxCommit1.0, code:", code)
 /*	if !bres.CheckTx.IsOK() {
 		err = errors.New("Tx commit error") 
@@ -195,6 +201,76 @@ func SendOrder(ctx unsafe.Pointer, proof *C.char, onErr C.ConsensusCallBack, use
 
 	return onError(nil, onErr, userData)
 }
+
+func (instance *ConsensusInstance) listenOnEvents() {
+	for {
+		select {
+		case <-instance.ctx.Done():
+			return
+		case msg := <-instance.subscription.eventCh:
+			fmt.Println("EVENT:", msg.Query)
+			if msg.Query == "tm.event='NewBlock'" {
+				block := msg.Data.(types.EventDataNewBlock).Block
+				height := block.Height
+				signal := SignalNewBlock{
+					Height: height,
+				}
+				sendSignal(instance, "NewBlock", signal)
+			}
+		}
+	}
+}
+
+func getInstance(ctx unsafe.Pointer) (*ConsensusInstance, error) {
+	cInstanceMutex.RLock()
+	defer cInstanceMutex.RUnlock()
+
+	pid := (*uint)(ctx)
+	if pid == nil {
+		return nil, errors.New("invalid context")
+	}
+
+	instance, ok := cInstances[*pid]
+	if !ok {
+		return nil, errors.New("instance not found")
+	}
+
+	return instance, nil
+}
+
+func sendSignal(instance *ConsensusInstance, eventType string, event interface{}) {
+	signal := SignalData{
+		Type: eventType,
+		Event: event,
+	}
+	data, err := json.Marshal(&signal)
+	if err != nil {
+		fmt.Println("marshal signal error", err)
+		return
+	}
+
+	dataStr := string(data)
+	str := C.CString(dataStr)
+	C.ConsensusSendSignal(instance.cb, str)
+	C.free(unsafe.Pointer(str))
+}
+
+func makeTxOrder(proof []byte, time string, identity string) ([]byte, error) {
+	
+	req := &SyncRequest{
+		Type: &SyncRequest_Order{
+				Order: &OrderRequest{
+					Proof: &Proof{Buf: proof},
+					Timestamp: &Timestamp{Now: time},
+					Identity: &Identity{PublicKey: identity},
+				},
+			},
+		}
+	tx, err := proto.Marshal(req)
+
+	return tx, err
+}
+
 
 func newTendermint(app abci.Application, configFile string) (*nm.Node, error) {
 	// read config
