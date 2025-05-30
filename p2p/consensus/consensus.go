@@ -57,7 +57,7 @@ var cInstanceMutex sync.RWMutex
 func main() {}
 
 //export Init
-func Init() unsafe.Pointer {
+func Init(configPath *C.char) unsafe.Pointer {
 	cInstanceMutex.Lock()
 	defer cInstanceMutex.Unlock()
 
@@ -65,11 +65,12 @@ func Init() unsafe.Pointer {
 	pid := (*uint)(cid)
 	cInstances = make(map[uint]*ConsensusInstance)
 	cInstance := &ConsensusInstance{
-		ID: uint(0),
+		ID: uint(len(cInstances)),
 	}
-	flag.StringVar(&cInstance.configFile, "config", "/home/boscojacinto/projects/TasteBot/Restaurant-FL/p2p/consensus/config/config.toml", "Path to config.toml")
-	cInstances[0] = cInstance
 	
+	flag.StringVar(&cInstance.configFile, "config", C.GoString(configPath) + "/config.toml", "Path to config.toml")
+	cInstances[0] = cInstance
+	///home/boscojacinto/projects/TasteBot/Restaurant-FL/p2p/consensus/config/config.toml
 	fmt.Println("Config File:", cInstance.configFile)
 	*pid = cInstance.ID
 	return cid
@@ -85,8 +86,9 @@ func Start(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointe
 	}
 
 	instance.ctx, instance.cancel = context.WithCancel(context.Background())
-	
-	db, err := badger.Open(badger.DefaultOptions("/tmp/badger"))
+	dir := filepath.Dir(instance.configFile)	
+
+	db, err := badger.Open(badger.DefaultOptions(dir + "/tmp/badger"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to open badger db: %v", err)
 		os.Exit(1)
@@ -105,7 +107,8 @@ func Start(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointe
 	}
 
 	instance.node = node 
-	instance.rpc = rpclocal.New(node)	
+	instance.rpc = rpclocal.New(node)
+	//			   instance.rpc.Subscribe(instance.ctx, "tm.event = 'NewBlock'")	
 	instance.node.Start()
 	return onError(nil, onErr, userData)
 }
@@ -179,14 +182,16 @@ func SendOrder(ctx unsafe.Pointer, proof *C.char, onErr C.ConsensusCallBack, use
 		return onError(errors.New("Cannot create order "), onErr, userData)
 	}
 
-	bres, err := instance.rpc.BroadcastTxCommit(c, tx)
-	if !bres.CheckTx.IsOK() {
+	code, err := instance.rpc.BroadcastTxAsync(c, tx) //BroadcastTxCommit(c, tx)
+	fmt.Println("After BroadcastTxCommit1.0, code:", code)
+/*	if !bres.CheckTx.IsOK() {
 		err = errors.New("Tx commit error") 
 	}
 
 	if !bres.DeliverTx.IsOK() {
 		err = errors.New("Tx deliver error") 
 	}
+*/	//fmt.Println("After BroadcastTxCommit1.1")
 
 	return onError(nil, onErr, userData)
 }

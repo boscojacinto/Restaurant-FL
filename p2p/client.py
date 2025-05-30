@@ -6,9 +6,8 @@ import ctypes
 import base64
 from ctypes import CDLL
 from datetime import datetime
-import restaurant_pb2
+import p2p.restaurant_pb2
 
-WAKU_GO_LIB = "./libgowaku.so.0"
 DISC_URL = "enrtree://AKP74RJLRUIRLPUD3KHFKX23B5LKQYSTWE4KPXZUMJQZSLG4LYMY2@nodes.restaurants.com"
 DISC_NAMESERVER = "nodes.restaurants.com"
 DISC_ENABLE = True
@@ -44,12 +43,12 @@ setup_content_topic = None
 msg_request_topic = None 
 
 class P2PClient:
-    def __init__(self, setup_bs_enr, msg_bs_enr, node_key, host):
+    def __init__(self, lib_path, setup_bs_enr, msg_bs_enr, node_key, host):
     	self.setup_bs_enr = setup_bs_enr
     	self.msg_bs_enr = msg_bs_enr
     	self.node_key = node_key
     	self.host = host
-    	waku_lib_init()
+    	waku_lib_init(lib_path)
 
     def start(self):
     	(setup_ctx, setup_connected, setup_peer_id,
@@ -219,10 +218,10 @@ def msgEventCallBack(ret_code, msg: str, user_data):
 			else:
 				print(f"Other")
 
-def waku_lib_init():
+def waku_lib_init(lib_path):
 	global waku_go
 
-	waku_go = CDLL(WAKU_GO_LIB)
+	waku_go = CDLL(lib_path)
 	waku_go.waku_new.argtypes = [ctypes.c_char_p, WakuCallBack, ctypes.c_void_p]
 	waku_go.waku_new.restype = ctypes.c_void_p
 	waku_go.waku_start.argtypes = [ctypes.c_void_p, WakuCallBack, ctypes.c_void_p]
@@ -258,7 +257,7 @@ if __name__ == "__main__":
 	msg_bs_enr = "enr:-KG4QJ60C0bldIz1merR78DRaJWdhSyDGImFc7n42mHqgGadXRyzOG6LOuZPyEEshitBybFvqgFw039VmOmdTFPtgg-GAZb7zkrAgmlkgnY0gmlwhMCoARqCcnOFAFkBAACJc2VjcDI1NmsxoQNLmJB1Pj72eUSZQnMof-AJdmltBsVrqCSzGa_k_YI8UIN0Y3CC6nSDdWRwgibAhXdha3UyAw"
 	node_key = '4ddecde332eff9353c8a7df4b429299af13bbfe2f5baa7f4474c93faf2fea0b5'
 	host = "192.168.1.26"
-	client = P2PClient(setup_bs_enr, msg_bs_enr, node_key, host)
+	client = P2PClient("./libgowaku.so.0", setup_bs_enr, msg_bs_enr, node_key, host)
 	client.start()
 	while True:
 		time.sleep(0.2)

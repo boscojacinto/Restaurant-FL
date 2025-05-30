@@ -89,7 +89,7 @@ typedef struct { void *data; GoInt len; GoInt cap; } GoSlice;
 extern "C" {
 #endif
 
-extern void* Init();
+extern void* Init(char* configPath);
 extern int Start(void* ctx, ConsensusCallBack onErr, void* userData);
 extern int Stop(void* ctx, ConsensusCallBack onErr, void* userData);
 extern int SendOrder(void* ctx, char* proof, ConsensusCallBack onErr, void* userData);
