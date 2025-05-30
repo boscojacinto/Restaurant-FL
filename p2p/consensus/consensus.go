@@ -21,6 +21,7 @@ import (
  "fmt"
  "flag"
  "time"
+ "bytes"
  "sync"
  "unsafe"
  "errors"
@@ -201,6 +202,36 @@ func SendOrder(ctx unsafe.Pointer, proof *C.char, onErr C.ConsensusCallBack, use
 
 	return onError(nil, onErr, userData)
 }
+
+//export Query
+func Query(ctx unsafe.Pointer, path *C.char, key *C.char, cb C.ConsensusCallBack, userData unsafe.Pointer) C.int {
+
+	instance, err := getInstance(ctx)
+	if err != nil {
+		return onError(errors.New("Cannot stop"), cb, userData)
+	}
+
+	c := context.Background()
+
+	abciPath := C.GoString(path)
+	abciKey := []byte(C.GoString(key))
+
+	qres, err := instance.rpc.ABCIQuery(c, abciPath, abciKey)
+	if err != nil {
+		return onError(errors.New("Cannot stop"), cb, userData)
+	}
+
+	if qres.Response.IsErr() {
+		return onError(errors.New("ABCIQuery failed"), cb, userData)
+	}
+	if !bytes.Equal(qres.Response.Key, abciKey) {
+		return onError(errors.New("returned key does not match queried key"), cb, userData)
+	}
+	
+	result := string(qres.Response.Value)
+	return onSuccesfulResponse(result, cb, userData)
+}
+
 
 func (instance *ConsensusInstance) listenOnEvents() {
 	for {

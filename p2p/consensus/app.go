@@ -41,11 +41,9 @@ func (app *InferSyncApp) CheckTx(req abcitypes.RequestCheckTx) abcitypes.Respons
 	code := uint32(0)
 	
 	_, valid := app.isValid(req.Tx)
-	fmt.Println("Here1.0")
 	if valid == false {
 		code = uint32(3)
 	}
-	fmt.Println("Here1.1")
 
 	return abcitypes.ResponseCheckTx{Code: code, Codespace: "sync", GasWanted: 1}
 }
@@ -166,8 +164,8 @@ func matchOrder(req *SyncRequest) (bool) {
 
 func verifyOrder(req *OrderRequest) (bool) {
 	proof := req.GetProof()
-	fmt.Println("\nPROOF:", string(proof.GetBuf()))
 	
+	proof=proof
 	// Verify proof
 
 	return true
@@ -178,7 +176,7 @@ func makeOrderKV(req *OrderRequest) ([]byte, []byte) {
 	keccak := sha3.NewLegacyKeccak256()
 	keccak.Write(proof.GetBuf())
 	hash := fmt.Sprintf("%x", keccak.Sum(nil))
-	fmt.Println("\nHASH:", hash)
+	fmt.Println("Order Hash:", hash)
 	
 	k := []byte("order")
 	v := []byte(hash)

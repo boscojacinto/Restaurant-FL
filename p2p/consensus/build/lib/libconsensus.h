@@ -96,6 +96,7 @@ extern int Start(void* ctx, ConsensusCallBack onErr, void* userData);
 extern int SetEventCallback(void* ctx, ConsensusCallBack cb);
 extern int Stop(void* ctx, ConsensusCallBack onErr, void* userData);
 extern int SendOrder(void* ctx, char* proof, ConsensusCallBack onErr, void* userData);
+extern int Query(void* ctx, char* path, char* key, ConsensusCallBack cb, void* userData);
 
 #ifdef __cplusplus
 }

@@ -68,6 +68,8 @@ def main():
 	consensus_go.SetEventCallback.restype = ctypes.c_int
 	consensus_go.SendOrder.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ConsensusCallBack, ctypes.c_void_p]
 	consensus_go.SendOrder.restype = ctypes.c_int
+	consensus_go.Query.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ConsensusCallBack, ctypes.c_void_p]
+	consensus_go.Query.restype = ctypes.c_int
 
 	config_path_str = "/home/boscojacinto/projects/TasteBot/Restaurant-FL/p2p/consensus/config"
 	config_path = ctypes.c_char_p(config_path_str.encode('utf-8'))
@@ -83,19 +85,29 @@ def main():
 	#p2p_client.start()
 	print(f"P2P Started")
 
-	# #time.sleep(20)
+	#time.sleep(15)
 
 	proofStr = "thisistheproof"
 	proof = ctypes.c_char_p(proofStr.encode('utf-8'))
 	consensus_go.SendOrder(ctx, proof, consensusCallBack, None)
 	print(f"Send Order1")	
 
-	# #time.sleep(5)
+	time.sleep(14)
 
-	proofStr = "thisistheproof2"
-	proof = ctypes.c_char_p(proofStr.encode('utf-8'))
-	consensus_go.SendOrder(ctx, proof, consensusCallBack, None)
-	print(f"Send Order2")	
+	path_str = "data"
+	path = ctypes.c_char_p(path_str.encode('utf-8'))
+	key_str = "order"
+	key = ctypes.c_char_p(key_str.encode('utf-8'))
+	value = ctypes.c_char_p(None)
+	consensus_go.Query(ctx, path, key, consensusCallBack, ctypes.byref(value))
+	value = value.value.decode('utf-8')
+	print(f"Value:{value}")
+
+	# proofStr = "thisistheproof2"
+	# proof = ctypes.c_char_p(proofStr.encode('utf-8'))
+	# consensus_go.SendOrder(ctx, proof, consensusCallBack, None)
+	# print(f"Send Order2")	
+
 
 	# # consensus_go.Stop(ctx, consensusCallBack, None)
 	# # print(f"STOPPED")	
