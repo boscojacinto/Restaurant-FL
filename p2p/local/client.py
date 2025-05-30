@@ -8,26 +8,26 @@ from ctypes import CDLL
 from datetime import datetime
 import restaurant_pb2
 
-WAKU_GO_LIB = "./libgowaku.so.0"
+WAKU_GO_LIB = "../libgowaku.so.0"
 DISC_URL = "enrtree://AKP74RJLRUIRLPUD3KHFKX23B5LKQYSTWE4KPXZUMJQZSLG4LYMY2@nodes.restaurants.com"
 DISC_NAMESERVER = "nodes.restaurants.com"
 DISC_ENABLE = True
 
-SETUP_PORT = 60011
-SETUP_DISCV5_PORT = 9911
+SETUP_PORT = 60012
+SETUP_DISCV5_PORT = 9912
 SETUP_STORE = True
 SETUP_STORE_TIME = (30*24*60*60) # 30 days
 SETUP_CLUSTER_ID = 88
 SETUP_SHARD_ID = 0
 SETUP_STORE_DB = "sqlite3://setup_store.db"
 
-PSI_PORT = 60021
-PSI_DISCV5_PORT = 9921
-PSI_STORE = True
-PSI_STORE_TIME = (5*60) # 5 minutes
-PSI_CLUSTER_ID = 89
-PSI_SHARD_ID = 0
-PSI_STORE_DB = "sqlite3://psi_store.db"
+MSG_PORT = 60022
+MSG_DISCV5_PORT = 9922
+MSG_STORE = True
+MSG_STORE_TIME = (5*60) # 5 minutes
+MSG_CLUSTER_ID = 89
+MSG_SHARD_ID = 0
+MSG_STORE_DB = "sqlite3://msg_store.db"
 
 TASTEBOT_PUBSUB_TOPIC_1 = '/tastbot/1/rs/88/0' #'/waku/2/rs/88/0'
 TASTEBOT_PUBSUB_TOPIC_2 = '/tastbot/1/rs/89/0' #'/waku/2/rs/89/0'
@@ -41,12 +41,12 @@ WakuCallBack = ctypes.CFUNCTYPE(
 
 waku_go = None
 setup_content_topic = None
-psi_request_topic = None 
+msg_request_topic = None 
 
-class PSIClient:
-    def __init__(self, setup_bs_enr, psi_bs_enr, node_key, host):
+class P2PClient:
+    def __init__(self, setup_bs_enr, msg_bs_enr, node_key, host):
     	self.setup_bs_enr = setup_bs_enr
-    	self.psi_bs_enr = psi_bs_enr
+    	self.msg_bs_enr = msg_bs_enr
     	self.node_key = node_key
     	self.host = host
     	waku_lib_init()
@@ -58,9 +58,9 @@ class PSIClient:
 
     	time.sleep(4)
 
-    	(psi_ctx, psi_connected, psi_peer_id,
-    		psi_address, psi_content_topic) = self.init_psi_node()
-    	print(f"Started PSI node: {psi_peer_id}, {psi_address}, {psi_content_topic}")
+    	(msg_ctx, msg_connected, msg_peer_id,
+    		msg_address, msg_content_topic) = self.init_msg_node()
+    	print(f"Started Msg node: {msg_peer_id}, {msg_address}, {msg_content_topic}")
 
     def init_setup_node(self):
     	node_config = "{ \"host\": \"%s\", \"port\": %d, \"nodeKey\": \"%s\", \"store\": %s, \"clusterID\": %d, \"shards\": [%d], \"databaseURL\": \"%s\", \"discV5\": %s, \"discV5UDPPort\": %d, \"discV5BootstrapNodes\": [\"%s\"]}" \
@@ -92,15 +92,15 @@ class PSIClient:
 
     	return ctx, connected, peer_id, address, topic
 
-    def init_psi_node(self):
+    def init_msg_node(self):
     	node_config = "{ \"host\": \"%s\", \"port\": %d, \"nodeKey\": \"%s\", \"store\": %s, \"clusterID\": %d, \"shards\": [%d], \"databaseURL\": \"%s\", \"discV5\": %s, \"discV5UDPPort\": %d, \"discV5BootstrapNodes\": [\"%s\"]}" \
-    					% (self.host, int(PSI_PORT), self.node_key, "true" if PSI_STORE else "false", int(PSI_CLUSTER_ID), PSI_SHARD_ID, PSI_STORE_DB, "true" if DISC_ENABLE else "false", int(PSI_DISCV5_PORT), self.psi_bs_enr)
+    					% (self.host, int(MSG_PORT), self.node_key, "true" if MSG_STORE else "false", int(MSG_CLUSTER_ID), MSG_SHARD_ID, MSG_STORE_DB, "true" if DISC_ENABLE else "false", int(MSG_DISCV5_PORT), self.msg_bs_enr)
 
     	node_config = node_config.encode('ascii')
 
     	ctx = waku_go.waku_new(node_config, wakuCallBack, None)
 
-    	ret = waku_go.waku_set_event_callback(ctx, psiEventCallBack)
+    	ret = waku_go.waku_set_event_callback(ctx, msgEventCallBack)
 
     	ret = waku_go.waku_start(ctx, wakuCallBack, None)
 
@@ -113,7 +113,7 @@ class PSIClient:
     	address = address.value.decode('utf-8')
 
     	#current_time = datetime.now().strftime("%H:%M:%S")	
-    	topic = self.get_psi_content_topic(1)
+    	topic = self.get_msg_content_topic(1)
 
     	subscription = "{ \"pubsubTopic\": \"%s\", \"contentTopics\":[\"%s\"]}" % (TASTEBOT_PUBSUB_TOPIC_2, topic.decode('utf-8'))
     	subscription = subscription.encode('ascii')
@@ -143,10 +143,10 @@ class PSIClient:
     		encoding, wakuCallBack, ctypes.byref(content_topic))
     	return content_topic.value
 
-    def get_psi_content_topic(self, timestamp):
+    def get_msg_content_topic(self, timestamp):
     	app_name = ctypes.c_char_p("tastebot".encode('utf-8'))
     	app_version = ctypes.c_char_p("1".encode('utf-8'))
-    	topic_name = ctypes.c_char_p(f"psi-{timestamp}".encode('utf-8'))
+    	topic_name = ctypes.c_char_p(f"msg-{timestamp}".encode('utf-8'))
     	encoding = ctypes.c_char_p('proto'.encode('utf-8'))
 
     	content_topic = ctypes.c_char_p(None)
@@ -199,7 +199,7 @@ def setupEventCallBack(ret_code, msg: str, user_data):
 				print(f"Other")
 
 @WakuCallBack
-def psiEventCallBack(ret_code, msg: str, user_data):
+def msgEventCallBack(ret_code, msg: str, user_data):
 	print(f"EVENT ret: {ret_code}, msg: {msg}, user_data:{user_data}")
 	if ret_code != 0:
 		return
@@ -255,10 +255,10 @@ def waku_lib_init():
 
 if __name__ == "__main__":
 	setup_bs_enr = "enr:-KG4QB3eb3HfEYfkM3qJ4PbnxrjM_KK4BIsYh0hh1NNFWYi0UhgbINGm38YoNDgiRSFJBLJT2aRj2qifsWTlZ886GV6GAZb7zkKYgmlkgnY0gmlwhMCoARqCcnOFAFgBAACJc2VjcDI1NmsxoQNLmJB1Pj72eUSZQnMof-AJdmltBsVrqCSzGa_k_YI8UIN0Y3CC6mqDdWRwgia2hXdha3UyAw"
-	psi_bs_enr = "enr:-KG4QJ60C0bldIz1merR78DRaJWdhSyDGImFc7n42mHqgGadXRyzOG6LOuZPyEEshitBybFvqgFw039VmOmdTFPtgg-GAZb7zkrAgmlkgnY0gmlwhMCoARqCcnOFAFkBAACJc2VjcDI1NmsxoQNLmJB1Pj72eUSZQnMof-AJdmltBsVrqCSzGa_k_YI8UIN0Y3CC6nSDdWRwgibAhXdha3UyAw"
-	node_key = '4ddecde332eff9353c8a7df4b429299af13bbfe2f5baa7f4474c93faf2fea0b5'
+	msg_bs_enr = "enr:-KG4QJ60C0bldIz1merR78DRaJWdhSyDGImFc7n42mHqgGadXRyzOG6LOuZPyEEshitBybFvqgFw039VmOmdTFPtgg-GAZb7zkrAgmlkgnY0gmlwhMCoARqCcnOFAFkBAACJc2VjcDI1NmsxoQNLmJB1Pj72eUSZQnMof-AJdmltBsVrqCSzGa_k_YI8UIN0Y3CC6nSDdWRwgibAhXdha3UyAw"
+	node_key = 'c0d2293bafb30c34d4373f3893b665707efb9b2f381b965e11c6b77e005c6f70'
 	host = "192.168.1.26"
-	client = PSIClient(setup_bs_enr, psi_bs_enr, node_key, host)
+	client = P2PClient(setup_bs_enr, msg_bs_enr, node_key, host)
 	client.start()
 	while True:
 		time.sleep(0.2)

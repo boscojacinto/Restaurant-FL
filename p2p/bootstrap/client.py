@@ -20,13 +20,13 @@ SETUP_CLUSTER_ID = 88
 SETUP_SHARD_ID = [0]
 SETUP_STORE_DB = "sqlite3://setup_store.db"
 
-PSI_PORT = 60020
-PSI_DISCV5_PORT = 9920
-PSI_STORE = True
-PSI_STORE_TIME = (5*60) # 5 minutes
-PSI_CLUSTER_ID = 89
-PSI_SHARD_ID = [0]
-PSI_STORE_DB = "sqlite3://psi_store.db"
+MSG_PORT = 60020
+MSG_DISCV5_PORT = 9920
+MSG_STORE = True
+MSG_STORE_TIME = (5*60) # 5 minutes
+MSG_CLUSTER_ID = 89
+MSG_SHARD_ID = [0]
+MSG_STORE_DB = "sqlite3://msg_store.db"
 
 TASTEBOT_PUBSUB_TOPIC_1 = '/tastbot/1/rs/88/0' #'/waku/2/rs/88/0'
 TASTEBOT_PUBSUB_TOPIC_2 = '/tastbot/1/rs/89/0' #'/waku/2/rs/89/0'
@@ -40,7 +40,7 @@ WakuCallBack = ctypes.CFUNCTYPE(
 
 waku_go = None
 setup_content_topic = None
-psi_request_topic = None 
+msg_request_topic = None 
 
 @WakuCallBack
 def wakuCallBack(ret_code, msg: str, user_data):
@@ -87,7 +87,7 @@ def setupEventCallBack(ret_code, msg: str, user_data):
 				print(f"Other")
 
 @WakuCallBack
-def psiEventCallBack(ret_code, msg: str, user_data):
+def msgEventCallBack(ret_code, msg: str, user_data):
 	print(f"EVENT ret: {ret_code}, msg: {msg}, user_data:{user_data}")
 	if ret_code != 0:
 		return
@@ -112,12 +112,12 @@ def main():
 	waku_lib_init()
 
 	(setup_ctx, setup_peer_id, setup_address) = init_setup_node()
-	print(f"Started PSI node: {setup_peer_id}, {setup_address}, {TASTEBOT_PUBSUB_TOPIC_1}")
+	print(f"Started Setup node: {setup_peer_id}, {setup_address}, {TASTEBOT_PUBSUB_TOPIC_1}")
 
 	time.sleep(2)
 
-	(psi_ctx, psi_peer_id, psi_address) = init_psi_node()
-	print(f"Started PSI node: {psi_peer_id}, {psi_address}, {TASTEBOT_PUBSUB_TOPIC_2}")
+	(msg_ctx, msg_peer_id, msg_address) = init_msg_node()
+	print(f"Started Msg node: {msg_peer_id}, {msg_address}, {TASTEBOT_PUBSUB_TOPIC_2}")
 
 	while True:
 		time.sleep(1)
@@ -149,14 +149,14 @@ def init_setup_node():
 
 	return ctx, peer_id, address
 
-def init_psi_node():
+def init_msg_node():
 	node_config = "{ \"host\": \"%s\", \"port\": %d, \"nodeKey\": \"%s\", \"store\": %s, \"clusterID\": %d, \"shards\": [%d], \"discV5\": %s, \"databaseURL\": \"%s\", \"discV5UDPPort\": %d}" \
-				   % (HOST, int(PSI_PORT), NODE_KEY, "true" if PSI_STORE else "false", int(PSI_CLUSTER_ID), *map(int, PSI_SHARD_ID), "true" if DISC_ENABLE else "false", PSI_STORE_DB, int(PSI_DISCV5_PORT))
+				   % (HOST, int(MSG_PORT), NODE_KEY, "true" if MSG_STORE else "false", int(MSG_CLUSTER_ID), *map(int, MSG_SHARD_ID), "true" if DISC_ENABLE else "false", MSG_STORE_DB, int(MSG_DISCV5_PORT))
 	node_config = node_config.encode('ascii')
 
 	ctx = waku_go.waku_new(node_config, wakuCallBack, None)
 
-	ret = waku_go.waku_set_event_callback(ctx, psiEventCallBack)
+	ret = waku_go.waku_set_event_callback(ctx, msgEventCallBack)
 
 	ret = waku_go.waku_start(ctx, wakuCallBack, None)
 
@@ -168,7 +168,7 @@ def init_psi_node():
 	ret = waku_go.waku_listen_addresses(ctx, wakuCallBack, ctypes.byref(address))
 	address = address.value.decode('utf-8')
 
-	topic = get_psi_content_topic(1)
+	topic = get_msg_content_topic(1)
 	print(f"\ntopic:{topic.decode('utf-8')}")
 
 	subscription = "{ \"pubsubTopic\": \"%s\", \"contentTopics\":[\"%s\"]}" % (TASTEBOT_PUBSUB_TOPIC_2, topic.decode('utf-8'))
@@ -188,10 +188,10 @@ def get_setup_content_topic():
 		encoding, wakuCallBack, ctypes.byref(content_topic))
 	return content_topic.value
 
-def get_psi_content_topic(timestamp):
+def get_msg_content_topic(timestamp):
 	app_name = ctypes.c_char_p("tastebot".encode('utf-8'))
 	app_version = ctypes.c_char_p("1".encode('utf-8'))
-	topic_name = ctypes.c_char_p(f"psi-{timestamp}".encode('utf-8'))
+	topic_name = ctypes.c_char_p(f"msg-{timestamp}".encode('utf-8'))
 	encoding = ctypes.c_char_p('proto'.encode('utf-8'))
 
 	content_topic = ctypes.c_char_p(None)
