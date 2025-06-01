@@ -1,4 +1,5 @@
 import os
+import sys
 import torch
 import asyncio
 import os.path as osp
@@ -9,6 +10,7 @@ from scipy.sparse import coo_matrix, issparse, load_npz
 import torch_geometric.transforms as T
 from torch_geometric.utils import to_networkx
 from torch_geometric.loader import HGTLoader
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../'))
 from ai.restaurant_model import AIModel
 import networkx as nx
 import matplotlib.pyplot as plt

@@ -43,10 +43,11 @@ STATUS_GO_LIB = "im/libs/libstatus.so.0"
 
 AI_MODEL = "swigg1.0-gemma3:4b"
 customer_ids = [{'id': 1, 'name': "Rohan", 'publicKey': "0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4", 'emojiHash': """👨‍✈️ℹ️📛🤘👩🏼‍🎤👨🏿‍🦱🏌🏼‍♀️🪣🐍🅱️👋🏼👱🏿‍♀️🙅🏼‍♂️🤨"""}]
-RESTAURANT_UID = "0xdc9e9199cee1b4686864450961848ca39420931d56080baa2ba196283dfc2682"
+RESTAURANT_UID = "0x9f02de9e49c6784cc95120daac6211d6ae16c9cc3a6292c2394c220c312d6bec"
+# Restaurant Public key 0x043b493da25ff3f725d66185ed2094f0058ee2a577987bd89b6c9c2cf70fdf9fc13c0629449be9e76b7826335b828ac2bb2eb8cf639e6f31eca442ebb38eb7b148 
 RESTAURANT_PASSWORD = "swigg@12345"
-RESTAURANT_DEVICE = "restaurant-pc-8"
-RESTAURANT_NAME = "Restaurant8"
+RESTAURANT_DEVICE = "restaurant-pc-9"
+RESTAURANT_NAME = "Restaurant9"
 MAX_CUSTOMERS = 10000
 MAX_RESTAURANTS = 1277
 CUSTOMER_FEATURES_NUM = 1024
@@ -138,7 +139,7 @@ class StatusClient:
     def on_status_cb(self, signal: str):
     	global ai_client
     	signal = json.loads(signal)
-    	print(f"signal received!:{signal["type"]}")
+    	#print(f"signal received!:{signal["type"]}")
     	if signal["type"] == "node.login":
     		try :
     			key_uid = signal["event"]["settings"]["key-uid"]
@@ -149,7 +150,7 @@ class StatusClient:
     	elif signal["type"] == "message.delivered":
     		print("Message delivered!")
     	elif signal["type"] == "messages.new":
-    		print(f"event!:{signal["event"]}")
+    		#print(f"event!:{signal["event"]}")
     		try:
     			new_msg = signal["event"]["chats"][0]["lastMessage"]["parsedText"][0]["children"][0]["literal"]
     			c_id = signal["event"]["chats"][0]["lastMessage"]["from"]
@@ -159,10 +160,10 @@ class StatusClient:
     		except KeyError:
     			pass
     	elif signal["type"] == "wakuv2.peerstats":
-    		print(f"stats!:{signal["event"]}")
+    		#print(f"stats!:{signal["event"]}")
     		pass
     	else:
-    		print(f"other!:{signal["type"]}")
+    		#print(f"other!:{signal["type"]}")
     		pass
     	return
 
@@ -461,6 +462,8 @@ def main(p):
 	time.sleep(0.5)
 	
 	ai_client.start()
+
+	time.sleep(0.5)
 
 	ai_client.greet(customer_ids[0])
 

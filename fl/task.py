@@ -17,9 +17,9 @@ from flwr_datasets.partitioner import IidPartitioner
 import os
 import sys
 from torch_geometric.transforms import RandomLinkSplit, ToUndirected
-sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../'))
-from ml.swg_db_local import SWGDatasetLocal
-from ml.swg_ml_local import SWG, create_loader, train_local, test_local
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../ml'))
+from swg_db_local import SWGDatasetLocal
+from swg_ml_local import SWG, create_loader, train_local, test_local
 import torch.nn.functional as F
 import numpy as np
 
