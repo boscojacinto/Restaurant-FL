@@ -18,9 +18,9 @@ from torch_geometric.data import (
     download_url,
     extract_zip,
 )
-from swigg_db import SWGDataset
-from swigg_ml_local import SWG 
-from swigg_db_local import SWGDatasetLocal
+from swg_db import SWGDataset
+from swg_ml_local import SWG 
+from swg_db_local import SWGDatasetLocal
 
 MAX_CUSTOMERS = 10000
 CUSTOMER_FEATURES_NUM = 1024

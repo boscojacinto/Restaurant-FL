@@ -119,14 +119,14 @@ class SWGDatasetLocal(InMemoryDataset):
         lg = local_graph.to_namedtuple()
 
         # Restaurant features
-        x = sp.load_npz(osp.join('/home/boscojacinto/projects/Restaurant-FL/', RESTAURANT_FEATURES_FILE))
+        x = sp.load_npz(osp.join('/home/boscojacinto/projects/TasteBot/Restaurant-FL/ml/', RESTAURANT_FEATURES_FILE))
         restaurant_attrs = torch.from_numpy(x.todense()).to(torch.float)
         #print(f"restaurant_attrs:{restaurant_attrs}")
         neighbor_restaurants = torch.nonzero(restaurant_attrs.any(dim=1)).squeeze()
         neighbor_restaurants = torch.tensor([neighbor_restaurants.item()])
         #print(f"neighbor_restaurants:{neighbor_restaurants.flatten()}")
 
-        x = np.load(osp.join('/home/boscojacinto/projects/Restaurant-FL/', NEIGHBOR_REST_CUST_FILE))
+        x = np.load(osp.join('/home/boscojacinto/projects/TasteBot/Restaurant-FL/ml/', NEIGHBOR_REST_CUST_FILE))
         r_c_adj = sp.coo_matrix(x).toarray()
         for idx in neighbor_restaurants.flatten():
             idx = idx.item()

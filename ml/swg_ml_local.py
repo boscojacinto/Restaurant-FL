@@ -13,7 +13,7 @@ from tqdm import tqdm
 import networkx as nx
 import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, precision_recall_curve, auc, matthews_corrcoef
-from swigg_db_local import SWGDatasetLocal
+from swg_db_local import SWGDatasetLocal
 
 class SWG(torch.nn.Module):
     def __init__(self, hidden_channels, num_heads, num_layers, node_types, mlp_hidden_layers, mlp_dropout, data):

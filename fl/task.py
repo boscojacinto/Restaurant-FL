@@ -18,8 +18,8 @@ import os
 import sys
 from torch_geometric.transforms import RandomLinkSplit, ToUndirected
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../'))
-from swigg_db_local import SWGDatasetLocal
-from swigg_ml_local import SWG, create_loader, train_local, test_local
+from ml.swg_db_local import SWGDatasetLocal
+from ml.swg_ml_local import SWG, create_loader, train_local, test_local
 import torch.nn.functional as F
 import numpy as np
 

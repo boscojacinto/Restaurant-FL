@@ -26,6 +26,7 @@ from ai.restaurant_model import AIModel as bot
 from ai.restaurant_model import CUSTOM_MODEL
 import private_set_intersection.python as psi
 
+path1 = None
 status_go = None
 status_cb = None
 ai_client = None
@@ -53,7 +54,9 @@ RESTAURANT_FEATURES_NUM = 1024
 CUSTOMER_FEATURES_FILE = 'features_customers.npz'
 RESTAURANT_FEATURES_FILE = 'features_restaurants.npz'
 NEIGHBOR_REST_CUST_FILE = 'neighbor_rest_cust.npy'
-
+RESTAURANT_EMBEDDINGS_FILE = 'restaurant_embeddings.pt'
+RESTAURANT_INTERACTIONS_FILE = 'restaurant_interactions.csv'
+CUSTOMER_EMBEDDINGS_FILE = 'customer_embeddings.pt' 
 INITIAL_PROMPT = 'Hello'
 
 class StatusClient:
@@ -308,25 +311,25 @@ async def create_embeddings(file):
 async def init_embeddings():
 	customer_embeds = torch.zeros((MAX_CUSTOMERS, CUSTOMER_FEATURES_NUM),
 								 dtype=torch.float)
-	embeds = await create_embeddings('./restaurant_interactions.csv')	
+	embeds = await create_embeddings(os.path.join(path, RESTAURANT_INTERACTIONS_FILE))	
 	#print(f"embeds:{embeds}")
 	random_customer_ids = torch.randperm(MAX_CUSTOMERS)[:25]
 	#print(f"random_customer_ids:{random_customer_ids.shape}")
-	torch.save(random_customer_ids, 'restaurant_customer_ids.pt')
+	torch.save(random_customer_ids, os.path.join(path, 'restaurant_customer_ids.pt'))
 	customer_embeds[random_customer_ids] = embeds
 	#print(f"customer_embeds:{customer_embeds}")
-	torch.save(customer_embeds, 'customer_embeddings.pt')
+	torch.save(customer_embeds, os.path.join(path, CUSTOMER_EMBEDDINGS_FILE))
 	
 	restaurant_embeds = torch.zeros((MAX_RESTAURANTS, RESTAURANT_FEATURES_NUM),
 								 dtype=torch.float)
-	torch.save(restaurant_embeds, 'restaurant_embeddings.pt')
-	if os.path.exists(CUSTOMER_FEATURES_FILE):
-		os.remove(CUSTOMER_FEATURES_FILE)
-	if os.path.exists(RESTAURANT_FEATURES_FILE):
-		os.remove(RESTAURANT_FEATURES_FILE)
+	torch.save(restaurant_embeds, os.path.join(path, RESTAURANT_EMBEDDINGS_FILE))
+	if os.path.exists(os.path.join(path, CUSTOMER_FEATURES_FILE)):
+		os.remove(os.path.join(path, CUSTOMER_FEATURES_FILE))
+	if os.path.exists(os.path.join(path, RESTAURANT_FEATURES_FILE)):
+		os.remove(os.path.join(path, RESTAURANT_FEATURES_FILE))
 
 async def save_customer_embeddings(customer_id, embeds):
-	customer_embeds = torch.load('customer_embeddings.pt')
+	customer_embeds = torch.load(os.path.join(path, CUSTOMER_EMBEDDINGS_FILE))
 	torch.manual_seed(42)
 	c_id = random.randint(0, MAX_CUSTOMERS - 1)
 	#print(f"customer_ids[0]['publicKey']:{customer_ids[0]['publicKey']}")
@@ -338,13 +341,13 @@ async def save_customer_embeddings(customer_id, embeds):
 
 	customer_embeds[c_id] = torch.tensor(embeds, dtype=torch.float)
 	#print(f"customer_embeds.shape:{customer_embeds.shape}")
-	torch.save(customer_embeds, 'customer_embeddings.pt')
+	torch.save(customer_embeds, os.path.join(path, CUSTOMER_EMBEDDINGS_FILE))
 	customer_feats = coo_matrix(customer_embeds)
 	#print(f"customer_feats:{customer_feats}")
-	sp.sparse.save_npz(CUSTOMER_FEATURES_FILE, customer_feats)
+	sp.sparse.save_npz(os.path.join(path, CUSTOMER_FEATURES_FILE), customer_feats)
 
 async def save_restaurant_embeddings(customer_id, embeds):
-	restaurant_embeds = torch.load('restaurant_embeddings.pt')
+	restaurant_embeds = torch.load(os.path.join(path, RESTAURANT_EMBEDDINGS_FILE))
 	torch.manual_seed(42)
 	#r_id = random.randint(0, MAX_RESTAURANTS - 1)
 	r_id = 1
@@ -357,17 +360,17 @@ async def save_restaurant_embeddings(customer_id, embeds):
 	print(f"c_id:{c_id}")
 
 	restaurant_embeds[r_id] = torch.tensor(embeds, dtype=torch.float)
-	torch.save(restaurant_embeds, 'restaurant_embeddings.pt')
+	torch.save(restaurant_embeds, os.path.join(path, RESTAURANT_EMBEDDINGS_FILE))
 	restaurant_feats =coo_matrix(restaurant_embeds)
-	sp.sparse.save_npz(RESTAURANT_FEATURES_FILE, restaurant_feats)
+	sp.sparse.save_npz(os.path.join(path, RESTAURANT_FEATURES_FILE), restaurant_feats)
 
-	customer_embeddings = torch.load('customer_embeddings.pt') 
+	customer_embeddings = torch.load(os.path.join(path, CUSTOMER_EMBEDDINGS_FILE)) 
 	r_c_adj = torch.zeros((MAX_RESTAURANTS, MAX_CUSTOMERS), dtype=torch.float)
 	for i, v in enumerate(customer_embeddings):
 		r_c_adj[r_id, i] = 1
 
 	r_c_adj_np = r_c_adj.numpy()
-	np.save(NEIGHBOR_REST_CUST_FILE, r_c_adj_np, allow_pickle=False)
+	np.save(os.path.join(path, NEIGHBOR_REST_CUST_FILE), r_c_adj_np, allow_pickle=False)
 
 async def restaurant_feedback(customer_id):
 	global restaurant_service
@@ -404,7 +407,8 @@ async def restaurant_setup_and_fetch(customer_id):
 										customer_reply.response)
 	return intersection, setup_reply.restaurantKey
 
-def main():
+def main(p):
+	global path
 	global status_go
 	global ai_client
 	global fl_client_1
@@ -418,6 +422,7 @@ def main():
 	global RESTAURANT_NAME
 	global STATUS_BACKEND_BIN
 
+	path = p
 	try:
 		status_backend = Popen([STATUS_BACKEND_BIN, "--address", "127.0.0.1:0"])
 	except OSError as e:
@@ -478,5 +483,5 @@ async def test():
 	# await save_restaurant_embeddings("0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4", embeds)
 
 if __name__ == '__main__':
-	main()
-	#asyncio.run(test())
+	path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'ml/')
+	main(path)

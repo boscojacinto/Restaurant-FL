@@ -117,3 +117,15 @@ def main():
 
 if __name__ == "__main__":
 	main()
+
+
+	# req = consenus_proto.SyncRequest()
+	# order = req.order
+	# dummy = req.dummy
+
+	# dummy.state = "test"
+	# order.proof.buf = b"thisistheproof"
+	# order.timestamp.now = datetime.now().strftime("%H:%M:%S")
+	# order.identity.publicKey = '4ddecde332eff9353c8a7df4b429299af13bbfe2f5baa7f4474c93faf2fea0b5'
+	# print(req.SerializeToString())
+	

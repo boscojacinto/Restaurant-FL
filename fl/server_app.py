@@ -19,7 +19,7 @@ from flwr.common import (
 )
 from flwr.common.logger import log
 from fl.task import get_params, get_model
-from swigg_db import SWGDataset
+from ml.swg_db import SWGDataset
 
 global_metadata = (['restaurant', 'area', 'customer'],
 				   [('restaurant', 'to', 'restaurant'),
