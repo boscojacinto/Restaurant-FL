@@ -20,7 +20,7 @@ dynamic-library:
 	CGO_LDFLAGS="-Wl,-soname,libconsensus.so.0" ${GOCMD} build \
 		-buildmode=c-shared \
 		-o ./build/lib/libconsensus.so \
-		./
+		./consensus
 	sed -i "s/#include <cgo_utils.h>//gi" ./build/lib/libconsensus.h
 
 	cd ./build/lib && \

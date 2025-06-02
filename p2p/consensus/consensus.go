@@ -26,6 +26,7 @@ import (
  "unsafe"
  "errors"
  "context"
+ "crypto/ecdsa"
  "path/filepath"
  "encoding/json"
  "github.com/dgraph-io/badger"
@@ -43,6 +44,10 @@ import (
  rpclocal "github.com/tendermint/tendermint/rpc/client/local"
  "google.golang.org/protobuf/proto"
  "github.com/tendermint/tendermint/types"
+ "github.com/ethereum/go-ethereum/crypto"
+ ma "github.com/multiformats/go-multiaddr"
+ "github.com/libp2p/go-libp2p/core/peer"
+ "github.com/libp2p/go-libp2p/core/protocol"
 )
 
 type ConsensusInstance struct {
@@ -55,6 +60,9 @@ type ConsensusInstance struct {
 	rpc *rpclocal.Local
 	cb unsafe.Pointer	
 	subscription EventListener
+	config *cfg.Config // Do not access after stopping node
+	height int64 
+	key *ecdsa.PrivateKey
 }
 
 type EventListener struct {
@@ -71,7 +79,17 @@ type SignalNewBlock struct {
 	Height int64 `json:"height"`
 }
 
+type Peer struct {
+	ID           peer.ID        `json:"peerID"`
+	Protocols    []protocol.ID  `json:"protocols"`
+	Addrs        []ma.Multiaddr `json:"addrs"`
+	Connected    bool           `json:"connected"`
+	PubsubTopics []string       `json:"pubsubTopics"`
+	IdleTimestamp time.Time          `json:"idleTimestamp"`
+}
+
 const Version = "1.0.0"
+const IdleCutOffPercentage = 5
 
 var cInstances map[uint]*ConsensusInstance
 var cInstanceMutex sync.RWMutex
@@ -121,7 +139,7 @@ func Start(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointe
 
 	flag.Parse()
 
-	node, err := newTendermint(app, instance.configFile)
+	node, err := newTendermint(instance, app)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		os.Exit(2)
@@ -232,6 +250,61 @@ func Query(ctx unsafe.Pointer, path *C.char, key *C.char, cb C.ConsensusCallBack
 	return onSuccesfulResponse(result, cb, userData)
 }
 
+//export AddPeer 
+func AddPeer(ctx unsafe.Pointer, peers []byte, onErr C.ConsensusCallBack, userData unsafe.Pointer) C.int {
+
+	instance, err := getInstance(ctx)
+	if err != nil {
+		return onError(errors.New("Cannot get instance"), onErr, userData)
+	}
+
+	c := context.Background()
+
+	block, err := instance.rpc.Block(c, &instance.height)
+	//block := result.(ctypes.ResultBlock)
+	blockTime := block.Block.Header.Time
+	fmt.Println("blockTime:", blockTime)
+
+	blockInterval := instance.config.Consensus.TimeoutCommit
+	graceTime := blockInterval * IdleCutOffPercentage/100
+	idleCutoffTime := blockTime.Add(blockInterval-graceTime)
+
+	fmt.Println("idleCutoffTime:", idleCutoffTime)
+
+	var peerIds []Peer
+	err = json.Unmarshal(peers, &peerIds)
+	if err != nil {
+		return onError(errors.New("Parsing peers failed"), onErr, userData)
+	}
+
+	var pAddrs [][]ma.Multiaddr
+	var sKeys []*ecdsa.PrivateKey
+
+	for i, p := range peerIds {
+        fmt.Printf("Peer %d:\n", i+1)
+        fmt.Printf("  PeerID: %s\n", p.ID)
+        fmt.Printf("  Protocols: %v\n", p.Protocols)
+        fmt.Printf("  Addrs: %v\n", p.Addrs)
+        fmt.Printf("  Connected: %v\n", p.Connected)
+        fmt.Printf("  PubsubTopics: %v\n", p.PubsubTopics)
+        fmt.Printf("  IdleTimestamp: %v\n", p.IdleTimestamp)
+
+        if p.IdleTimestamp.Compare(idleCutoffTime) >= 0  {
+        	pAddrs = append(pAddrs, p.Addrs)
+			sKey, _ := crypto.GenerateKey()
+			sKeys = append(sKeys, sKey)
+        }
+    }
+
+    // TODO: use safe int64 to uint
+	url, subdomains, sEnrs := createLocalPeer(uint(instance.height), "nodes.restaurant.idle.com", instance.key, pAddrs, sKeys)
+
+	fmt.Println("URL:", url)
+	fmt.Println("Subdomains:", subdomains)
+	fmt.Println("sEnrs:", sEnrs)
+
+	return onError(nil, onErr, userData)
+}
 
 func (instance *ConsensusInstance) listenOnEvents() {
 	for {
@@ -303,11 +376,12 @@ func makeTxOrder(proof []byte, time string, identity string) ([]byte, error) {
 }
 
 
-func newTendermint(app abci.Application, configFile string) (*nm.Node, error) {
+func newTendermint(instance *ConsensusInstance, app abci.Application) (*nm.Node, error) {
 	// read config
 	config := cfg.DefaultConfig()
-	config.RootDir = filepath.Dir(filepath.Dir(configFile))
-	viper.SetConfigFile(configFile)
+	config.RootDir = filepath.Dir(filepath.Dir(instance.configFile))
+	
+	viper.SetConfigFile(instance.configFile)
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("viper failed to read config file: %w", err)
 	}
@@ -351,6 +425,8 @@ func newTendermint(app abci.Application, configFile string) (*nm.Node, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new Tendermint node: %w", err)
 	}
+
+	instance.config = config
 
 	return node, nil
 }

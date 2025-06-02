@@ -1,8 +1,10 @@
 import re
+import os
 import sys
 import grpc
 import asyncio
 import private_set_intersection.python as psi
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../'))
 import restaurant_pb2
 import restaurant_pb2_grpc
 

@@ -74,7 +74,7 @@ def main():
 	config_path_str = "/home/boscojacinto/projects/TasteBot/Restaurant-FL/p2p/consensus/config"
 	config_path = ctypes.c_char_p(config_path_str.encode('utf-8'))
 	ctx = consensus_go.Init(config_path)
-	#p2p_client = P2PClient(WAKU_GO_LIB, SETUP_BS_ENR, MSG_BS_ENR, NODE_KEY, HOST)
+	p2p_client = P2PClient(WAKU_GO_LIB, SETUP_BS_ENR, MSG_BS_ENR, NODE_KEY, HOST)
 
 	consensus_go.SetEventCallback(ctx, eventconsensusCallBack)
 

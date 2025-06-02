@@ -6,7 +6,7 @@ import ctypes
 import base64
 from ctypes import CDLL
 from datetime import datetime
-import p2p.restaurant_pb2
+#import restaurant_pb2
 
 DISC_URL = "enrtree://AKP74RJLRUIRLPUD3KHFKX23B5LKQYSTWE4KPXZUMJQZSLG4LYMY2@nodes.restaurants.com"
 DISC_NAMESERVER = "nodes.restaurants.com"

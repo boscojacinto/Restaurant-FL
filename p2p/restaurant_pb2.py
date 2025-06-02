@@ -9,6 +9,7 @@ from google.protobuf import descriptor_pool as _descriptor_pool
 from google.protobuf import runtime_version as _runtime_version
 from google.protobuf import symbol_database as _symbol_database
 from google.protobuf.internal import builder as _builder
+import sys 
 _runtime_version.ValidateProtobufRuntimeVersion(
     _runtime_version.Domain.PUBLIC,
     5,
@@ -21,8 +22,7 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 
 _sym_db = _symbol_database.Default()
 
-import private_set_intersection.proto.psi_python_proto_pb.private_set_intersection.proto.psi_pb2 as psi__pb2
-#import psi_pb2 as psi__pb2
+import p2p.psi_pb2 as psi__pb2
 
 
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10restaurant.proto\x12\tpsi_proto\x1a\tpsi.proto\"%\n\x0cSetupRequest\x12\x15\n\rnum_customers\x18\x01 \x01(\r\"J\n\nSetupReply\x12%\n\x05setup\x18\x01 \x01(\x0b\x32\x16.psi_proto.ServerSetup\x12\x15\n\rrestaurantKey\x18\x02 \x01(\t\"6\n\x0f\x43ustomerRequest\x12#\n\x07request\x18\x01 \x01(\x0b\x32\x12.psi_proto.Request\"6\n\rCustomerReply\x12%\n\x08response\x18\x01 \x01(\x0b\x32\x13.psi_proto.Response2\x90\x01\n\x12RestaurantNeighbor\x12\x39\n\x05Setup\x12\x17.psi_proto.SetupRequest\x1a\x15.psi_proto.SetupReply\"\x00\x12?\n\x05\x46\x65tch\x12\x1a.psi_proto.CustomerRequest\x1a\x18.psi_proto.CustomerReply\"\x00\x62\x06proto3')
