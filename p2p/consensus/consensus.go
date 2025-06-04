@@ -274,7 +274,6 @@ func AddPeer(ctx unsafe.Pointer, peers *C.char, onErr C.ConsensusCallBack, userD
 		return onError(errors.New("Cannot get instance3"), onErr, userData)		
 	}
 
-	fmt.Println("BLOCK: %+v\n", block.Block)
 	blockTime := block.Block.Header.Time
 	fmt.Println("blockTime:", blockTime)
 
@@ -288,14 +287,12 @@ func AddPeer(ctx unsafe.Pointer, peers *C.char, onErr C.ConsensusCallBack, userD
 
 	var peerIds []Peer
 	peer_list := C.GoString(peers)
-	fmt.Println("PEER_list:", peer_list)
 
 	err = json.Unmarshal([]byte(peer_list), &peerIds)
 	if err != nil {
 		fmt.Println("err:", err)
 		return onError(errors.New("Parsing peers failed"), onErr, userData)
 	}
-	fmt.Println("peerIds:", peerIds)
 
 	var pAddrs [][]ma.Multiaddr
 	var sKeys []*ecdsa.PrivateKey
@@ -316,16 +313,12 @@ func AddPeer(ctx unsafe.Pointer, peers *C.char, onErr C.ConsensusCallBack, userD
         }
     }
 
-	fmt.Println("pAddrs:", pAddrs)
-	fmt.Println("sKeys:", sKeys)
-	fmt.Println("instance.height:", uint(instance.height))
-
     // TODO: use safe int64 to uint
-	url, subdomains, sEnrs := createLocalPeer(uint(instance.height), "nodes.restaurant.idle.com", instance.key, pAddrs, sKeys)
+	url, subdomains, _ := createLocalPeer(uint(instance.height), "nodes.restaurant.idle.com", instance.key, pAddrs, sKeys)
 
 	fmt.Println("URL:", url)
 	fmt.Println("Subdomains:", subdomains)
-	fmt.Println("sEnrs:", sEnrs)
+	//fmt.Println("sEnrs:", sEnrs)
 
 	return onError(nil, onErr, userData)
 }

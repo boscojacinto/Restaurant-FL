@@ -77,7 +77,6 @@ func (app *InferSyncApp) DeliverTx(req abcitypes.RequestDeliverTx) abcitypes.Res
 			// Check if order proof belongs to us
 			//if matchOrder(syncReq) {				
 			key, value = makeOrderKV(syncReq.GetOrder(), v)
-			fmt.Println("VALUE:", value)
 			valid = true
 			//}
 		}
@@ -103,9 +102,43 @@ func (app *InferSyncApp) DeliverTx(req abcitypes.RequestDeliverTx) abcitypes.Res
 }
 
 func (app *InferSyncApp) Commit() abcitypes.ResponseCommit {
-	fmt.Println("\nCOMMITTING:")
+	
+	keccak := sha3.NewLegacyKeccak256()
+	var appHash = []byte{}
+
+	err := app.db.View(func(txn *badger.Txn) error {
+        opts := badger.DefaultIteratorOptions
+        opts.PrefetchValues = false
+        
+        it := txn.NewIterator(opts)
+        defer it.Close()
+
+        var keys [][]byte
+        var rCount = uint64(0)
+        for it.Rewind(); it.Valid(); it.Next() {
+            key := it.Item().KeyCopy(nil)
+            keys = append(keys, key)
+        }
+
+        for _, key := range keys {
+            fmt.Println("KEY:", string(key))
+			keccak.Write(key)
+			rCount = rCount + uint64(1)
+        }
+
+        if rCount != 0 {
+			appHash = []byte(fmt.Sprintf("%x", keccak.Sum(nil)))
+        }
+        
+        return nil
+    })
+    if err != nil {
+        fmt.Println("Could not create app hash:", err)
+    }
+
+    fmt.Println("APPHASH:", appHash)
 	app.currentBatch.Commit()
-	return abcitypes.ResponseCommit{Data: []byte{}}
+	return abcitypes.ResponseCommit{Data: appHash}
 }
 
 func (app *InferSyncApp) Query(reqQuery abcitypes.RequestQuery) (resQuery abcitypes.ResponseQuery) {
@@ -195,34 +228,26 @@ func getOrderKV(app *InferSyncApp, req *OrderRequest) ([]byte, []byte, error) {
 
 	identity := req.GetIdentity()
 	id := string(identity.GetID())
-	fmt.Println("ID:", id)
 	key := []byte(id + "-" + "order")
-	fmt.Println("Key:", key)
+	fmt.Println("Key:", id + "-" + "order")
 	var value []byte
 
 	err := app.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(key)
 		if err != nil && err != badger.ErrKeyNotFound {
-			fmt.Println("badger.ErrKeyNotFound")
 			return err
 		}
-
-		fmt.Println("item:", item)
 
 		if item == nil {
 			return nil			
 		}
 
-		fmt.Println("item.ValueSize():", item.ValueSize())
 		value = make([]byte, item.ValueSize())
-		fmt.Println("here1.0:")
 		_, e := item.ValueCopy(value)
-		fmt.Println("here1.1:", e)
 
 		return e
 	})
 	if err != nil {
-		fmt.Println("here1.2:")		
 		return nil, nil, err
 	}
 
@@ -240,41 +265,36 @@ func makeOrderKV(req *OrderRequest, prevOrderBytes []byte) ([]byte, []byte) {
 	keccak := sha3.NewLegacyKeccak256()
 	keccak.Write(proof.GetBuf())
 	hash := fmt.Sprintf("%x", keccak.Sum(nil))
-	fmt.Println("Order Hash:", hash)
-	
+	fmt.Println("Initial Order Hash:", hash)
+	numOrders := uint64(1)
 	identity := req.GetIdentity()
 	id := string(identity.GetID())
 
 	var prevOrderKV RestaurantOrderKV
 
 	if prevOrderBytes != nil {
-		fmt.Println("prevOrderBytes != nil")
 		prevOrder := bytes.NewBuffer(prevOrderBytes)
 		dec := gob.NewDecoder(prevOrder)
 		err := dec.Decode(&prevOrderKV)
 		if err != nil {
 			return nil, nil
 		}
-
-		fmt.Println("prevOrderKV.Id:", prevOrderKV.Id)
-		fmt.Println("prevOrderKV.HashOrders:", prevOrderKV.HashOrders)
-		fmt.Println("prevOrderKV.NumOrders:", prevOrderKV.NumOrders)
 	}
 
-	if prevOrderKV.HashOrders != "" {
-		fmt.Println("prevOrderKV.HashOrders != ''")
+	if prevOrderKV.HashOrders != "" && prevOrderKV.NumOrders > 1 {
 		keccak = sha3.NewLegacyKeccak256()
 		keccak.Write([]byte(prevOrderKV.HashOrders))
 		keccak.Write([]byte(hash))
 		hash = fmt.Sprintf("%x", keccak.Sum(nil))
+		numOrders = prevOrderKV.NumOrders + 1
 	}
 
-	fmt.Println("Order Hash:", hash)
+	fmt.Println("Final Order Hash:", hash)
 
 	orderData := RestaurantOrderKV{
 		Id: id,
 		HashOrders: hash,
-		NumOrders: 1,
+		NumOrders: numOrders,
 	}
 
 	enc := gob.NewEncoder(&curOrder)
@@ -291,9 +311,7 @@ func makeOrderKV(req *OrderRequest, prevOrderBytes []byte) ([]byte, []byte) {
 func (app *InferSyncApp) isValid(tx []byte) (req *SyncRequest, valid bool) {
 	
 	valid = false
-/*	var key []byte
-	var value []byte
-*/
+
 	req = &SyncRequest{}
 
 	if err := proto.Unmarshal(tx, req); err != nil {
@@ -304,7 +322,6 @@ func (app *InferSyncApp) isValid(tx []byte) (req *SyncRequest, valid bool) {
 	    case *SyncRequest_Order:{
 	    	fmt.Printf("Order:%s\n", d.Order)
 			if verifyOrder(req.GetOrder()) {
-				//key, value = makeOrderKV(req.GetOrder())
 				valid = true
 			}
 	    }
@@ -324,24 +341,5 @@ func (app *InferSyncApp) isValid(tx []byte) (req *SyncRequest, valid bool) {
 	// check if the same key=value already exists
 	// No need to check duplicate tx since 
 	// nullifier in proof verfication already does that
-/*	err := app.db.View(func(txn *badger.Txn) error {
-		item, err := txn.Get(key)
-		if err != nil && err != badger.ErrKeyNotFound {
-			return err
-		}
-		if err == nil {
-			return item.Value(func(val []byte) error {
-				if !bytes.Equal(val, value) {
-					valid = true 
-				}
-				return nil
-			})
-		}
-		return nil
-	})
-	if err != nil {
-		panic(err)
-	}
-*/
 	return req, valid
 }
