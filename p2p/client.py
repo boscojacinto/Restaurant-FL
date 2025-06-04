@@ -48,18 +48,22 @@ class P2PClient:
     	self.msg_bs_enr = msg_bs_enr
     	self.node_key = node_key
     	self.host = host
+    	self.setup_ctx = None
+    	self.msg_ctx = None
+    	self.setup_peer_id = None
+    	self.msg_peer_id = None
     	waku_lib_init(lib_path)
 
     def start(self):
-    	(setup_ctx, setup_connected, setup_peer_id,
+    	(self.setup_ctx, setup_connected, self.setup_peer_id,
     		setup_address, setup_content_topic) = self.init_setup_node()
-    	print(f"Started Setup node: {setup_peer_id}, {setup_address}, {setup_content_topic}")
+    	print(f"Started Setup node: {self.setup_peer_id}, {setup_address}, {setup_content_topic}")
 
     	time.sleep(4)
 
-    	(msg_ctx, msg_connected, msg_peer_id,
+    	(self.msg_ctx, msg_connected, self.msg_peer_id,
     		msg_address, msg_content_topic) = self.init_msg_node()
-    	print(f"Started MSG node: {msg_peer_id}, {msg_address}, {msg_content_topic}")
+    	print(f"Started MSG node: {self.msg_peer_id}, {msg_address}, {msg_content_topic}")
 
     def init_setup_node(self):
     	node_config = "{ \"host\": \"%s\", \"port\": %d, \"nodeKey\": \"%s\", \"store\": %s, \"clusterID\": %d, \"shards\": [%d], \"databaseURL\": \"%s\", \"discV5\": %s, \"discV5UDPPort\": %d, \"discV5BootstrapNodes\": [\"%s\"]}" \
@@ -152,6 +156,25 @@ class P2PClient:
     	ret = waku_go.waku_content_topic(app_name, app_version, topic_name,
     		encoding, wakuCallBack, ctypes.byref(content_topic))
     	return content_topic.value
+
+    def get_setup_peers(self):
+    	peers_list = ctypes.c_char_p(None)
+    	waku_go.waku_peers(self.setup_ctx, wakuCallBack, ctypes.byref(peers_list))
+    	return peers_list.value
+
+    def get_msg_peers(self):
+    	peers_list = ctypes.c_char_p(None)
+    	waku_go.waku_peers(self.msg_ctx, wakuCallBack, ctypes.byref(peers_list))
+    	return peers_list.value
+
+    def connect_setup_to_peer(self, peerId):
+    	peer = ctypes.c_char_p(peerId.encode('utf-8'))
+    	connected = waku_go.waku_connect(self.setup_ctx, peer, 20000, wakuCallBack, None)
+
+    def connect_msg_to_peer(self, peerId):
+    	peer = ctypes.c_char_p(peerId.encode('utf-8'))
+    	connected = waku_go.waku_connect(self.msg_ctx, peer, 20000, wakuCallBack, None)
+
 
 @WakuCallBack
 def wakuCallBack(ret_code, msg: str, user_data):

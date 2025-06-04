@@ -3,3 +3,5 @@ python3 -m grpc_tools.protoc -I../venv/lib/python3.12/site-packages/private_set_
 mv psi_pb2.py ../venv/lib/python3.12/site-packages/private_set_intersection/proto/psi_python_proto_pb/private_set_intersection/proto/
  
 python3 -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. consensus.proto order.proto
+
+#protoc --go_out=. --go_opt=paths=source_relative consensus.proto order.proto

@@ -15,7 +15,7 @@
 proxy_app = "tcp://127.0.0.1:26658"
 
 # A custom human readable name for this node
-moniker = "tastebot-node1"
+moniker = "boscojacinto-InsydeH2O-EFI-BIOS"
 
 # If this node is many blocks behind the tip of the chain, FastSync
 # allows them to catchup quickly by downloading blocks in parallel
@@ -403,7 +403,7 @@ double_sign_check_height = 0
 skip_timeout_commit = false
 
 # EmptyBlocks mode and possible interval between empty blocks
-create_empty_blocks = true
+create_empty_blocks = false
 create_empty_blocks_interval = "0s"
 
 # Reactor sleep duration parameters

@@ -12,7 +12,7 @@ message Timestamp {
 }
 
 message Identity {
-    string publicKey = 1;    
+    bytes ID = 1;    
 }
 
 message OrderRequest {

@@ -85,7 +85,7 @@ type Peer struct {
 	Addrs        []ma.Multiaddr `json:"addrs"`
 	Connected    bool           `json:"connected"`
 	PubsubTopics []string       `json:"pubsubTopics"`
-	IdleTimestamp time.Time          `json:"idleTimestamp"`
+	IdleTimestamp time.Time     `json:"idleTimestamp"`
 }
 
 const Version = "1.0.0"
@@ -97,7 +97,7 @@ var cInstanceMutex sync.RWMutex
 func main() {}
 
 //export Init
-func Init(configPath *C.char) unsafe.Pointer {
+func Init(configPath *C.char, key *C.char) unsafe.Pointer {
 	cInstanceMutex.Lock()
 	defer cInstanceMutex.Unlock()
 
@@ -107,7 +107,7 @@ func Init(configPath *C.char) unsafe.Pointer {
 	cInstance := &ConsensusInstance{
 		ID: uint(len(cInstances)),
 	}
-	
+	cInstance.key, _ = crypto.ToECDSA([]byte (C.GoString(key)))
 	flag.StringVar(&cInstance.configFile, "config", C.GoString(configPath) + "/config.toml", "Path to config.toml")
 	cInstances[0] = cInstance
 	*pid = cInstance.ID
@@ -134,6 +134,7 @@ func Start(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointe
 	}
 
 	instance.db = db
+	instance.height = 0
 
 	app := NewInferSyncApp(db)
 
@@ -188,7 +189,7 @@ func Stop(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointer
 }
 
 //export SendOrder
-func SendOrder(ctx unsafe.Pointer, proof *C.char, onErr C.ConsensusCallBack, userData unsafe.Pointer) C.int {
+func SendOrder(ctx unsafe.Pointer, proof *C.char, id *C.char, onErr C.ConsensusCallBack, userData unsafe.Pointer) C.int {
 
 	instance, err := getInstance(ctx)
 	if err != nil {
@@ -199,10 +200,14 @@ func SendOrder(ctx unsafe.Pointer, proof *C.char, onErr C.ConsensusCallBack, use
 
 	len := C.strlen(proof)
 	proofBytes := C.GoBytes(unsafe.Pointer(proof), C.int(len))
-	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	identity := "4ddecde332eff9353c8a7df4b429299af13bbfe2f5baa7f4474c93faf2fea0b5"
+	
+	//identity := "4ddecde332eff9353c8a7df4b429299af13bbfe2f5baa7f4474c93faf2fea0b5"
+	len = C.strlen(id)
+	idBytes := C.GoBytes(unsafe.Pointer(id), C.int(len))
 
-	tx, err := makeTxOrder(proofBytes, timestamp, identity)
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	
+	tx, err := makeTxOrder(proofBytes, timestamp, idBytes)
 	if err != nil {
 		return onError(errors.New("Cannot create order "), onErr, userData)
 	}
@@ -251,31 +256,46 @@ func Query(ctx unsafe.Pointer, path *C.char, key *C.char, cb C.ConsensusCallBack
 }
 
 //export AddPeer 
-func AddPeer(ctx unsafe.Pointer, peers []byte, onErr C.ConsensusCallBack, userData unsafe.Pointer) C.int {
+func AddPeer(ctx unsafe.Pointer, peers *C.char, onErr C.ConsensusCallBack, userData unsafe.Pointer) C.int {
 
 	instance, err := getInstance(ctx)
 	if err != nil {
-		return onError(errors.New("Cannot get instance"), onErr, userData)
+		return onError(errors.New("Cannot get instance1"), onErr, userData)
 	}
 
 	c := context.Background()
 
 	block, err := instance.rpc.Block(c, &instance.height)
-	//block := result.(ctypes.ResultBlock)
+	if err != nil {
+		return onError(errors.New("Cannot get instance2"), onErr, userData)		
+	}
+
+	if block.Block == nil {
+		return onError(errors.New("Cannot get instance3"), onErr, userData)		
+	}
+
+	fmt.Println("BLOCK: %+v\n", block.Block)
 	blockTime := block.Block.Header.Time
 	fmt.Println("blockTime:", blockTime)
 
 	blockInterval := instance.config.Consensus.TimeoutCommit
+	fmt.Println("blockInterval:", blockInterval)
 	graceTime := blockInterval * IdleCutOffPercentage/100
+	fmt.Println("graceTime:", graceTime)
 	idleCutoffTime := blockTime.Add(blockInterval-graceTime)
 
 	fmt.Println("idleCutoffTime:", idleCutoffTime)
 
 	var peerIds []Peer
-	err = json.Unmarshal(peers, &peerIds)
+	peer_list := C.GoString(peers)
+	fmt.Println("PEER_list:", peer_list)
+
+	err = json.Unmarshal([]byte(peer_list), &peerIds)
 	if err != nil {
+		fmt.Println("err:", err)
 		return onError(errors.New("Parsing peers failed"), onErr, userData)
 	}
+	fmt.Println("peerIds:", peerIds)
 
 	var pAddrs [][]ma.Multiaddr
 	var sKeys []*ecdsa.PrivateKey
@@ -295,6 +315,10 @@ func AddPeer(ctx unsafe.Pointer, peers []byte, onErr C.ConsensusCallBack, userDa
 			sKeys = append(sKeys, sKey)
         }
     }
+
+	fmt.Println("pAddrs:", pAddrs)
+	fmt.Println("sKeys:", sKeys)
+	fmt.Println("instance.height:", uint(instance.height))
 
     // TODO: use safe int64 to uint
 	url, subdomains, sEnrs := createLocalPeer(uint(instance.height), "nodes.restaurant.idle.com", instance.key, pAddrs, sKeys)
@@ -316,6 +340,7 @@ func (instance *ConsensusInstance) listenOnEvents() {
 			if msg.Query == "tm.event='NewBlock'" {
 				block := msg.Data.(types.EventDataNewBlock).Block
 				height := block.Height
+				instance.height = height
 				signal := SignalNewBlock{
 					Height: height,
 				}
@@ -359,14 +384,14 @@ func sendSignal(instance *ConsensusInstance, eventType string, event interface{}
 	C.free(unsafe.Pointer(str))
 }
 
-func makeTxOrder(proof []byte, time string, identity string) ([]byte, error) {
+func makeTxOrder(proof []byte, time string, id []byte) ([]byte, error) {
 	
 	req := &SyncRequest{
 		Type: &SyncRequest_Order{
 				Order: &OrderRequest{
 					Proof: &Proof{Buf: proof},
 					Timestamp: &Timestamp{Now: time},
-					Identity: &Identity{PublicKey: identity},
+					Identity: &Identity{ID: id},
 				},
 			},
 		}
@@ -380,7 +405,9 @@ func newTendermint(instance *ConsensusInstance, app abci.Application) (*nm.Node,
 	// read config
 	config := cfg.DefaultConfig()
 	config.RootDir = filepath.Dir(filepath.Dir(instance.configFile))
-	
+	config.Consensus.CreateEmptyBlocks = false
+	config.Consensus.TimeoutCommit = (10 * time.Second)
+
 	viper.SetConfigFile(instance.configFile)
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("viper failed to read config file: %w", err)

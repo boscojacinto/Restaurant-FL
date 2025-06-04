@@ -271,6 +271,7 @@ func createLocalPeer(seq uint, domain string, signingKey *ecdsa.PrivateKey,
     var node *enode.Node
     var tcpAddr *net.TCPAddr
     var err error
+    var nodeKeys []*ecdsa.PrivateKey
 
     for _, addr := range(addrs) {
         for _, a := range(addr) {
@@ -285,6 +286,7 @@ func createLocalPeer(seq uint, domain string, signingKey *ecdsa.PrivateKey,
         node, err = createLocalNode(key, tcpAddr.IP, 0, tcpAddr.Port)    
         if err == nil {
             enrs = append(enrs, node)
+            nodeKeys = append(nodeKeys, key)
         }
     }
 
@@ -298,27 +300,67 @@ func createLocalPeer(seq uint, domain string, signingKey *ecdsa.PrivateKey,
         fmt.Printf("Error signing tree:", err)
     }
 
-    fmt.Println("url:", url)
+    //fmt.Println("url:", url)
     fmt.Println(tree.ToTXT(domain))
-    fmt.Println("tree.nodes:", tree.Nodes())    
+    //fmt.Println("tree.nodes:", tree.Nodes())    
 
     b32format := base32.StdEncoding.WithPadding(base32.NoPadding)
     var subdomains []string
-    var encyptedEnrs [][]byte
+    var encyptedPeerIds [][]byte
 
-    for _, sKey := range(sharedKeys) {
+    for _, sKey := range(sharedKeys) { 
 
         eSKey := ecies.ImportECDSA(sKey)
         
-        for _, e := range(tree.Nodes()) {
+        for j, e := range(tree.Nodes()) {
 
             h := sha3.NewLegacyKeccak256()
             io.WriteString(h, e.String())
             ids := b32format.EncodeToString(h.Sum(nil)[:16]) 
-            fmt.Println("ID:", ids)
-            subdomains = append(subdomains, ids) 
+            //fmt.Println("ID:", ids)
+            subdomains = append(subdomains, ids)
 
-            enrString, err := e.MarshalText()
+            pKey := (*ecdsa.PrivateKey)(nodeKeys[j])
+            privK := (*p2pcrypto.Secp256k1PrivateKey)(secp256k1.PrivKeyFromBytes(pKey.D.Bytes()))
+
+            peerId, err := peer.IDFromPublicKey(privK.GetPublic())
+            if err != nil {
+                fmt.Println("err:", err)                
+            }
+            //fmt.Println("peerId:", peerId)
+            peerIdBytes, _ := peerId.Marshal()
+
+            ePeerId, err := ecies.Encrypt(rand.Reader, &eSKey.PublicKey, peerIdBytes, nil, nil)
+            if err != nil {
+                fmt.Println("ERROR")
+                panic(err)
+            }   
+            encyptedPeerIds = append(encyptedPeerIds, ePeerId)
+        }
+    }
+
+    return url, subdomains, encyptedPeerIds
+}
+
+func createID(publicKey []byte) (peer.ID) {
+
+    pubKey, err := p2pcrypto.UnmarshalSecp256k1PublicKey(publicKey)
+
+    if err != nil {
+        fmt.Println("ERROR")
+        panic(err)
+    }
+
+    peerId, err := peer.IDFromPublicKey(pubKey)
+
+    if err != nil {
+        fmt.Println("ERROR")
+        panic(err)
+    }
+
+    return peerId
+} 
+/*            enrString, err := e.MarshalText()
 
             eEnr, err := ecies.Encrypt(rand.Reader, &eSKey.PublicKey, enrString, nil, nil)
             if err != nil {
@@ -326,8 +368,4 @@ func createLocalPeer(seq uint, domain string, signingKey *ecdsa.PrivateKey,
             }   
             fmt.Println("eEnr:%x\n", eEnr)            
             encyptedEnrs = append(encyptedEnrs, eEnr)
-        }
-    }
-
-    return url, subdomains, encyptedEnrs
-}
+*/

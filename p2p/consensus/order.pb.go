@@ -111,7 +111,7 @@ func (x *Timestamp) GetNow() string {
 
 type Identity struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	PublicKey     string                 `protobuf:"bytes,1,opt,name=publicKey,proto3" json:"publicKey,omitempty"`
+	ID            []byte                 `protobuf:"bytes,1,opt,name=ID,proto3" json:"ID,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -146,11 +146,11 @@ func (*Identity) Descriptor() ([]byte, []int) {
 	return file_order_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *Identity) GetPublicKey() string {
+func (x *Identity) GetID() []byte {
 	if x != nil {
-		return x.PublicKey
+		return x.ID
 	}
-	return ""
+	return nil
 }
 
 type OrderRequest struct {
@@ -221,9 +221,9 @@ const file_order_proto_rawDesc = "" +
 	"\x05Proof\x12\x10\n" +
 	"\x03buf\x18\x01 \x01(\fR\x03buf\"\x1d\n" +
 	"\tTimestamp\x12\x10\n" +
-	"\x03now\x18\x01 \x01(\tR\x03now\"(\n" +
-	"\bIdentity\x12\x1c\n" +
-	"\tpublicKey\x18\x01 \x01(\tR\tpublicKey\"\x8c\x01\n" +
+	"\x03now\x18\x01 \x01(\tR\x03now\"\x1a\n" +
+	"\bIdentity\x12\x0e\n" +
+	"\x02ID\x18\x01 \x01(\fR\x02ID\"\x8c\x01\n" +
 	"\fOrderRequest\x12!\n" +
 	"\x05proof\x18\x01 \x01(\v2\v.main.ProofR\x05proof\x12-\n" +
 	"\ttimestamp\x18\x02 \x01(\v2\x0f.main.TimestampR\ttimestamp\x12*\n" +
