@@ -175,6 +175,16 @@ class P2PClient:
     	peer = ctypes.c_char_p(peerId.encode('utf-8'))
     	connected = waku_go.waku_connect(self.msg_ctx, peer, 20000, wakuCallBack, None)
 
+    def get_setup_enr(self):
+    	enr = ctypes.c_char_p(None)
+    	waku_go.waku_get_enr(self.setup_ctx, wakuCallBack, ctypes.byref(enr))
+    	return enr.value
+
+    def get_msg_enr(self):
+    	enr = ctypes.c_char_p(None)
+    	waku_go.waku_get_enr(self.msg_ctx, wakuCallBack, ctypes.byref(enr))
+    	return enr.value
+
 
 @WakuCallBack
 def wakuCallBack(ret_code, msg: str, user_data):
@@ -274,6 +284,8 @@ def waku_lib_init(lib_path):
 	waku_go.waku_relay_topics.restype = ctypes.c_int
 	waku_go.waku_store_local_query.argtypes = [ctypes.c_void_p, ctypes.c_char_p, WakuCallBack, ctypes.c_void_p]
 	waku_go.waku_store_local_query.restype = ctypes.c_int
+	waku_go.waku_get_enr.argtypes = [ctypes.c_void_p, WakuCallBack, ctypes.c_void_p]
+	waku_go.waku_get_enr.restype = ctypes.c_int
 
 if __name__ == "__main__":
 	setup_bs_enr = "enr:-KG4QB3eb3HfEYfkM3qJ4PbnxrjM_KK4BIsYh0hh1NNFWYi0UhgbINGm38YoNDgiRSFJBLJT2aRj2qifsWTlZ886GV6GAZb7zkKYgmlkgnY0gmlwhMCoARqCcnOFAFgBAACJc2VjcDI1NmsxoQNLmJB1Pj72eUSZQnMof-AJdmltBsVrqCSzGa_k_YI8UIN0Y3CC6mqDdWRwgia2hXdha3UyAw"

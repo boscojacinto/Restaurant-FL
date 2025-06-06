@@ -55,7 +55,8 @@ type ConsensusInstance struct {
 	cancel context.CancelFunc
 	ID uint
 	configFile string
-	db *badger.DB 
+	orderDb *badger.DB
+	registerDb *badger.DB 
 	node *nm.Node
 	rpc *rpclocal.Local
 	cb unsafe.Pointer	
@@ -63,6 +64,7 @@ type ConsensusInstance struct {
 	config *cfg.Config // Do not access after stopping node
 	height int64 
 	key *ecdsa.PrivateKey
+	sharedKey *ecdsa.PrivateKey
 }
 
 type EventListener struct {
@@ -108,6 +110,7 @@ func Init(configPath *C.char, key *C.char) unsafe.Pointer {
 		ID: uint(len(cInstances)),
 	}
 	cInstance.key, _ = crypto.ToECDSA([]byte (C.GoString(key)))
+	cInstance.sharedKey, _ = crypto.GenerateKey()
 	flag.StringVar(&cInstance.configFile, "config", C.GoString(configPath) + "/config.toml", "Path to config.toml")
 	cInstances[0] = cInstance
 	*pid = cInstance.ID
@@ -127,16 +130,23 @@ func Start(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointe
 	instance.ctx, instance.cancel = context.WithCancel(context.Background())
 	dir := filepath.Dir(instance.configFile)	
 
-	db, err := badger.Open(badger.DefaultOptions(dir + "/tmp/badger"))
+	orderDb, err := badger.Open(badger.DefaultOptions(dir + "/tmp/order"))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to open badger db: %v", err)
+		fmt.Fprintf(os.Stderr, "failed to open order db: %v", err)
 		os.Exit(1)
 	}
+	instance.orderDb = orderDb
 
-	instance.db = db
+	registerDb, err := badger.Open(badger.DefaultOptions(dir + "/tmp/register"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to open register db: %v", err)
+		os.Exit(1)
+	}
+	instance.registerDb = registerDb
+
 	instance.height = 0
 
-	app := NewInferSyncApp(db)
+	app := NewInferSyncApp(orderDb, registerDb)
 
 	flag.Parse()
 
@@ -180,7 +190,8 @@ func Stop(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointer
 		return onError(errors.New("Cannot stop"), onErr, userData)
 	}
 
-	instance.db.Close()
+	instance.orderDb.Close()
+	instance.registerDb.Close()
 
 	instance.node.Stop()
 	instance.node.Wait()
@@ -189,7 +200,8 @@ func Stop(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointer
 }
 
 //export SendOrder
-func SendOrder(ctx unsafe.Pointer, proof *C.char, id *C.char, onErr C.ConsensusCallBack, userData unsafe.Pointer) C.int {
+func SendOrder(ctx unsafe.Pointer, proof *C.char, id *C.char, enr *C.char,
+	peers *C.char, onErr C.ConsensusCallBack, userData unsafe.Pointer) C.int {
 
 	instance, err := getInstance(ctx)
 	if err != nil {
@@ -200,14 +212,26 @@ func SendOrder(ctx unsafe.Pointer, proof *C.char, id *C.char, onErr C.ConsensusC
 
 	len := C.strlen(proof)
 	proofBytes := C.GoBytes(unsafe.Pointer(proof), C.int(len))
-	
-	//identity := "4ddecde332eff9353c8a7df4b429299af13bbfe2f5baa7f4474c93faf2fea0b5"
-	len = C.strlen(id)
-	idBytes := C.GoBytes(unsafe.Pointer(id), C.int(len))
-
+	idStr := C.GoString(id)
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 	
-	tx, err := makeTxOrder(proofBytes, timestamp, idBytes)
+	var url string
+	var subdomains []string
+
+	if unsafe.Pointer(peers) != nil {
+		url, subdomains, err = addPeers(instance, peers)
+		if err != nil {
+			return onError(errors.New("Failed to add peers"), onErr, userData)			
+		}
+	}
+
+	var enrString string
+	if enr != nil {
+		enrString = C.GoString(enr)
+	}
+
+	tx, err := makeTxOrder(proofBytes, timestamp, idStr,
+							enrString, url, subdomains)
 	if err != nil {
 		return onError(errors.New("Cannot create order "), onErr, userData)
 	}
@@ -255,23 +279,17 @@ func Query(ctx unsafe.Pointer, path *C.char, key *C.char, cb C.ConsensusCallBack
 	return onSuccesfulResponse(result, cb, userData)
 }
 
-//export AddPeer 
-func AddPeer(ctx unsafe.Pointer, peers *C.char, onErr C.ConsensusCallBack, userData unsafe.Pointer) C.int {
-
-	instance, err := getInstance(ctx)
-	if err != nil {
-		return onError(errors.New("Cannot get instance1"), onErr, userData)
-	}
+func addPeers(instance *ConsensusInstance, peers *C.char) (string, []string, error) {
 
 	c := context.Background()
 
 	block, err := instance.rpc.Block(c, &instance.height)
 	if err != nil {
-		return onError(errors.New("Cannot get instance2"), onErr, userData)		
+		return "", []string{}, errors.New("Cannot get block")		
 	}
 
 	if block.Block == nil {
-		return onError(errors.New("Cannot get instance3"), onErr, userData)		
+		return "", []string{}, errors.New("Block is empty")		
 	}
 
 	blockTime := block.Block.Header.Time
@@ -291,11 +309,10 @@ func AddPeer(ctx unsafe.Pointer, peers *C.char, onErr C.ConsensusCallBack, userD
 	err = json.Unmarshal([]byte(peer_list), &peerIds)
 	if err != nil {
 		fmt.Println("err:", err)
-		return onError(errors.New("Parsing peers failed"), onErr, userData)
+		errors.New("Parsing peers failed")
 	}
 
 	var pAddrs [][]ma.Multiaddr
-	var sKeys []*ecdsa.PrivateKey
 
 	for i, p := range peerIds {
         fmt.Printf("Peer %d:\n", i+1)
@@ -308,19 +325,18 @@ func AddPeer(ctx unsafe.Pointer, peers *C.char, onErr C.ConsensusCallBack, userD
 
         if p.IdleTimestamp.Compare(idleCutoffTime) >= 0  {
         	pAddrs = append(pAddrs, p.Addrs)
-			sKey, _ := crypto.GenerateKey()
-			sKeys = append(sKeys, sKey)
         }
     }
 
     // TODO: use safe int64 to uint
-	url, subdomains, _ := createLocalPeer(uint(instance.height), "nodes.restaurant.idle.com", instance.key, pAddrs, sKeys)
+	url, subdomains, _ := createLocalPeer(uint(instance.height), 
+	"nodes.restaurant.idle.com", instance.key, pAddrs, instance.sharedKey)
 
 	fmt.Println("URL:", url)
 	fmt.Println("Subdomains:", subdomains)
 	//fmt.Println("sEnrs:", sEnrs)
 
-	return onError(nil, onErr, userData)
+	return url, subdomains, nil 
 }
 
 func (instance *ConsensusInstance) listenOnEvents() {
@@ -377,14 +393,29 @@ func sendSignal(instance *ConsensusInstance, eventType string, event interface{}
 	C.free(unsafe.Pointer(str))
 }
 
-func makeTxOrder(proof []byte, time string, id []byte) ([]byte, error) {
+func makeTxOrder(proof []byte, time string, id string,
+	enr string, url string, subdomains []string) ([]byte, error) {
 	
+	var identity Identity
+	var idlePeers IdlePeers
+
+	if len(enr) != 0 {
+		identity = Identity{ID: id, ENR: &enr}
+	} else {
+		identity = Identity{ID: id}		
+	}
+
+	if len(url) != 0 && len(subdomains) != 0 {
+		idlePeers = IdlePeers{Url: url, SubDomain: subdomains}
+	}
+
 	req := &SyncRequest{
 		Type: &SyncRequest_Order{
 				Order: &OrderRequest{
 					Proof: &Proof{Buf: proof},
 					Timestamp: &Timestamp{Now: time},
-					Identity: &Identity{ID: id},
+					Identity: &identity,
+					IdlePeers: &idlePeers,
 				},
 			},
 		}

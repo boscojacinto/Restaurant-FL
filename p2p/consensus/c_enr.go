@@ -7,9 +7,12 @@ import (
     "bytes"
     "time"
     "context"
+    "errors"
+    "strings"
     "strconv"
     "encoding/base32"
-    "encoding/base64"    
+    "encoding/base64"
+    "encoding/binary"     
     "encoding/hex"
     "crypto/ecdsa"
     "crypto/rand"  
@@ -265,13 +268,12 @@ func extractIP(addr ma.Multiaddr) (*net.TCPAddr, error) {
 }
 
 func createLocalPeer(seq uint, domain string, signingKey *ecdsa.PrivateKey,
-    addrs [][]ma.Multiaddr, sharedKeys []*ecdsa.PrivateKey) (string, []string, [][]byte) {
+    addrs [][]ma.Multiaddr, sharedKey *ecdsa.PrivateKey) (string, []string, [][]byte) {
 
     var enrs []*enode.Node 
     var node *enode.Node
     var tcpAddr *net.TCPAddr
     var err error
-    var nodeKeys []*ecdsa.PrivateKey
 
     for _, addr := range(addrs) {
         for _, a := range(addr) {
@@ -281,12 +283,9 @@ func createLocalPeer(seq uint, domain string, signingKey *ecdsa.PrivateKey,
             }
         }
 
-        key, _ := crypto.GenerateKey()
-
-        node, err = createLocalNode(key, tcpAddr.IP, 0, tcpAddr.Port)    
+        node, err = createLocalNode(sharedKey, tcpAddr.IP, 0, tcpAddr.Port)    
         if err == nil {
             enrs = append(enrs, node)
-            nodeKeys = append(nodeKeys, key)
         }
     }
 
@@ -308,41 +307,38 @@ func createLocalPeer(seq uint, domain string, signingKey *ecdsa.PrivateKey,
     var subdomains []string
     var encyptedPeerIds [][]byte
 
-    for _, sKey := range(sharedKeys) { 
+    eSKey := ecies.ImportECDSA(sharedKey)
+    
+    for _, e := range(tree.Nodes()) {
 
-        eSKey := ecies.ImportECDSA(sKey)
-        
-        for j, e := range(tree.Nodes()) {
+        h := sha3.NewLegacyKeccak256()
+        io.WriteString(h, e.String())
+        ids := b32format.EncodeToString(h.Sum(nil)[:16]) 
+        //fmt.Println("ID:", ids)
+        subdomains = append(subdomains, ids)
 
-            h := sha3.NewLegacyKeccak256()
-            io.WriteString(h, e.String())
-            ids := b32format.EncodeToString(h.Sum(nil)[:16]) 
-            //fmt.Println("ID:", ids)
-            subdomains = append(subdomains, ids)
+        pKey := (*ecdsa.PrivateKey)(sharedKey)
+        privK := (*p2pcrypto.Secp256k1PrivateKey)(secp256k1.PrivKeyFromBytes(pKey.D.Bytes()))
 
-            pKey := (*ecdsa.PrivateKey)(nodeKeys[j])
-            privK := (*p2pcrypto.Secp256k1PrivateKey)(secp256k1.PrivKeyFromBytes(pKey.D.Bytes()))
-
-            peerId, err := peer.IDFromPublicKey(privK.GetPublic())
-            if err != nil {
-                fmt.Println("err:", err)                
-            }
-            //fmt.Println("peerId:", peerId)
-            peerIdBytes, _ := peerId.Marshal()
-
-            ePeerId, err := ecies.Encrypt(rand.Reader, &eSKey.PublicKey, peerIdBytes, nil, nil)
-            if err != nil {
-                fmt.Println("ERROR")
-                panic(err)
-            }   
-            encyptedPeerIds = append(encyptedPeerIds, ePeerId)
+        peerId, err := peer.IDFromPublicKey(privK.GetPublic())
+        if err != nil {
+            fmt.Println("err:", err)                
         }
+        //fmt.Println("peerId:", peerId)
+        peerIdBytes, _ := peerId.Marshal()
+
+        ePeerId, err := ecies.Encrypt(rand.Reader, &eSKey.PublicKey, peerIdBytes, nil, nil)
+        if err != nil {
+            fmt.Println("ERROR")
+            panic(err)
+        }   
+        encyptedPeerIds = append(encyptedPeerIds, ePeerId)
     }
 
     return url, subdomains, encyptedPeerIds
 }
 
-func createID(publicKey []byte) (peer.ID) {
+func createIDFromSecp256k1Bytes(publicKey []byte) (peer.ID) {
 
     pubKey, err := p2pcrypto.UnmarshalSecp256k1PublicKey(publicKey)
 
@@ -360,6 +356,187 @@ func createID(publicKey []byte) (peer.ID) {
 
     return peerId
 } 
+
+func createIDFromEcdsaPublicKey(publicKey *ecdsa.PublicKey) (peer.ID, error) {
+
+    pubKey := ecdsaPubKeyToSecp256k1PublicKey(publicKey)
+    peerID, err := peer.IDFromPublicKey(pubKey)
+    if err != nil {
+        return "", err
+    }
+
+    return peerID, nil
+} 
+
+func isIPv6(str string) bool {
+    ip := net.ParseIP(str)
+    return ip != nil && strings.Contains(str, ":")
+}
+
+func ecdsaPubKeyToSecp256k1PublicKey(pubKey *ecdsa.PublicKey) *p2pcrypto.Secp256k1PublicKey {
+    xFieldVal := &secp256k1.FieldVal{}
+    yFieldVal := &secp256k1.FieldVal{}
+    xFieldVal.SetByteSlice(pubKey.X.Bytes())
+    yFieldVal.SetByteSlice(pubKey.Y.Bytes())
+    return (*p2pcrypto.Secp256k1PublicKey)(secp256k1.NewPublicKey(xFieldVal, yFieldVal))
+}
+
+func enodeToMultiAddr(node *enode.Node) (ma.Multiaddr, error) {
+    pubKey := ecdsaPubKeyToSecp256k1PublicKey(node.Pubkey())
+    peerID, err := peer.IDFromPublicKey(pubKey)
+    if err != nil {
+        return nil, err
+    }
+
+    ipType := "ip4"
+    portNumber := node.TCP()
+
+    if portNumber == 0 {
+        return nil, errors.New("port not available")
+    }
+
+    if isIPv6(node.IP().String()) {
+        ipType = "ip6"
+        var port enr.TCP6
+        if err := node.Record().Load(&port); err != nil {
+            return nil, err
+        }
+        portNumber = int(port)
+    }
+
+    return ma.NewMultiaddr(fmt.Sprintf("/%s/%s/tcp/%d/p2p/%s", ipType, node.IP(), portNumber, peerID))
+}
+
+// Multiaddress is used to extract all the multiaddresses that are part of a ENR record
+func getMultiaddress(node *enode.Node) (peer.ID, []ma.Multiaddr, error) {
+    pubKey := ecdsaPubKeyToSecp256k1PublicKey(node.Pubkey())
+    peerID, err := peer.IDFromPublicKey(pubKey)
+    if err != nil {
+        return "", nil, err
+    }
+
+    var result []ma.Multiaddr
+
+    addr, err := enodeToMultiAddr(node)
+    if err != nil {
+        if !errors.Is(err, errors.New("port not available")) {
+            return "", nil, err
+        }
+    } else {
+        result = append(result, addr)
+    }
+
+    var multiaddrRaw []byte
+    if err := node.Record().Load(enr.WithEntry("multiaddrs", &multiaddrRaw)); err != nil {
+        if !enr.IsNotFound(err) {
+            return "", nil, err
+        }
+        // No multiaddr entry on enr
+        return peerID, result, nil
+    }
+
+    if len(multiaddrRaw) < 2 {
+        // There was no error loading the multiaddr field, but its length is incorrect
+        return peerID, result, nil
+    }
+
+    offset := 0
+    for {
+        maSize := binary.BigEndian.Uint16(multiaddrRaw[offset : offset+2])
+        if len(multiaddrRaw) < offset+2+int(maSize) {
+            return "", nil, errors.New("invalid multiaddress field length")
+        }
+        maRaw := multiaddrRaw[offset+2 : offset+2+int(maSize)]
+        addr, err := ma.NewMultiaddrBytes(maRaw)
+        if err != nil {
+            // The value is not a multiaddress. Ignoring...
+            continue
+        }
+
+        hostInfoStr := fmt.Sprintf("/p2p/%s", peerID.String())
+        _, pID := peer.SplitAddr(addr)
+        if pID != "" && pID != peerID {
+            // Addresses in the ENR that contain a p2p component are circuit relay addr
+            hostInfoStr = "/p2p-circuit" + hostInfoStr
+        }
+
+        hostInfo, err := ma.NewMultiaddr(hostInfoStr)
+        if err != nil {
+            return "", nil, err
+        }
+        result = append(result, addr.Encapsulate(hostInfo))
+
+        offset += 2 + int(maSize)
+        if offset >= len(multiaddrRaw) {
+            break
+        }
+    }
+
+    return peerID, result, nil
+}
+
+func EnodeToPeerInfo(enr string) (*peer.AddrInfo, error) {
+    var node = new(enode.Node)
+
+    err := node.UnmarshalText([]byte(enr))
+    fmt.Println("node UnmarshalText:", err)
+    if err != nil {
+        return nil, err
+    }
+
+    _, addresses, err := getMultiaddress(node)
+    if err != nil {
+        return nil, err
+    }
+
+    res, err := peer.AddrInfosFromP2pAddrs(addresses...)
+    if err != nil {
+        return nil, err
+    }
+    if len(res) == 0 {
+        return nil, errors.New("could not retrieve peer addresses from enr")
+    }
+    return &res[0], nil
+}
+
+func CheckURL(url string, idStr string) (string, *ecdsa.PublicKey, error) {
+
+    domain, pubkey, err := dnsdisc.ParseURL(url)
+    fmt.Println("pubkey:", pubkey)
+
+    if err != nil {
+        return "", nil, err
+    }
+
+    pubKey := ecdsaPubKeyToSecp256k1PublicKey(pubkey)
+    peerId, err := peer.IDFromPublicKey(pubKey)
+    fmt.Println("pId:", peerId)
+
+    if err != nil {
+        return "", nil, err                
+    }
+
+    id, err := peer.Decode(idStr)
+    fmt.Println("iid:", id)
+    fmt.Println("err:", err)
+    if err != nil {
+        return "", nil, err
+    }
+
+    if peerId != id {
+        return "", nil, errors.New("Peer ids dont match")
+    }
+
+    return domain, pubkey, nil
+}
+
+func CreateSubDomain(enr string) (string) {
+    h := sha3.NewLegacyKeccak256()
+    io.WriteString(h, enr)
+    b32format := base32.StdEncoding.WithPadding(base32.NoPadding)
+    ids := b32format.EncodeToString(h.Sum(nil)[:16])
+    return ids 
+}
 /*            enrString, err := e.MarshalText()
 
             eEnr, err := ecies.Encrypt(rand.Reader, &eSKey.PublicKey, enrString, nil, nil)

@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 	"bytes"
+	"errors"
+	"crypto/ecdsa"
+	"math/big"
 	"encoding/gob"
 	"golang.org/x/crypto/sha3"
 	"github.com/dgraph-io/badger"
@@ -15,8 +18,11 @@ const AppVersion = 1
 const ID = "4ddecde332eff9353c8a7df4b429299af13bbfe2f5baa7f4474c93faf2fea0b5"
 
 type InferSyncApp struct {
-	db *badger.DB
-	currentBatch *badger.Txn
+	orderDb *badger.DB
+	registerDb *badger.DB
+	currentOrders *badger.Txn
+	currentPeers *badger.Txn
+	registerPeers *badger.Txn
 }
 
 type State struct {
@@ -28,9 +34,10 @@ type State struct {
 var _ abcitypes.Application = (*InferSyncApp)(nil)
 var localOrderFound = false
 
-func NewInferSyncApp(db *badger.DB) *InferSyncApp {
+func NewInferSyncApp(orderDb *badger.DB, registerDb *badger.DB) *InferSyncApp {
 	return &InferSyncApp{
-		db: db,
+		orderDb: orderDb,
+		registerDb: registerDb,
 	}
 }
 
@@ -48,8 +55,8 @@ func (InferSyncApp) SetOption(req abcitypes.RequestSetOption) abcitypes.Response
 func (app *InferSyncApp) CheckTx(req abcitypes.RequestCheckTx) abcitypes.ResponseCheckTx {
 	code := uint32(0)
 	
-	_, valid := app.isValid(req.Tx)
-	if valid == false {
+	_, _, err := app.isTxValid(req.Tx)
+	if err != nil {
 		code = uint32(3)
 	}
 
@@ -58,27 +65,89 @@ func (app *InferSyncApp) CheckTx(req abcitypes.RequestCheckTx) abcitypes.Respons
 
 func (app *InferSyncApp) DeliverTx(req abcitypes.RequestDeliverTx) abcitypes.ResponseDeliverTx {
 
-	syncReq, valid := app.isValid(req.Tx)
-	if valid == false {
+	syncReq, orderInfo, err := app.isTxValid(req.Tx)
+	if err != nil {
 		return abcitypes.ResponseDeliverTx{Code: 3, Codespace: "sync"}
 	}
 
-	var key []byte
-	var value []byte
-	var k []byte
-	var v []byte
+	var orderKey []byte
+	var orderValue []byte
+	var peersKeys [][]byte
+	var peersValues [][]byte
 
 	switch syncReq.Type.(type) {
 		case *SyncRequest_Order: {
 			fmt.Println("DeliverTX:SyncRequest_Order")
 			
-			k, v, _ = getOrderKV(app, syncReq.GetOrder())
-			k=k
-			// Check if order proof belongs to us
-			//if matchOrder(syncReq) {				
-			key, value = makeOrderKV(syncReq.GetOrder(), v)
-			valid = true
-			//}
+			orderKey, orderValue, _ = getOrderKV(app, orderInfo)
+			orderKey=orderKey
+			
+			orderKey, orderValue = makeOrderKV(orderInfo, orderValue)
+			peersKeys, peersValues = makePeersKV(orderInfo)
+
+			err := app.currentOrders.Set(orderKey, orderValue)
+			fmt.Println("Adding order key")
+			if err != nil {
+				panic(err)
+			}		
+
+			var v []byte
+			for i, k := range(peersKeys) {
+
+				v = peersValues[i]
+				if string(v) != "" {
+					if i == 0 && len(peersKeys) == 1 {
+						err := app.registerPeers.Set(k, v)
+						fmt.Println("Added key to register DB")
+						if err != nil {
+							panic(err)
+						}
+						break						
+					}
+				} else {
+					err := app.registerDb.View(func(txn *badger.Txn) error {
+				        opts := badger.DefaultIteratorOptions
+				        opts.PrefetchValues = false
+				        
+				        it := txn.NewIterator(opts)
+				        defer it.Close()
+
+				        var keys [][]byte
+				        for it.Rewind(); it.Valid(); it.Next() {
+				            key := it.Item().KeyCopy(nil)
+				            keys = append(keys, key)
+				        }
+
+				        fmt.Println("Peer KEY:", string(k))
+				        for _, key := range keys {
+				            fmt.Println("ENR KEY:", string(key))
+
+				            if string(k) == string(key) {
+
+								item, err := txn.Get(key)
+								if err != nil && err != badger.ErrKeyNotFound {
+									fmt.Println("Item not found")
+									panic(err)
+								}
+
+				            	v = make([]byte, item.ValueSize())
+								_, e := item.ValueCopy(v)
+								e=e
+								err = app.currentPeers.Set(k, v)
+								fmt.Println("Added peer key to order DB")
+								if err != nil {
+									panic(err)
+								}
+								break
+				            } 
+				        }
+				        return nil
+				    })
+				    if err != nil {
+				        fmt.Println("Could not create app hash:", err)
+				    }
+				}
+			}
 		}
 
 		case *SyncRequest_Dummy: {
@@ -90,14 +159,6 @@ func (app *InferSyncApp) DeliverTx(req abcitypes.RequestDeliverTx) abcitypes.Res
 		}	
 	}
 
-	if valid {
-		err := app.currentBatch.Set(key, value)
-		fmt.Println("Added key")
-		if err != nil {
-			panic(err)
-		}		
-	}
-
 	return abcitypes.ResponseDeliverTx{Code: 0, Codespace: "sync"}
 }
 
@@ -106,7 +167,7 @@ func (app *InferSyncApp) Commit() abcitypes.ResponseCommit {
 	keccak := sha3.NewLegacyKeccak256()
 	var appHash = []byte{}
 
-	err := app.db.View(func(txn *badger.Txn) error {
+	err := app.orderDb.View(func(txn *badger.Txn) error {
         opts := badger.DefaultIteratorOptions
         opts.PrefetchValues = false
         
@@ -137,13 +198,15 @@ func (app *InferSyncApp) Commit() abcitypes.ResponseCommit {
     }
 
     fmt.Println("APPHASH:", appHash)
-	app.currentBatch.Commit()
+	app.currentOrders.Commit()
+	app.currentPeers.Commit()
+	app.registerPeers.Commit()
 	return abcitypes.ResponseCommit{Data: appHash}
 }
 
 func (app *InferSyncApp) Query(reqQuery abcitypes.RequestQuery) (resQuery abcitypes.ResponseQuery) {
 	resQuery.Key = reqQuery.Data
-	err := app.db.View(func(txn *badger.Txn) error {
+	err := app.orderDb.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(reqQuery.Data)
 		if err != nil && err != badger.ErrKeyNotFound {
 			return err
@@ -170,7 +233,9 @@ func (InferSyncApp) InitChain(req abcitypes.RequestInitChain) abcitypes.Response
 }
 
 func (app *InferSyncApp) BeginBlock(req abcitypes.RequestBeginBlock) abcitypes.ResponseBeginBlock {
-	app.currentBatch = app.db.NewTransaction(true)
+	app.currentOrders = app.orderDb.NewTransaction(true)
+	app.currentPeers = app.orderDb.NewTransaction(true)
+	app.registerPeers = app.registerDb.NewTransaction(true)
 	return abcitypes.ResponseBeginBlock{}
 }
 
@@ -209,13 +274,73 @@ func matchOrder(req *SyncRequest) (bool) {
 	return true
 }
 
-func verifyOrder(req *OrderRequest) (bool) {
-	proof := req.GetProof()
-	
-	proof=proof
-	// Verify proof
+type SyncOrderInfo struct {
+	ProofHash string
+	NumOrders uint64
+	NodeID string
+	NodePeerAddr string
+	NodeURL string
+	NodeENR string
+	NodeDomain string
+	NodeSubDomains []string
+	NodePublicKey ecdsa.PublicKey 	
+}
 
-	return true
+func verifyOrder(req *OrderRequest) (*SyncOrderInfo, error) {
+
+	var orderInfo = &SyncOrderInfo{}
+	proof := req.GetProof()
+	// TODO Verify proof
+	keccak := sha3.NewLegacyKeccak256()
+	keccak.Write(proof.GetBuf())
+	hash := fmt.Sprintf("%x", keccak.Sum(nil))
+	fmt.Println("Initial Order Hash:", hash)
+	orderInfo.ProofHash = hash
+	orderInfo.NumOrders = uint64(1)
+	orderInfo.NodeID = req.GetIdentity().GetID()
+	
+	// Verify ENR
+	enr := req.GetIdentity().GetENR()
+	fmt.Println("ENR is:", enr)
+
+	if enr != "" {
+		peerAddrInfo, err := EnodeToPeerInfo(enr)
+		if err != nil {
+			return nil, err
+		}		
+
+		orderInfo.NodeENR = req.GetIdentity().GetENR()
+		orderInfo.NodePeerAddr = peerAddrInfo.String()
+		fmt.Println("peerAddrInfo.ID:", peerAddrInfo.ID)
+		fmt.Println("peerAddrInfo.Addrs:", peerAddrInfo.Addrs)
+	}
+
+	// Verify Url of enr tree(peers)
+	idlePeers := req.GetIdlePeers()
+
+	if idlePeers != nil {
+		url := idlePeers.GetUrl()
+		subdomains := idlePeers.GetSubDomain()
+		
+		// TODO: Check is subdomains correspond to 
+		// unlisted idle peers 
+
+		idStr := req.GetIdentity().GetID()
+		domain, pubKey, err := CheckURL(url, idStr)
+		if err != nil {
+			return nil, err
+		}
+		orderInfo.NodeURL = url
+		orderInfo.NodeDomain = domain
+		orderInfo.NodeSubDomains = subdomains
+		orderInfo.NodePublicKey = ecdsa.PublicKey{
+	  		Curve: pubKey.Curve,
+	        X:     new(big.Int).Set(pubKey.X),
+	        Y:     new(big.Int).Set(pubKey.Y),			
+		}
+	}
+
+	return orderInfo, nil
 }
 
 type RestaurantOrderKV struct {
@@ -224,15 +349,13 @@ type RestaurantOrderKV struct {
 	NumOrders uint64
 }
 
-func getOrderKV(app *InferSyncApp, req *OrderRequest) ([]byte, []byte, error) {
+func getOrderKV(app *InferSyncApp, info *SyncOrderInfo) ([]byte, []byte, error) {
 
-	identity := req.GetIdentity()
-	id := string(identity.GetID())
-	key := []byte(id + "-" + "order")
-	fmt.Println("Key:", id + "-" + "order")
+	key := []byte(info.NodeID + "-" + "order")
+	fmt.Println("Key:", info.NodeID + "-" + "order")
 	var value []byte
 
-	err := app.db.View(func(txn *badger.Txn) error {
+	err := app.orderDb.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(key)
 		if err != nil && err != badger.ErrKeyNotFound {
 			return err
@@ -258,19 +381,11 @@ func getOrderKV(app *InferSyncApp, req *OrderRequest) ([]byte, []byte, error) {
 	return key, value, err
 }
 
-func makeOrderKV(req *OrderRequest, prevOrderBytes []byte) ([]byte, []byte) {
+func makeOrderKV(info *SyncOrderInfo, prevOrderBytes []byte) ([]byte, []byte) {
 	var curOrder bytes.Buffer
-	
-	proof := req.GetProof()
-	keccak := sha3.NewLegacyKeccak256()
-	keccak.Write(proof.GetBuf())
-	hash := fmt.Sprintf("%x", keccak.Sum(nil))
-	fmt.Println("Initial Order Hash:", hash)
-	numOrders := uint64(1)
-	identity := req.GetIdentity()
-	id := string(identity.GetID())
-
 	var prevOrderKV RestaurantOrderKV
+	
+	fmt.Println("Initial Order Hash:", info.ProofHash)
 
 	if prevOrderBytes != nil {
 		prevOrder := bytes.NewBuffer(prevOrderBytes)
@@ -280,21 +395,23 @@ func makeOrderKV(req *OrderRequest, prevOrderBytes []byte) ([]byte, []byte) {
 			return nil, nil
 		}
 	}
+	
+	var hash string
 
 	if prevOrderKV.HashOrders != "" && prevOrderKV.NumOrders > 1 {
-		keccak = sha3.NewLegacyKeccak256()
+		keccak := sha3.NewLegacyKeccak256()
 		keccak.Write([]byte(prevOrderKV.HashOrders))
-		keccak.Write([]byte(hash))
+		keccak.Write([]byte(info.ProofHash))
 		hash = fmt.Sprintf("%x", keccak.Sum(nil))
-		numOrders = prevOrderKV.NumOrders + 1
+		info.NumOrders = prevOrderKV.NumOrders + 1
 	}
 
 	fmt.Println("Final Order Hash:", hash)
 
 	orderData := RestaurantOrderKV{
-		Id: id,
-		HashOrders: hash,
-		NumOrders: numOrders,
+		Id: info.NodeID,
+		HashOrders: info.ProofHash,
+		NumOrders: info.NumOrders,
 	}
 
 	enc := gob.NewEncoder(&curOrder)
@@ -303,16 +420,42 @@ func makeOrderKV(req *OrderRequest, prevOrderBytes []byte) ([]byte, []byte) {
 		return nil, nil
 	}
 
-	k := []byte(id + "-" + "order")
+	k := []byte(info.NodeID + "-" + "order")
 	v := []byte(curOrder.Bytes())
 	return k, v
 }
 
-func (app *InferSyncApp) isValid(tx []byte) (req *SyncRequest, valid bool) {
-	
-	valid = false
+type RestaurantPeersKV struct {
+	Subdomains []string
+}
 
-	req = &SyncRequest{}
+func makePeersKV(info *SyncOrderInfo) ([][]byte, [][]byte) {
+	var keys [][]byte
+	var values [][]byte
+
+	if info.NodeENR != "" {
+		subdomain := CreateSubDomain(info.NodeENR)		
+		k := []byte(subdomain + "-" + "peer")
+		v := []byte(info.NodeENR)		
+		keys = append(keys, k)
+		values = append(values, v)
+
+	} else if len(info.NodeSubDomains) != 0 {
+
+		for _, subdomain := range(info.NodeSubDomains) {
+			k := []byte(subdomain + "-" + "peer")
+			v := []byte("")	
+			keys = append(keys, k)
+			values = append(values, v)			
+		}
+	} 
+
+	return keys, values
+}
+
+func (app *InferSyncApp) isTxValid(tx []byte) (*SyncRequest, *SyncOrderInfo, error) {
+	
+	req := &SyncRequest{}
 
 	if err := proto.Unmarshal(tx, req); err != nil {
 		panic(err)
@@ -321,25 +464,21 @@ func (app *InferSyncApp) isValid(tx []byte) (req *SyncRequest, valid bool) {
     switch d := req.Type.(type) {
 	    case *SyncRequest_Order:{
 	    	fmt.Printf("Order:%s\n", d.Order)
-			if verifyOrder(req.GetOrder()) {
-				valid = true
+			orderInfo, err := verifyOrder(req.GetOrder())
+			if err != nil {
+				return req, orderInfo, nil
 			}
 	    }
 	    case *SyncRequest_Dummy:{
 	    	fmt.Printf("Dummy:%s\n", d.Dummy)
-			valid = true
+			return nil, nil, errors.New("Invalid tx")
 		}
 		default:
-			valid = false
-			return req, valid
-	}
-
-	if !valid {
-		return req, valid
+			return nil, nil, errors.New("Invalid tx")
 	}
 
 	// check if the same key=value already exists
 	// No need to check duplicate tx since 
 	// nullifier in proof verfication already does that
-	return req, valid
+	return nil, nil, errors.New("Invalid tx")
 }

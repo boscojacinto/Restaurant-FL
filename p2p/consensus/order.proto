@@ -12,11 +12,18 @@ message Timestamp {
 }
 
 message Identity {
-    bytes ID = 1;    
+    string ID = 1;
+    optional string ENR = 2;     
+}
+
+message IdlePeers {
+    string url = 1;
+    repeated string subDomain = 2;
 }
 
 message OrderRequest {
     Proof proof = 1;
     Timestamp timestamp = 2;
     Identity identity = 3;
+    optional IdlePeers idlePeers = 4;
 }
