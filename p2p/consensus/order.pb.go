@@ -112,7 +112,7 @@ func (x *Timestamp) GetNow() string {
 type Identity struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ID            string                 `protobuf:"bytes,1,opt,name=ID,proto3" json:"ID,omitempty"`
-	ENR           *string                `protobuf:"bytes,2,opt,name=ENR,proto3,oneof" json:"ENR,omitempty"`
+	ENR           string                 `protobuf:"bytes,2,opt,name=ENR,proto3" json:"ENR,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -155,34 +155,35 @@ func (x *Identity) GetID() string {
 }
 
 func (x *Identity) GetENR() string {
-	if x != nil && x.ENR != nil {
-		return *x.ENR
+	if x != nil {
+		return x.ENR
 	}
 	return ""
 }
 
-type IdlePeers struct {
+type Peers struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Url           string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
-	SubDomain     []string               `protobuf:"bytes,2,rep,name=subDomain,proto3" json:"subDomain,omitempty"`
+	Idle          bool                   `protobuf:"varint,1,opt,name=idle,proto3" json:"idle,omitempty"`
+	Url           string                 `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
+	SubDomain     []string               `protobuf:"bytes,3,rep,name=subDomain,proto3" json:"subDomain,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *IdlePeers) Reset() {
-	*x = IdlePeers{}
+func (x *Peers) Reset() {
+	*x = Peers{}
 	mi := &file_order_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *IdlePeers) String() string {
+func (x *Peers) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*IdlePeers) ProtoMessage() {}
+func (*Peers) ProtoMessage() {}
 
-func (x *IdlePeers) ProtoReflect() protoreflect.Message {
+func (x *Peers) ProtoReflect() protoreflect.Message {
 	mi := &file_order_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -194,19 +195,26 @@ func (x *IdlePeers) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use IdlePeers.ProtoReflect.Descriptor instead.
-func (*IdlePeers) Descriptor() ([]byte, []int) {
+// Deprecated: Use Peers.ProtoReflect.Descriptor instead.
+func (*Peers) Descriptor() ([]byte, []int) {
 	return file_order_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *IdlePeers) GetUrl() string {
+func (x *Peers) GetIdle() bool {
+	if x != nil {
+		return x.Idle
+	}
+	return false
+}
+
+func (x *Peers) GetUrl() string {
 	if x != nil {
 		return x.Url
 	}
 	return ""
 }
 
-func (x *IdlePeers) GetSubDomain() []string {
+func (x *Peers) GetSubDomain() []string {
 	if x != nil {
 		return x.SubDomain
 	}
@@ -218,7 +226,7 @@ type OrderRequest struct {
 	Proof         *Proof                 `protobuf:"bytes,1,opt,name=proof,proto3" json:"proof,omitempty"`
 	Timestamp     *Timestamp             `protobuf:"bytes,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	Identity      *Identity              `protobuf:"bytes,3,opt,name=identity,proto3" json:"identity,omitempty"`
-	IdlePeers     *IdlePeers             `protobuf:"bytes,4,opt,name=idlePeers,proto3,oneof" json:"idlePeers,omitempty"`
+	Peers         *Peers                 `protobuf:"bytes,4,opt,name=peers,proto3" json:"peers,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -274,9 +282,9 @@ func (x *OrderRequest) GetIdentity() *Identity {
 	return nil
 }
 
-func (x *OrderRequest) GetIdlePeers() *IdlePeers {
+func (x *OrderRequest) GetPeers() *Peers {
 	if x != nil {
-		return x.IdlePeers
+		return x.Peers
 	}
 	return nil
 }
@@ -289,21 +297,19 @@ const file_order_proto_rawDesc = "" +
 	"\x05Proof\x12\x10\n" +
 	"\x03buf\x18\x01 \x01(\fR\x03buf\"\x1d\n" +
 	"\tTimestamp\x12\x10\n" +
-	"\x03now\x18\x01 \x01(\tR\x03now\"9\n" +
+	"\x03now\x18\x01 \x01(\tR\x03now\",\n" +
 	"\bIdentity\x12\x0e\n" +
-	"\x02ID\x18\x01 \x01(\tR\x02ID\x12\x15\n" +
-	"\x03ENR\x18\x02 \x01(\tH\x00R\x03ENR\x88\x01\x01B\x06\n" +
-	"\x04_ENR\";\n" +
-	"\tIdlePeers\x12\x10\n" +
-	"\x03url\x18\x01 \x01(\tR\x03url\x12\x1c\n" +
-	"\tsubDomain\x18\x02 \x03(\tR\tsubDomain\"\xce\x01\n" +
+	"\x02ID\x18\x01 \x01(\tR\x02ID\x12\x10\n" +
+	"\x03ENR\x18\x02 \x01(\tR\x03ENR\"K\n" +
+	"\x05Peers\x12\x12\n" +
+	"\x04idle\x18\x01 \x01(\bR\x04idle\x12\x10\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\x12\x1c\n" +
+	"\tsubDomain\x18\x03 \x03(\tR\tsubDomain\"\xaf\x01\n" +
 	"\fOrderRequest\x12!\n" +
 	"\x05proof\x18\x01 \x01(\v2\v.main.ProofR\x05proof\x12-\n" +
 	"\ttimestamp\x18\x02 \x01(\v2\x0f.main.TimestampR\ttimestamp\x12*\n" +
-	"\bidentity\x18\x03 \x01(\v2\x0e.main.IdentityR\bidentity\x122\n" +
-	"\tidlePeers\x18\x04 \x01(\v2\x0f.main.IdlePeersH\x00R\tidlePeers\x88\x01\x01B\f\n" +
-	"\n" +
-	"_idlePeersB\tZ\a./;mainb\x06proto3"
+	"\bidentity\x18\x03 \x01(\v2\x0e.main.IdentityR\bidentity\x12!\n" +
+	"\x05peers\x18\x04 \x01(\v2\v.main.PeersR\x05peersB\tZ\a./;mainb\x06proto3"
 
 var (
 	file_order_proto_rawDescOnce sync.Once
@@ -322,14 +328,14 @@ var file_order_proto_goTypes = []any{
 	(*Proof)(nil),        // 0: main.Proof
 	(*Timestamp)(nil),    // 1: main.Timestamp
 	(*Identity)(nil),     // 2: main.Identity
-	(*IdlePeers)(nil),    // 3: main.IdlePeers
+	(*Peers)(nil),        // 3: main.Peers
 	(*OrderRequest)(nil), // 4: main.OrderRequest
 }
 var file_order_proto_depIdxs = []int32{
 	0, // 0: main.OrderRequest.proof:type_name -> main.Proof
 	1, // 1: main.OrderRequest.timestamp:type_name -> main.Timestamp
 	2, // 2: main.OrderRequest.identity:type_name -> main.Identity
-	3, // 3: main.OrderRequest.idlePeers:type_name -> main.IdlePeers
+	3, // 3: main.OrderRequest.peers:type_name -> main.Peers
 	4, // [4:4] is the sub-list for method output_type
 	4, // [4:4] is the sub-list for method input_type
 	4, // [4:4] is the sub-list for extension type_name
@@ -342,8 +348,6 @@ func file_order_proto_init() {
 	if File_order_proto != nil {
 		return
 	}
-	file_order_proto_msgTypes[2].OneofWrappers = []any{}
-	file_order_proto_msgTypes[4].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

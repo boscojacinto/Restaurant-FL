@@ -15,12 +15,10 @@ import (
     "encoding/binary"     
     "encoding/hex"
     "crypto/ecdsa"
-    "crypto/rand"  
     "golang.org/x/crypto/sha3"      
     "github.com/ethereum/go-ethereum/p2p/enr"
     "github.com/ethereum/go-ethereum/p2p/enode"
     "github.com/ethereum/go-ethereum/crypto"
-    "github.com/ethereum/go-ethereum/crypto/ecies"
     "github.com/ethereum/go-ethereum/p2p/dnsdisc"
     "github.com/libp2p/go-libp2p/core/peer"
     "github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -268,9 +266,9 @@ func extractIP(addr ma.Multiaddr) (*net.TCPAddr, error) {
 }
 
 func createLocalPeer(seq uint, domain string, signingKey *ecdsa.PrivateKey,
-    addrs [][]ma.Multiaddr, sharedKey *ecdsa.PrivateKey) (string, []string, [][]byte) {
+    addrs [][]ma.Multiaddr, sharedKey *ecdsa.PrivateKey) (string, []string) {
 
-    var enrs []*enode.Node 
+    var nodeEnrs []*enode.Node 
     var node *enode.Node
     var tcpAddr *net.TCPAddr
     var err error
@@ -285,11 +283,11 @@ func createLocalPeer(seq uint, domain string, signingKey *ecdsa.PrivateKey,
 
         node, err = createLocalNode(sharedKey, tcpAddr.IP, 0, tcpAddr.Port)    
         if err == nil {
-            enrs = append(enrs, node)
+            nodeEnrs = append(nodeEnrs, node)
         }
     }
 
-    tree, err := dnsdisc.MakeTree(seq, enrs, nil)
+    tree, err := dnsdisc.MakeTree(seq, nodeEnrs, nil)
     if err != nil {
         fmt.Println("Error making tree:", err)
     }
@@ -299,43 +297,20 @@ func createLocalPeer(seq uint, domain string, signingKey *ecdsa.PrivateKey,
         fmt.Printf("Error signing tree:", err)
     }
 
-    //fmt.Println("url:", url)
-    fmt.Println(tree.ToTXT(domain))
-    //fmt.Println("tree.nodes:", tree.Nodes())    
+    //fmt.Println(tree.ToTXT(domain))
 
     b32format := base32.StdEncoding.WithPadding(base32.NoPadding)
-    var subdomains []string
-    var encyptedPeerIds [][]byte
-
-    eSKey := ecies.ImportECDSA(sharedKey)
+    var subDomains []string
     
-    for _, e := range(tree.Nodes()) {
+    for _, enr := range(tree.Nodes()) {
 
-        h := sha3.NewLegacyKeccak256()
-        io.WriteString(h, e.String())
-        ids := b32format.EncodeToString(h.Sum(nil)[:16]) 
-        //fmt.Println("ID:", ids)
-        subdomains = append(subdomains, ids)
-
-        pKey := (*ecdsa.PrivateKey)(sharedKey)
-        privK := (*p2pcrypto.Secp256k1PrivateKey)(secp256k1.PrivKeyFromBytes(pKey.D.Bytes()))
-
-        peerId, err := peer.IDFromPublicKey(privK.GetPublic())
-        if err != nil {
-            fmt.Println("err:", err)                
-        }
-        //fmt.Println("peerId:", peerId)
-        peerIdBytes, _ := peerId.Marshal()
-
-        ePeerId, err := ecies.Encrypt(rand.Reader, &eSKey.PublicKey, peerIdBytes, nil, nil)
-        if err != nil {
-            fmt.Println("ERROR")
-            panic(err)
-        }   
-        encyptedPeerIds = append(encyptedPeerIds, ePeerId)
+        enrHash := sha3.NewLegacyKeccak256()
+        io.WriteString(enrHash, enr.String())
+        subdomain := b32format.EncodeToString(enrHash.Sum(nil)[:16]) 
+        subDomains = append(subDomains, subdomain)
     }
 
-    return url, subdomains, encyptedPeerIds
+    return url, subDomains
 }
 
 func createIDFromSecp256k1Bytes(publicKey []byte) (peer.ID) {
@@ -484,15 +459,23 @@ func EnodeToPeerInfo(enr string) (*peer.AddrInfo, error) {
         return nil, err
     }
 
+    fmt.Println("EnodeToPeerInfo1.0")
+
     _, addresses, err := getMultiaddress(node)
+    fmt.Println("EnodeToPeerInfo1.1:", err)
+
     if err != nil {
         return nil, err
     }
 
     res, err := peer.AddrInfosFromP2pAddrs(addresses...)
+    fmt.Println("EnodeToPeerInfo1.2:", err)
+
     if err != nil {
         return nil, err
     }
+    fmt.Println("EnodeToPeerInfo1.3:", len(res))
+
     if len(res) == 0 {
         return nil, errors.New("could not retrieve peer addresses from enr")
     }
@@ -530,19 +513,11 @@ func CheckURL(url string, idStr string) (string, *ecdsa.PublicKey, error) {
     return domain, pubkey, nil
 }
 
-func CreateSubDomain(enr string) (string) {
-    h := sha3.NewLegacyKeccak256()
-    io.WriteString(h, enr)
+func CreatePeerSubDomain(enr string) (string) {
     b32format := base32.StdEncoding.WithPadding(base32.NoPadding)
-    ids := b32format.EncodeToString(h.Sum(nil)[:16])
-    return ids 
+    
+    keccak := sha3.NewLegacyKeccak256()
+    io.WriteString(keccak, enr)
+    peerSubDomain := b32format.EncodeToString(keccak.Sum(nil)[:16])
+    return peerSubDomain
 }
-/*            enrString, err := e.MarshalText()
-
-            eEnr, err := ecies.Encrypt(rand.Reader, &eSKey.PublicKey, enrString, nil, nil)
-            if err != nil {
-                panic(err)
-            }   
-            fmt.Println("eEnr:%x\n", eEnr)            
-            encyptedEnrs = append(encyptedEnrs, eEnr)
-*/

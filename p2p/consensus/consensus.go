@@ -29,6 +29,7 @@ import (
  "crypto/ecdsa"
  "path/filepath"
  "encoding/json"
+ "encoding/hex"
  "github.com/dgraph-io/badger"
  "github.com/spf13/viper"
 
@@ -109,7 +110,12 @@ func Init(configPath *C.char, key *C.char) unsafe.Pointer {
 	cInstance := &ConsensusInstance{
 		ID: uint(len(cInstances)),
 	}
-	cInstance.key, _ = crypto.ToECDSA([]byte (C.GoString(key)))
+
+	kHex, err := hex.DecodeString(C.GoString(key))
+	cInstance.key, err = crypto.ToECDSA(kHex)
+	fmt.Println("\ncInstance.key:", cInstance.key)
+	fmt.Println("\nerr:", err)
+
 	cInstance.sharedKey, _ = crypto.GenerateKey()
 	flag.StringVar(&cInstance.configFile, "config", C.GoString(configPath) + "/config.toml", "Path to config.toml")
 	cInstances[0] = cInstance
@@ -201,7 +207,13 @@ func Stop(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointer
 
 //export SendOrder
 func SendOrder(ctx unsafe.Pointer, proof *C.char, id *C.char, enr *C.char,
-	peers *C.char, onErr C.ConsensusCallBack, userData unsafe.Pointer) C.int {
+	peers *C.char, idle C.bool, onErr C.ConsensusCallBack, userData unsafe.Pointer) C.int {
+
+	if unsafe.Pointer(proof) == nil ||
+	   unsafe.Pointer(id) == nil ||
+	   unsafe.Pointer(enr) == nil {
+		return onError(errors.New("Proof, id, enr invalie"), onErr, userData)
+	}
 
 	instance, err := getInstance(ctx)
 	if err != nil {
@@ -210,42 +222,28 @@ func SendOrder(ctx unsafe.Pointer, proof *C.char, id *C.char, enr *C.char,
 
 	c := context.Background()
 
-	len := C.strlen(proof)
-	proofBytes := C.GoBytes(unsafe.Pointer(proof), C.int(len))
+	proofBytes := C.GoBytes(unsafe.Pointer(proof), C.int(C.strlen(proof)))
 	idStr := C.GoString(id)
-	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	enrString := C.GoString(enr)
+	timestampStr := time.Now().Format("2006-01-02 15:04:05")
 	
 	var url string
-	var subdomains []string
+	var peerSubDomains []string
 
 	if unsafe.Pointer(peers) != nil {
-		url, subdomains, err = addPeers(instance, peers)
+		url, peerSubDomains, err = createPeerSubDomains(instance, peers, idle)
 		if err != nil {
 			return onError(errors.New("Failed to add peers"), onErr, userData)			
 		}
 	}
 
-	var enrString string
-	if enr != nil {
-		enrString = C.GoString(enr)
-	}
-
-	tx, err := makeTxOrder(proofBytes, timestamp, idStr,
-							enrString, url, subdomains)
+	tx, err := makeTxOrder(proofBytes, timestampStr, idStr,
+							enrString, url, peerSubDomains, idle)
 	if err != nil {
 		return onError(errors.New("Cannot create order "), onErr, userData)
 	}
 
-	code, err := instance.rpc.BroadcastTxAsync(c, tx)
-	fmt.Println("After BroadcastTxCommit1.0, code:", code)
-/*	if !bres.CheckTx.IsOK() {
-		err = errors.New("Tx commit error") 
-	}
-
-	if !bres.DeliverTx.IsOK() {
-		err = errors.New("Tx deliver error") 
-	}
-*/	//fmt.Println("After BroadcastTxCommit1.1")
+	_, err = instance.rpc.BroadcastTxAsync(c, tx)
 
 	return onError(nil, onErr, userData)
 }
@@ -279,7 +277,8 @@ func Query(ctx unsafe.Pointer, path *C.char, key *C.char, cb C.ConsensusCallBack
 	return onSuccesfulResponse(result, cb, userData)
 }
 
-func addPeers(instance *ConsensusInstance, peers *C.char) (string, []string, error) {
+func createPeerSubDomains(instance *ConsensusInstance, peers *C.char,
+	idle C.bool) (string, []string, error) {
 
 	c := context.Background()
 
@@ -293,20 +292,18 @@ func addPeers(instance *ConsensusInstance, peers *C.char) (string, []string, err
 	}
 
 	blockTime := block.Block.Header.Time
-	fmt.Println("blockTime:", blockTime)
-
 	blockInterval := instance.config.Consensus.TimeoutCommit
-	fmt.Println("blockInterval:", blockInterval)
 	graceTime := blockInterval * IdleCutOffPercentage/100
-	fmt.Println("graceTime:", graceTime)
 	idleCutoffTime := blockTime.Add(blockInterval-graceTime)
-
+	fmt.Println("blockTime:", blockTime)
+	fmt.Println("blockInterval:", blockInterval)
+	fmt.Println("graceTime:", graceTime)
 	fmt.Println("idleCutoffTime:", idleCutoffTime)
 
 	var peerIds []Peer
-	peer_list := C.GoString(peers)
+	peerList := C.GoString(peers)
 
-	err = json.Unmarshal([]byte(peer_list), &peerIds)
+	err = json.Unmarshal([]byte(peerList), &peerIds)
 	if err != nil {
 		fmt.Println("err:", err)
 		errors.New("Parsing peers failed")
@@ -323,20 +320,27 @@ func addPeers(instance *ConsensusInstance, peers *C.char) (string, []string, err
         fmt.Printf("  PubsubTopics: %v\n", p.PubsubTopics)
         fmt.Printf("  IdleTimestamp: %v\n", p.IdleTimestamp)
 
-        if p.IdleTimestamp.Compare(idleCutoffTime) >= 0  {
-        	pAddrs = append(pAddrs, p.Addrs)
-        }
+        //if p.IdleTimestamp.Compare(idleCutoffTime) >= 0  {
+        //	pAddrs = append(pAddrs, p.Addrs)
+        //}
+        pAddrs = append(pAddrs, p.Addrs)        
     }
 
+    var domain string 
+	if idle == true {
+		domain = "nodes.restaurant.idle.com"
+	} else {
+		domain = "nodes.restaurant.busy.com"		
+	}
+
     // TODO: use safe int64 to uint
-	url, subdomains, _ := createLocalPeer(uint(instance.height), 
-	"nodes.restaurant.idle.com", instance.key, pAddrs, instance.sharedKey)
+	url, subDomains := createLocalPeer(uint(instance.height), 
+		domain, instance.key, pAddrs, instance.sharedKey)
 
 	fmt.Println("URL:", url)
-	fmt.Println("Subdomains:", subdomains)
-	//fmt.Println("sEnrs:", sEnrs)
+	fmt.Println("subDomains:", subDomains)
 
-	return url, subdomains, nil 
+	return url, subDomains, nil 
 }
 
 func (instance *ConsensusInstance) listenOnEvents() {
@@ -393,32 +397,33 @@ func sendSignal(instance *ConsensusInstance, eventType string, event interface{}
 	C.free(unsafe.Pointer(str))
 }
 
-func makeTxOrder(proof []byte, time string, id string,
-	enr string, url string, subdomains []string) ([]byte, error) {
+func makeTxOrder(proof []byte, id string, enr string, timestamp string,
+	url string, peerSubDomains []string, idle C.bool) ([]byte, error) {
 	
-	var identity Identity
-	var idlePeers IdlePeers
+	var req *SyncRequest
+	var peers Peers
 
-	if len(enr) != 0 {
-		identity = Identity{ID: id, ENR: &enr}
-	} else {
-		identity = Identity{ID: id}		
+	if len(url) != 0 && len(peerSubDomains) != 0 {
+		var isIdle bool 
+		if idle == true {
+			isIdle = true
+		} else {
+			isIdle = false
+		}
+		peers = Peers{Idle: isIdle, Url: url, SubDomain: peerSubDomains}
 	}
 
-	if len(url) != 0 && len(subdomains) != 0 {
-		idlePeers = IdlePeers{Url: url, SubDomain: subdomains}
-	}
-
-	req := &SyncRequest{
+	req = &SyncRequest{
 		Type: &SyncRequest_Order{
 				Order: &OrderRequest{
 					Proof: &Proof{Buf: proof},
-					Timestamp: &Timestamp{Now: time},
-					Identity: &identity,
-					IdlePeers: &idlePeers,
+					Timestamp: &Timestamp{Now: timestamp},
+					Identity: &Identity{ID: id, ENR: enr},
+					Peers: &peers,
 				},
-			},
-		}
+		},
+	}
+
 	tx, err := proto.Marshal(req)
 
 	return tx, err

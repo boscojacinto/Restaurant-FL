@@ -79,9 +79,10 @@ def main():
 	config_path = ctypes.c_char_p(config_path_str.encode('utf-8'))
 	p2p_client = P2PClient(WAKU_GO_LIB, SETUP_BS_ENR, MSG_BS_ENR, NODE_KEY, HOST)
 	
-	account = Account.from_key(p2p_client.node_key)
-
-	ctx = consensus_go.Init(config_path, account.key)
+	#account = Account.from_key(p2p_client.node_key)
+	node_key = ctypes.c_char_p(p2p_client.node_key.encode('utf-8'))
+	print(f"p2p_client.node_key:{p2p_client.node_key}")
+	ctx = consensus_go.Init(config_path, node_key)
 
 	consensus_go.SetEventCallback(ctx, eventconsensusCallBack)
 
@@ -101,10 +102,10 @@ def main():
 	data[1]['idleTimestamp'] = datetime.now(pytz.timezone("Asia/Kolkata")).isoformat()
 	data = json.dumps(data)
 	peer_list_w_time = data.encode('ascii')
-	#consensus_go.AddPeer(ctx, peer_list_w_time, consensusCallBack, None)
+	# #consensus_go.AddPeer(ctx, peer_list_w_time, consensusCallBack, None)
 
 	time.sleep(4)
-	# #time.sleep(15)
+	# # #time.sleep(15)
 
 	proofStr = "thisistheproof"
 	proof = ctypes.c_char_p(proofStr.encode('utf-8'))
@@ -114,18 +115,18 @@ def main():
 	node_enr_bytes = p2p_client.get_msg_enr()	
 	node_enr = ctypes.c_char_p(node_enr_bytes)
 
-	consensus_go.SendOrder(ctx, proof, peer_id, node_enr, peer_list_w_time, consensusCallBack, None)
+	consensus_go.SendOrder(ctx, proof, peer_id, node_enr, None , consensusCallBack, None) #peer_list_w_time
 	print(f"Send Order1")	
 
-	# time.sleep(14)
+	time.sleep(14)
 
-	# proofStr = "thisistheproof1"
-	# proof = ctypes.c_char_p(proofStr.encode('utf-8'))
+	proofStr = "thisistheproof1"
+	proof = ctypes.c_char_p(proofStr.encode('utf-8'))
 
-	# peer_id_str = p2p_client.msg_peer_id.encode('utf-8')
-	# peer_id = ctypes.c_char_p(peer_id_str)
-	# consensus_go.SendOrder(ctx, proof, peer_id, consensusCallBack, None)
-	# print(f"Send Order2")
+	peer_id_str = p2p_client.msg_peer_id.encode('utf-8')
+	peer_id = ctypes.c_char_p(peer_id_str)
+	consensus_go.SendOrder(ctx, proof, peer_id, None, peer_list_w_time, consensusCallBack, None) #node_enr
+	print(f"Send Order2")
 
 
 	# path_str = "data"
