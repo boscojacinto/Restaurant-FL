@@ -227,18 +227,19 @@ func SendOrder(ctx unsafe.Pointer, proof *C.char, id *C.char, enr *C.char,
 	enrString := C.GoString(enr)
 	timestampStr := time.Now().Format("2006-01-02 15:04:05")
 	
+	var nodeEnr string
 	var url string
 	var peerSubDomains []string
 
 	if unsafe.Pointer(peers) != nil {
-		url, peerSubDomains, err = createPeerSubDomains(instance, peers, idle)
+		nodeEnr, url, peerSubDomains, err = createPeerSubDomains(instance, enrString, peers, idle)
 		if err != nil {
 			return onError(errors.New("Failed to add peers"), onErr, userData)			
 		}
 	}
 
-	tx, err := makeTxOrder(proofBytes, timestampStr, idStr,
-							enrString, url, peerSubDomains, idle)
+	tx, err := makeTxOrder(proofBytes, idStr, nodeEnr, timestampStr,
+						url, peerSubDomains, idle)
 	if err != nil {
 		return onError(errors.New("Cannot create order "), onErr, userData)
 	}
@@ -277,18 +278,18 @@ func Query(ctx unsafe.Pointer, path *C.char, key *C.char, cb C.ConsensusCallBack
 	return onSuccesfulResponse(result, cb, userData)
 }
 
-func createPeerSubDomains(instance *ConsensusInstance, peers *C.char,
-	idle C.bool) (string, []string, error) {
+func createPeerSubDomains(instance *ConsensusInstance, nodeEnr string, peers *C.char,
+	idle C.bool) (string, string, []string, error) {
 
 	c := context.Background()
 
 	block, err := instance.rpc.Block(c, &instance.height)
 	if err != nil {
-		return "", []string{}, errors.New("Cannot get block")		
+		return "", "", []string{}, errors.New("Cannot get block")		
 	}
 
 	if block.Block == nil {
-		return "", []string{}, errors.New("Block is empty")		
+		return "", "", []string{}, errors.New("Block is empty")		
 	}
 
 	blockTime := block.Block.Header.Time
@@ -306,10 +307,11 @@ func createPeerSubDomains(instance *ConsensusInstance, peers *C.char,
 	err = json.Unmarshal([]byte(peerList), &peerIds)
 	if err != nil {
 		fmt.Println("err:", err)
-		errors.New("Parsing peers failed")
+		return "", "", nil, errors.New("Parsing peers failed")
 	}
 
 	var pAddrs [][]ma.Multiaddr
+	var pIds []peer.ID
 
 	for i, p := range peerIds {
         fmt.Printf("Peer %d:\n", i+1)
@@ -324,6 +326,7 @@ func createPeerSubDomains(instance *ConsensusInstance, peers *C.char,
         //	pAddrs = append(pAddrs, p.Addrs)
         //}
         pAddrs = append(pAddrs, p.Addrs)        
+        pIds = append(pIds, p.ID)
     }
 
     var domain string 
@@ -335,12 +338,22 @@ func createPeerSubDomains(instance *ConsensusInstance, peers *C.char,
 
     // TODO: use safe int64 to uint
 	url, subDomains := createLocalPeer(uint(instance.height), 
-		domain, instance.key, pAddrs, instance.sharedKey)
+		domain, instance.key, pAddrs, pIds, instance.sharedKey)
 
 	fmt.Println("URL:", url)
 	fmt.Println("subDomains:", subDomains)
 
-	return url, subDomains, nil 
+	nodeAddrInfo, err := EnodeToPeerInfo(nodeEnr)
+	if err != nil {
+		return "", "", nil, err
+	}	
+
+	newNodeEnr, err := createLocalRegisterPeer(uint(instance.height), domain, 
+		nodeAddrInfo.Addrs,  nodeAddrInfo.ID, instance.sharedKey)		
+	fmt.Println("newNodeEnr:", newNodeEnr)
+	fmt.Println("\n\nENRR:", CreatePeerSubDomain(newNodeEnr))
+
+	return newNodeEnr, url, subDomains, nil 
 }
 
 func (instance *ConsensusInstance) listenOnEvents() {

@@ -390,7 +390,10 @@ func makeRegisterPeerKV(app *InferSyncApp, info *OrderInfo) error {
 
 func makeIdlePeerKV(app *InferSyncApp, info *OrderInfo) error {
 
-	if info.PeerUrl == "" || len(info.PeerSubDomains) != 0 {
+	fmt.Println("makeIdlePeerKV:", info.PeerUrl)
+	fmt.Println("len(info.PeerSubDomains):", len(info.PeerSubDomains))
+
+	if info.PeerUrl == "" || len(info.PeerSubDomains) == 0 {
 		return errors.New("Invalid peer url or peer subdomain")
 	}
 

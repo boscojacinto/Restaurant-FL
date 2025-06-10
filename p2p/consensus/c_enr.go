@@ -31,8 +31,8 @@ params.hostAddr = hostAddr
 hostAddrMA, err := manet.FromNetAddr(hostAddr)
 params.multiAddr = append(params.multiAddr, hostAddrMA)
 */
-func createENR(privateKey *ecdsa.PrivateKey, ip net.IP, udpPort, tcpPort uint16) (*enr.Record, error) {
-    var flags uint8
+func createENR(privateKey *ecdsa.PrivateKey, ip net.IP, udpPort, tcpPort int, seq uint, peerId peer.ID) (*enr.Record, error) {
+    //var flags uint8
     record := &enr.Record{}
     fmt.Println("ip:", ip)
     record.Set(enr.IPv4(ip))
@@ -40,14 +40,19 @@ func createENR(privateKey *ecdsa.PrivateKey, ip net.IP, udpPort, tcpPort uint16)
     record.Set(enr.TCP(tcpPort))
     //flags |= (1 << 3) // lightpush
     //flags |= (1 << 2) // filter
-    flags |= (1 << 1) // store
-    flags |= (1 << 0) // relay
-    record.Set(enr.WithEntry("waku2", flags))
+    //flags |= (1 << 1) // store
+    //flags |= (1 << 0) // relay
+    //record.Set(enr.WithEntry("waku2", flags))
     
-/*    // Set the public key in the record
+    // Set the public key in the record
     pubkey := &privateKey.PublicKey
     record.Set(enr.WithEntry("secp256k1", base64.RawURLEncoding.EncodeToString(crypto.CompressPubkey(pubkey))))
-*/
+
+    // Set the waku peerId in the record
+    record.Set(enr.WithEntry("waku2-peerid", peerId.String()))
+
+    record.SetSeq(uint64(seq))
+
     // Sign the record
     enode.SignV4(record, privateKey)
     
@@ -105,7 +110,7 @@ func createLocalNode(privateKey *ecdsa.PrivateKey, ip net.IP, udpPort, tcpPort i
     return localnode.Node(), nil
 }
 
-func CreateTree() {
+/*func CreateTree() {
     type Node struct {
         ip string
         udpPort uint16
@@ -125,10 +130,10 @@ func CreateTree() {
 
     var leafRecords []string
 
-    for _, node := range nodes {
+    for i, node := range nodes {
 
         key, _ := crypto.GenerateKey()        
-        record, _ := createENR(key, net.ParseIP(node.ip), node.udpPort, node.tcpPort)
+        record, _ := createENR(key, net.ParseIP(node.ip), node.udpPort, node.tcpPort, seq, peer.ID{string(i)})
         p2pKey := (*p2pcrypto.Secp256k1PrivateKey)(secp256k1.PrivKeyFromBytes(key.D.Bytes()))
         peerId, _ := peer.IDFromPublicKey(p2pKey.GetPublic())
 
@@ -155,7 +160,7 @@ func CreateTree() {
     fmt.Println("url:", url)
     fmt.Println(tree.ToTXT(domain))
 }
-
+*/
 func CreateTreeFromLocalNode() {
     type Node struct {
         ip string
@@ -266,14 +271,15 @@ func extractIP(addr ma.Multiaddr) (*net.TCPAddr, error) {
 }
 
 func createLocalPeer(seq uint, domain string, signingKey *ecdsa.PrivateKey,
-    addrs [][]ma.Multiaddr, sharedKey *ecdsa.PrivateKey) (string, []string) {
+    addrs [][]ma.Multiaddr, peerIds []peer.ID, sharedKey *ecdsa.PrivateKey) (string, []string) {
 
     var nodeEnrs []*enode.Node 
     var node *enode.Node
     var tcpAddr *net.TCPAddr
+    var nodeRecord *enr.Record
     var err error
 
-    for _, addr := range(addrs) {
+    for i, addr := range(addrs) {
         for _, a := range(addr) {
             tcpAddr, err = extractIP(a)
             if err == nil {
@@ -281,7 +287,16 @@ func createLocalPeer(seq uint, domain string, signingKey *ecdsa.PrivateKey,
             }
         }
 
-        node, err = createLocalNode(sharedKey, tcpAddr.IP, 0, tcpAddr.Port)    
+        //node, err = createLocalNode(sharedKey, tcpAddr.IP, 0, tcpAddr.Port)    
+        nodeRecord, err = createENR(sharedKey, tcpAddr.IP, 0, tcpAddr.Port, seq, peerIds[i])
+        node, err = enode.New(enode.V4ID{}, nodeRecord)
+        fmt.Println("\ni:", i)
+        fmt.Println(" seq:", seq)
+        fmt.Println(" peerId:", peerIds[i])
+        fmt.Println(" tcpAddr.IP:", tcpAddr.IP)
+        fmt.Println(" tcpAddr.Port:", tcpAddr.Port)
+        fmt.Println(" node.string():", node.String())
+        //node, err = encodeENRToLeaf(nodeRecord)        
         if err == nil {
             nodeEnrs = append(nodeEnrs, node)
         }
@@ -311,6 +326,35 @@ func createLocalPeer(seq uint, domain string, signingKey *ecdsa.PrivateKey,
     }
 
     return url, subDomains
+}
+
+func createLocalRegisterPeer(seq uint, domain string, addr []ma.Multiaddr,
+    peerId peer.ID, sharedKey *ecdsa.PrivateKey) (string, error) {
+
+    var node *enode.Node
+    var tcpAddr *net.TCPAddr
+    var nodeRecord *enr.Record
+    var err error
+
+    tcpAddr, err = extractIP(addr[0])
+    if err != nil {
+        return "", err
+    }
+
+    nodeRecord, err = createENR(sharedKey, tcpAddr.IP, 0, tcpAddr.Port, seq, peerId)
+    node, err = enode.New(enode.V4ID{}, nodeRecord)
+    fmt.Println("\nNODE:")
+    fmt.Println(" seq:", seq)
+    fmt.Println(" peerId:", peerId)
+    fmt.Println(" tcpAddr.IP:", tcpAddr.IP)
+    fmt.Println(" tcpAddr.Port:", tcpAddr.Port)
+    fmt.Println(" node.string():", node.String())
+
+/*    enrHash := sha3.NewLegacyKeccak256()
+    io.WriteString(enrHash, node.String())
+    regDomain := b32format.EncodeToString(enrHash.Sum(nil)[:16]) 
+*/
+    return node.String(), nil
 }
 
 func createIDFromSecp256k1Bytes(publicKey []byte) (peer.ID) {
@@ -454,27 +498,21 @@ func EnodeToPeerInfo(enr string) (*peer.AddrInfo, error) {
     var node = new(enode.Node)
 
     err := node.UnmarshalText([]byte(enr))
-    fmt.Println("node UnmarshalText:", err)
     if err != nil {
         return nil, err
     }
 
-    fmt.Println("EnodeToPeerInfo1.0")
-
     _, addresses, err := getMultiaddress(node)
-    fmt.Println("EnodeToPeerInfo1.1:", err)
 
     if err != nil {
         return nil, err
     }
 
     res, err := peer.AddrInfosFromP2pAddrs(addresses...)
-    fmt.Println("EnodeToPeerInfo1.2:", err)
 
     if err != nil {
         return nil, err
     }
-    fmt.Println("EnodeToPeerInfo1.3:", len(res))
 
     if len(res) == 0 {
         return nil, errors.New("could not retrieve peer addresses from enr")

@@ -68,7 +68,7 @@ def main():
 	consensus_go.Stop.restype = ctypes.c_int
 	consensus_go.SetEventCallback.argtypes = [ctypes.c_void_p, ConsensusCallBack]
 	consensus_go.SetEventCallback.restype = ctypes.c_int
-	consensus_go.SendOrder.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ConsensusCallBack, ctypes.c_void_p]
+	consensus_go.SendOrder.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_bool, ConsensusCallBack, ctypes.c_void_p]
 	consensus_go.SendOrder.restype = ctypes.c_int
 	consensus_go.Query.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ConsensusCallBack, ctypes.c_void_p]
 	consensus_go.Query.restype = ctypes.c_int
@@ -115,18 +115,18 @@ def main():
 	node_enr_bytes = p2p_client.get_msg_enr()	
 	node_enr = ctypes.c_char_p(node_enr_bytes)
 
-	consensus_go.SendOrder(ctx, proof, peer_id, node_enr, None , consensusCallBack, None) #peer_list_w_time
+	consensus_go.SendOrder(ctx, proof, peer_id, node_enr, peer_list_w_time, True, consensusCallBack, None) #peer_list_w_time
 	print(f"Send Order1")	
 
 	time.sleep(14)
 
-	proofStr = "thisistheproof1"
-	proof = ctypes.c_char_p(proofStr.encode('utf-8'))
+	# proofStr = "thisistheproof1"
+	# proof = ctypes.c_char_p(proofStr.encode('utf-8'))
 
-	peer_id_str = p2p_client.msg_peer_id.encode('utf-8')
-	peer_id = ctypes.c_char_p(peer_id_str)
-	consensus_go.SendOrder(ctx, proof, peer_id, None, peer_list_w_time, consensusCallBack, None) #node_enr
-	print(f"Send Order2")
+	# peer_id_str = p2p_client.msg_peer_id.encode('utf-8')
+	# peer_id = ctypes.c_char_p(peer_id_str)
+	# consensus_go.SendOrder(ctx, proof, peer_id, None, peer_list_w_time, consensusCallBack, None) #node_enr
+	# print(f"Send Order2")
 
 
 	# path_str = "data"
