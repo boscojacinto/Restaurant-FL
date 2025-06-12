@@ -6,15 +6,21 @@ import ctypes
 from ctypes import CDLL
 from datetime import datetime
 from p2p.client import P2PClient
-from eth_account import Account
 
 CONSENSUS_LIB = "p2p/build/lib/libconsensus.so.0"
-WAKU_GO_LIB = "p2p/libgowaku.so.0"
 
-SETUP_BS_ENR = "enr:-KG4QB3eb3HfEYfkM3qJ4PbnxrjM_KK4BIsYh0hh1NNFWYi0UhgbINGm38YoNDgiRSFJBLJT2aRj2qifsWTlZ886GV6GAZb7zkKYgmlkgnY0gmlwhMCoARqCcnOFAFgBAACJc2VjcDI1NmsxoQNLmJB1Pj72eUSZQnMof-AJdmltBsVrqCSzGa_k_YI8UIN0Y3CC6mqDdWRwgia2hXdha3UyAw"
-MSG_BS_ENR = "enr:-KG4QJ60C0bldIz1merR78DRaJWdhSyDGImFc7n42mHqgGadXRyzOG6LOuZPyEEshitBybFvqgFw039VmOmdTFPtgg-GAZb7zkrAgmlkgnY0gmlwhMCoARqCcnOFAFkBAACJc2VjcDI1NmsxoQNLmJB1Pj72eUSZQnMof-AJdmltBsVrqCSzGa_k_YI8UIN0Y3CC6nSDdWRwgibAhXdha3UyAw"
-NODE_KEY = '4ddecde332eff9353c8a7df4b429299af13bbfe2f5baa7f4474c93faf2fea0b5'
+CLIENT_ID = 1
+
 HOST = "192.168.1.26"
+NODE_KEY = 'fbcf082527559a8c79544373f78845f81b14b2d0cc2de55998d75e06b60c5b5e'
+
+SETUP_PORT = 60011
+SETUP_DISCV5_PORT = 9911
+SETUP_BS_ENR = "enr:-KG4QB3eb3HfEYfkM3qJ4PbnxrjM_KK4BIsYh0hh1NNFWYi0UhgbINGm38YoNDgiRSFJBLJT2aRj2qifsWTlZ886GV6GAZb7zkKYgmlkgnY0gmlwhMCoARqCcnOFAFgBAACJc2VjcDI1NmsxoQNLmJB1Pj72eUSZQnMof-AJdmltBsVrqCSzGa_k_YI8UIN0Y3CC6mqDdWRwgia2hXdha3UyAw"
+
+MSG_PORT = 60021
+MSG_DISCV5_PORT = 9921
+MSG_BS_ENR = "enr:-KG4QJ60C0bldIz1merR78DRaJWdhSyDGImFc7n42mHqgGadXRyzOG6LOuZPyEEshitBybFvqgFw039VmOmdTFPtgg-GAZb7zkrAgmlkgnY0gmlwhMCoARqCcnOFAFkBAACJc2VjcDI1NmsxoQNLmJB1Pj72eUSZQnMof-AJdmltBsVrqCSzGa_k_YI8UIN0Y3CC6nSDdWRwgibAhXdha3UyAw"
 
 ConsensusCallBack = ctypes.CFUNCTYPE(
 	None,
@@ -72,24 +78,22 @@ def main():
 	consensus_go.SendOrder.restype = ctypes.c_int
 	consensus_go.Query.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ConsensusCallBack, ctypes.c_void_p]
 	consensus_go.Query.restype = ctypes.c_int
-	# consensus_go.AddPeer.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ConsensusCallBack, ctypes.c_void_p]
-	# consensus_go.AddPeer.restype = ctypes.c_int
 
-	config_path_str = "/home/boscojacinto/projects/TasteBot/Restaurant-FL/p2p/consensus/config"
-	config_path = ctypes.c_char_p(config_path_str.encode('utf-8'))
-	p2p_client = P2PClient(WAKU_GO_LIB, SETUP_BS_ENR, MSG_BS_ENR, NODE_KEY, HOST)
-	
-	#account = Account.from_key(p2p_client.node_key)
+	root_path_str = f"/home/boscojacinto/projects/TasteBot/Restaurant-FL/p2p/consensus/client_{CLIENT_ID}"
+	root_path = ctypes.c_char_p(root_path_str.encode('utf-8'))
+	p2p_client = P2PClient(CLIENT_ID, NODE_KEY, HOST, SETUP_PORT, SETUP_DISCV5_PORT, SETUP_BS_ENR,
+					MSG_PORT, MSG_DISCV5_PORT, MSG_BS_ENR)
+
 	node_key = ctypes.c_char_p(p2p_client.node_key.encode('utf-8'))
-	print(f"p2p_client.node_key:{p2p_client.node_key}")
-	ctx = consensus_go.Init(config_path, node_key)
-
+	client_id = str(CLIENT_ID).encode('ascii')
+	ctx = consensus_go.Init(client_id, root_path, node_key)
+	# node id tm d18c7b9e2c9d71531fd73640fcf45bd699a983d4
+	
 	consensus_go.SetEventCallback(ctx, eventconsensusCallBack)
 
 	consensus_go.Start(ctx, consensusCallBack, None)
 	print(f"Consensus Started")
 	
-	# #time.sleep(1)
 	p2p_client.start()
 	print(f"P2P Started")
 
@@ -98,14 +102,19 @@ def main():
 	peers_list = p2p_client.get_msg_peers()
 	peers_string = peers_list.decode('utf-8')
 	data = json.loads(peers_string)
-	data[0]['idleTimestamp'] = datetime.now(pytz.timezone("Asia/Kolkata")).isoformat()
-	data[1]['idleTimestamp'] = datetime.now(pytz.timezone("Asia/Kolkata")).isoformat()
+
+	for i in range(len(data)):
+		if (data[i]['peerID'] == p2p_client.msg_peer_id):
+			print(f"\nPeer at {i} is {data[i]['peerID']}")
+			remove_id = i
+		data[i]['idleTimestamp'] = datetime.now(pytz.timezone("Asia/Kolkata")).isoformat()
+
+	data.pop(remove_id)
+
 	data = json.dumps(data)
 	peer_list_w_time = data.encode('ascii')
-	# #consensus_go.AddPeer(ctx, peer_list_w_time, consensusCallBack, None)
 
 	time.sleep(4)
-	# # #time.sleep(15)
 
 	proofStr = "thisistheproof"
 	proof = ctypes.c_char_p(proofStr.encode('utf-8'))
@@ -120,13 +129,13 @@ def main():
 
 	time.sleep(14)
 
-	# proofStr = "thisistheproof1"
-	# proof = ctypes.c_char_p(proofStr.encode('utf-8'))
+	proofStr = "thisistheproof1"
+	proof = ctypes.c_char_p(proofStr.encode('utf-8'))
 
-	# peer_id_str = p2p_client.msg_peer_id.encode('utf-8')
-	# peer_id = ctypes.c_char_p(peer_id_str)
-	# consensus_go.SendOrder(ctx, proof, peer_id, None, peer_list_w_time, consensusCallBack, None) #node_enr
-	# print(f"Send Order2")
+	peer_id_str = p2p_client.msg_peer_id.encode('utf-8')
+	peer_id = ctypes.c_char_p(peer_id_str)
+	consensus_go.SendOrder(ctx, proof, peer_id, node_enr, peer_list_w_time, True, consensusCallBack, None) #node_enr
+	print(f"Send Order2")
 
 
 	# path_str = "data"

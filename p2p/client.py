@@ -12,21 +12,15 @@ DISC_URL = "enrtree://AKP74RJLRUIRLPUD3KHFKX23B5LKQYSTWE4KPXZUMJQZSLG4LYMY2@node
 DISC_NAMESERVER = "nodes.restaurants.com"
 DISC_ENABLE = True
 
-SETUP_PORT = 60011
-SETUP_DISCV5_PORT = 9911
 SETUP_STORE = True
 SETUP_STORE_TIME = (30*24*60*60) # 30 days
 SETUP_CLUSTER_ID = 88
 SETUP_SHARD_ID = 0
-SETUP_STORE_DB = "sqlite3://setup_store.db"
 
-MSG_PORT = 60021
-MSG_DISCV5_PORT = 9921
 MSG_STORE = True
 MSG_STORE_TIME = (5*60) # 5 minutes
 MSG_CLUSTER_ID = 89
 MSG_SHARD_ID = 0
-MSG_STORE_DB = "sqlite3://msg_store.db"
 
 TASTEBOT_PUBSUB_TOPIC_1 = '/tastbot/1/rs/88/0' #'/waku/2/rs/88/0'
 TASTEBOT_PUBSUB_TOPIC_2 = '/tastbot/1/rs/89/0' #'/waku/2/rs/89/0'
@@ -43,8 +37,14 @@ setup_content_topic = None
 msg_request_topic = None 
 
 class P2PClient:
-    def __init__(self, lib_path, setup_bs_enr, msg_bs_enr, node_key, host):
+    def __init__(self, client_id, node_key, host, setup_port, setup_discv5_port, setup_bs_enr, msg_port, msg_discv5_port, msg_bs_enr):
+    	self.client_id = client_id
+    	self.setup_port = setup_port
+    	self.setup_discv5_port = setup_discv5_port
     	self.setup_bs_enr = setup_bs_enr
+    	
+    	self.msg_port = msg_port
+    	self.msg_discv5_port = msg_discv5_port
     	self.msg_bs_enr = msg_bs_enr
     	self.node_key = node_key
     	self.host = host
@@ -52,7 +52,9 @@ class P2PClient:
     	self.msg_ctx = None
     	self.setup_peer_id = None
     	self.msg_peer_id = None
-    	waku_lib_init(lib_path)
+    	self.setup_store_db = f"sqlite3://data/setup_store_{self.client_id}.db"
+    	self.msg_store_db = f"sqlite3://data/msg_store_{self.client_id}.db"
+    	waku_lib_init()
 
     def start(self):
     	(self.setup_ctx, setup_connected, self.setup_peer_id,
@@ -67,7 +69,7 @@ class P2PClient:
 
     def init_setup_node(self):
     	node_config = "{ \"host\": \"%s\", \"port\": %d, \"nodeKey\": \"%s\", \"store\": %s, \"clusterID\": %d, \"shards\": [%d], \"databaseURL\": \"%s\", \"discV5\": %s, \"discV5UDPPort\": %d, \"discV5BootstrapNodes\": [\"%s\"]}" \
-    					% (self.host, int(SETUP_PORT), self.node_key, "true" if SETUP_STORE else "false", int(SETUP_CLUSTER_ID), SETUP_SHARD_ID, SETUP_STORE_DB, "true" if DISC_ENABLE else "false", int(SETUP_DISCV5_PORT), self.setup_bs_enr)
+    					% (self.host, int(self.setup_port), self.node_key, "true" if SETUP_STORE else "false", int(SETUP_CLUSTER_ID), SETUP_SHARD_ID, self.setup_store_db, "true" if DISC_ENABLE else "false", int(self.setup_discv5_port), self.setup_bs_enr)
     	node_config = node_config.encode('ascii')
 
     	ctx = waku_go.waku_new(node_config, wakuCallBack, None)
@@ -97,7 +99,7 @@ class P2PClient:
 
     def init_msg_node(self):
     	node_config = "{ \"host\": \"%s\", \"port\": %d, \"nodeKey\": \"%s\", \"store\": %s, \"clusterID\": %d, \"shards\": [%d], \"databaseURL\": \"%s\", \"discV5\": %s, \"discV5UDPPort\": %d, \"discV5BootstrapNodes\": [\"%s\"]}" \
-    					% (self.host, int(MSG_PORT), self.node_key, "true" if MSG_STORE else "false", int(MSG_CLUSTER_ID), MSG_SHARD_ID, MSG_STORE_DB, "true" if DISC_ENABLE else "false", int(MSG_DISCV5_PORT), self.msg_bs_enr)
+    					% (self.host, int(self.msg_port), self.node_key, "true" if MSG_STORE else "false", int(MSG_CLUSTER_ID), MSG_SHARD_ID, self.msg_store_db, "true" if DISC_ENABLE else "false", int(self.msg_discv5_port), self.msg_bs_enr)
 
     	node_config = node_config.encode('ascii')
 
@@ -251,9 +253,11 @@ def msgEventCallBack(ret_code, msg: str, user_data):
 			else:
 				print(f"Other")
 
-def waku_lib_init(lib_path):
+def waku_lib_init():
 	global waku_go
 
+	path = os.path.dirname(__file__)
+	lib_path = os.path.join(path, "libgowaku.so.0")
 	waku_go = CDLL(lib_path)
 	waku_go.waku_new.argtypes = [ctypes.c_char_p, WakuCallBack, ctypes.c_void_p]
 	waku_go.waku_new.restype = ctypes.c_void_p
@@ -288,11 +292,18 @@ def waku_lib_init(lib_path):
 	waku_go.waku_get_enr.restype = ctypes.c_int
 
 if __name__ == "__main__":
-	setup_bs_enr = "enr:-KG4QB3eb3HfEYfkM3qJ4PbnxrjM_KK4BIsYh0hh1NNFWYi0UhgbINGm38YoNDgiRSFJBLJT2aRj2qifsWTlZ886GV6GAZb7zkKYgmlkgnY0gmlwhMCoARqCcnOFAFgBAACJc2VjcDI1NmsxoQNLmJB1Pj72eUSZQnMof-AJdmltBsVrqCSzGa_k_YI8UIN0Y3CC6mqDdWRwgia2hXdha3UyAw"
-	msg_bs_enr = "enr:-KG4QJ60C0bldIz1merR78DRaJWdhSyDGImFc7n42mHqgGadXRyzOG6LOuZPyEEshitBybFvqgFw039VmOmdTFPtgg-GAZb7zkrAgmlkgnY0gmlwhMCoARqCcnOFAFkBAACJc2VjcDI1NmsxoQNLmJB1Pj72eUSZQnMof-AJdmltBsVrqCSzGa_k_YI8UIN0Y3CC6nSDdWRwgibAhXdha3UyAw"
-	node_key = '4ddecde332eff9353c8a7df4b429299af13bbfe2f5baa7f4474c93faf2fea0b5'
 	host = "192.168.1.26"
-	client = P2PClient("./libgowaku.so.0", setup_bs_enr, msg_bs_enr, node_key, host)
+	node_key = 'a67f37280a69830a40083a2fa2b599250c872713ec090ecf0924c8a7075b064e'#'4ddecde332eff9353c8a7df4b429299af13bbfe2f5baa7f4474c93faf2fea0b5'
+
+	setup_port = 60011
+	setup_discv5_port = 9911
+	setup_bs_enr = "enr:-KG4QB3eb3HfEYfkM3qJ4PbnxrjM_KK4BIsYh0hh1NNFWYi0UhgbINGm38YoNDgiRSFJBLJT2aRj2qifsWTlZ886GV6GAZb7zkKYgmlkgnY0gmlwhMCoARqCcnOFAFgBAACJc2VjcDI1NmsxoQNLmJB1Pj72eUSZQnMof-AJdmltBsVrqCSzGa_k_YI8UIN0Y3CC6mqDdWRwgia2hXdha3UyAw"
+
+	msg_port = 60021
+	msg_discv5_port = 9921
+	msg_bs_enr = "enr:-KG4QJ60C0bldIz1merR78DRaJWdhSyDGImFc7n42mHqgGadXRyzOG6LOuZPyEEshitBybFvqgFw039VmOmdTFPtgg-GAZb7zkrAgmlkgnY0gmlwhMCoARqCcnOFAFkBAACJc2VjcDI1NmsxoQNLmJB1Pj72eUSZQnMof-AJdmltBsVrqCSzGa_k_YI8UIN0Y3CC6nSDdWRwgibAhXdha3UyAw"
+
+	client = P2PClient(1, node_key, host, setup_port, setup_discv5_port, setup_bs_enr, msg_port, msg_discv5_port, msg_bs_enr)
 	client.start()
 	while True:
 		time.sleep(0.2)

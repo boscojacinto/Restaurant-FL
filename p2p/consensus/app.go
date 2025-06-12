@@ -400,7 +400,7 @@ func makeIdlePeerKV(app *InferSyncApp, info *OrderInfo) error {
 	var k []byte
 	var v []byte
 	var rKey []byte
-	var rFound bool = true
+	var rFound bool = false
 
 	k = []byte(info.PeerUrl + "-" + "peers")
 	for _, peerSubDomain := range(info.PeerSubDomains) {
@@ -408,15 +408,15 @@ func makeIdlePeerKV(app *InferSyncApp, info *OrderInfo) error {
 
 		rKey = []byte(peerSubDomain + "-" + "register")
 		_, err := app.currentRegisters.Get(rKey)
-		if err != nil {
-			rFound = false
+		if err == nil {
+			rFound = true
 			break
 		}
 		v = append(v, peerSubDomain...)
 	}
 
 	if rFound == false {
-		errors.New("Peer subdomain not registered")
+		return errors.New("Peer subdomain not registered")
 	}
 
 	err := app.currentPeers.Set(k, v)

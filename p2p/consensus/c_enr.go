@@ -15,6 +15,7 @@ import (
     "encoding/binary"     
     "encoding/hex"
     "crypto/ecdsa"
+    "crypto/sha256"
     "golang.org/x/crypto/sha3"      
     "github.com/ethereum/go-ethereum/p2p/enr"
     "github.com/ethereum/go-ethereum/p2p/enode"
@@ -24,6 +25,7 @@ import (
     "github.com/decred/dcrd/dcrec/secp256k1/v4"
     p2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
     ma "github.com/multiformats/go-multiaddr"
+    "golang.org/x/crypto/ripemd160"    
 )
 
 /*hostAddr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", *config.Host, *config.Port))
@@ -558,4 +560,38 @@ func CreatePeerSubDomain(enr string) (string) {
     io.WriteString(keccak, enr)
     peerSubDomain := b32format.EncodeToString(keccak.Sum(nil)[:16])
     return peerSubDomain
+}
+
+func validatorKeyFromECDSA(key []byte) (ValidatorKey, error) {
+    privateKey := (*p2pcrypto.Secp256k1PrivateKey)(secp256k1.PrivKeyFromBytes(key))    
+    privateKeyEcdsa, _ := crypto.ToECDSA(key)
+    privateKeyBytes, _ := privateKey.Raw()
+    publicKeyBytes, _ := privateKey.GetPublic().Raw()
+    //compPubKeyBytes := crypto.CompressPubkey(&privateKey.PublicKey)
+    fmt.Printf("Private Key: %s\n", hex.EncodeToString(privateKeyBytes))
+    fmt.Printf("Public Key: %s\n", hex.EncodeToString(publicKeyBytes))
+
+    privateKeyBase64 := base64.StdEncoding.EncodeToString(privateKeyBytes)
+    publicKeyBase64 := base64.StdEncoding.EncodeToString(publicKeyBytes)
+    address := getAddress(publicKeyBytes)
+
+    vKey := ValidatorKey{
+        Address: hex.EncodeToString(address),
+        PublicKey: publicKeyBase64,
+        PrivateKey: privateKeyBase64,
+        PrivateKeyEcdsa: privateKeyEcdsa,
+    }
+
+    return vKey, nil
+}
+
+func getAddress(pubBytes []byte) []byte {
+    hasherSHA256 := sha256.New()
+    _, _ = hasherSHA256.Write(pubBytes)
+    sha := hasherSHA256.Sum(nil)
+
+    hasherRIPEMD160 := ripemd160.New()
+    _, _ = hasherRIPEMD160.Write(sha)
+
+    return hasherRIPEMD160.Sum(nil)
 }

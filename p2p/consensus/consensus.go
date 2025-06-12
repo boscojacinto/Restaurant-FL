@@ -51,11 +51,19 @@ import (
  "github.com/libp2p/go-libp2p/core/protocol"
 )
 
+type ValidatorKey struct {
+    Address string
+    PublicKey string
+    PrivateKey string
+    PrivateKeyEcdsa *ecdsa.PrivateKey
+}
+
 type ConsensusInstance struct {
 	ctx context.Context
 	cancel context.CancelFunc
+	clientId string
 	ID uint
-	configFile string
+	rootDir string
 	orderDb *badger.DB
 	registerDb *badger.DB 
 	node *nm.Node
@@ -64,7 +72,7 @@ type ConsensusInstance struct {
 	subscription EventListener
 	config *cfg.Config // Do not access after stopping node
 	height int64 
-	key *ecdsa.PrivateKey
+	key ValidatorKey
 	sharedKey *ecdsa.PrivateKey
 }
 
@@ -100,24 +108,25 @@ var cInstanceMutex sync.RWMutex
 func main() {}
 
 //export Init
-func Init(configPath *C.char, key *C.char) unsafe.Pointer {
+func Init(clientId *C.char, rootDir *C.char, key *C.char) unsafe.Pointer {
+	
 	cInstanceMutex.Lock()
 	defer cInstanceMutex.Unlock()
 
 	cid := C.malloc(C.size_t(unsafe.Sizeof(uintptr(0))))
 	pid := (*uint)(cid)
+	
 	cInstances = make(map[uint]*ConsensusInstance)
 	cInstance := &ConsensusInstance{
 		ID: uint(len(cInstances)),
 	}
+	cInstance.clientId = C.GoString(clientId)
+	cInstance.rootDir = C.GoString(rootDir)
 
-	kHex, err := hex.DecodeString(C.GoString(key))
-	cInstance.key, err = crypto.ToECDSA(kHex)
-	fmt.Println("\ncInstance.key:", cInstance.key)
-	fmt.Println("\nerr:", err)
-
+	kHex, _ := hex.DecodeString(C.GoString(key))
+	cInstance.key, _ = validatorKeyFromECDSA(kHex)
 	cInstance.sharedKey, _ = crypto.GenerateKey()
-	flag.StringVar(&cInstance.configFile, "config", C.GoString(configPath) + "/config.toml", "Path to config.toml")
+
 	cInstances[0] = cInstance
 	*pid = cInstance.ID
 
@@ -134,7 +143,7 @@ func Start(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointe
 	}
 
 	instance.ctx, instance.cancel = context.WithCancel(context.Background())
-	dir := filepath.Dir(instance.configFile)	
+	dir := filepath.Join(instance.rootDir, "/data")	
 
 	orderDb, err := badger.Open(badger.DefaultOptions(dir + "/tmp/order"))
 	if err != nil {
@@ -281,25 +290,45 @@ func Query(ctx unsafe.Pointer, path *C.char, key *C.char, cb C.ConsensusCallBack
 func createPeerSubDomains(instance *ConsensusInstance, nodeEnr string, peers *C.char,
 	idle C.bool) (string, string, []string, error) {
 
+	var idleCutoffTime time.Time
 	c := context.Background()
 
 	block, err := instance.rpc.Block(c, &instance.height)
-	if err != nil {
-		return "", "", []string{}, errors.New("Cannot get block")		
+	if err == nil {
+		blockTime := block.Block.Header.Time
+		//blockHeight := block.Block.Header.Height
+		blockInterval := instance.config.Consensus.TimeoutCommit
+		graceTime := blockInterval * IdleCutOffPercentage/100
+		idleCutoffTime = blockTime.Add(blockInterval-graceTime)
+		fmt.Println("blockTime:", blockTime)
+		fmt.Println("blockInterval:", blockInterval)
+		fmt.Println("graceTime:", graceTime)
+		fmt.Println("idleCutoffTime:", idleCutoffTime)
 	}
 
-	if block.Block == nil {
-		return "", "", []string{}, errors.New("Block is empty")		
+	qres, err := instance.rpc.Validators(c, nil, nil, nil)
+	fmt.Println("qres:", qres)
+	fmt.Println("instance.key.Address:", instance.key.Address)
+/*	if err != nil {
+		return "", "", []string{}, errors.New("Cannot query validators")
 	}
-
-	blockTime := block.Block.Header.Time
-	blockInterval := instance.config.Consensus.TimeoutCommit
-	graceTime := blockInterval * IdleCutOffPercentage/100
-	idleCutoffTime := blockTime.Add(blockInterval-graceTime)
-	fmt.Println("blockTime:", blockTime)
-	fmt.Println("blockInterval:", blockInterval)
-	fmt.Println("graceTime:", graceTime)
-	fmt.Println("idleCutoffTime:", idleCutoffTime)
+*/
+/*	if qres.Count == 0 || qres.Total == 0 {
+		return "", "", []string{}, errors.New("ABCIQuery failed")
+	}
+*//*	if !bytes.Equal(qres.Response.Key, "validators") {
+		return "", "", []string{}, errors.New("returned key does not match queried key")
+	}
+*/	
+/*	var validatorAddr []byte
+	lastCommitHeight := block.Block.LastCommit.Height
+	validatorsSig := block.Block.LastCommit.Signatures
+	for i, validator := range(validatorsSig) {
+		validatorAddr = validator.ValidatorAddress
+		if len(validatorAddr) != 20 {
+			continue
+		}
+	}*/
 
 	var peerIds []Peer
 	peerList := C.GoString(peers)
@@ -322,11 +351,14 @@ func createPeerSubDomains(instance *ConsensusInstance, nodeEnr string, peers *C.
         fmt.Printf("  PubsubTopics: %v\n", p.PubsubTopics)
         fmt.Printf("  IdleTimestamp: %v\n", p.IdleTimestamp)
 
-        //if p.IdleTimestamp.Compare(idleCutoffTime) >= 0  {
-        //	pAddrs = append(pAddrs, p.Addrs)
+        //if idleCutoffTime != (0 * time.Second) {
+	        //if p.IdleTimestamp.Compare(idleCutoffTime) >= 0  {
+	        //	pAddrs = append(pAddrs, p.Addrs)
+	        //}        	
+        //} else {
+	        pAddrs = append(pAddrs, p.Addrs)        
+	        pIds = append(pIds, p.ID)        	
         //}
-        pAddrs = append(pAddrs, p.Addrs)        
-        pIds = append(pIds, p.ID)
     }
 
     var domain string 
@@ -338,7 +370,7 @@ func createPeerSubDomains(instance *ConsensusInstance, nodeEnr string, peers *C.
 
     // TODO: use safe int64 to uint
 	url, subDomains := createLocalPeer(uint(instance.height), 
-		domain, instance.key, pAddrs, pIds, instance.sharedKey)
+		domain, instance.key.PrivateKeyEcdsa, pAddrs, pIds, instance.sharedKey)
 
 	fmt.Println("URL:", url)
 	fmt.Println("subDomains:", subDomains)
@@ -446,17 +478,23 @@ func makeTxOrder(proof []byte, id string, enr string, timestamp string,
 func newTendermint(instance *ConsensusInstance, app abci.Application) (*nm.Node, error) {
 	// read config
 	config := cfg.DefaultConfig()
-	config.RootDir = filepath.Dir(filepath.Dir(instance.configFile))
-	config.Consensus.CreateEmptyBlocks = false
-	config.Consensus.TimeoutCommit = (10 * time.Second)
 
-	viper.SetConfigFile(instance.configFile)
+	dir := filepath.Join(instance.rootDir, "/config/config.toml")	
+
+	viper.SetConfigFile(dir)
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("viper failed to read config file: %w", err)
 	}
 	if err := viper.Unmarshal(config); err != nil {
 		return nil, fmt.Errorf("viper failed to unmarshal config: %w", err)
 	}
+
+	config.RootDir = instance.rootDir
+	config.SetRoot(config.RootDir)
+	
+	config.Consensus.CreateEmptyBlocks = false
+	config.Consensus.TimeoutCommit = (10 * time.Second)
+
 	if err := config.ValidateBasic(); err != nil {
 		return nil, fmt.Errorf("config is invalid: %w", err)
 	}
@@ -492,6 +530,7 @@ func newTendermint(instance *ConsensusInstance, app abci.Application) (*nm.Node,
 	nm.DefaultMetricsProvider(config.Instrumentation),
 	logger)
 	if err != nil {
+		fmt.Println("ERROR:", err)
 		return nil, fmt.Errorf("failed to create new Tendermint node: %w", err)
 	}
 
