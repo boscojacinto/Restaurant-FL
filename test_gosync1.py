@@ -87,7 +87,7 @@ def main():
 	node_key = ctypes.c_char_p(p2p_client.node_key.encode('utf-8'))
 	client_id = str(CLIENT_ID).encode('ascii')
 	ctx = consensus_go.Init(client_id, root_path, node_key)
-	# node id tm 817ba3158b9fad6e5e77f4196a382e59077ca2b3
+	# node id tm dce8859ffb1f4c37ee9dc1390a5ebb75a9667374
 
 	consensus_go.SetEventCallback(ctx, eventconsensusCallBack)
 

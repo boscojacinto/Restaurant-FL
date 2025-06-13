@@ -7,7 +7,14 @@ from ctypes import CDLL
 from datetime import datetime
 from p2p.client import P2PClient
 
-CONSENSUS_LIB = "p2p/build/lib/libconsensus.so.0"
+	# ID           peer.ID        `json:"peerID"`
+	# Protocols    []protocol.ID  `json:"protocols"`
+	# Addrs        []ma.Multiaddr `json:"addrs"`
+	# Connected    bool           `json:"connected"`
+	# PubsubTopics []string       `json:"pubsubTopics"`
+	# IdleTimestamp time.Time     `json:"idleTimestamp"`
+
+CONSENSUS_LIB = "./libconsensus.so.0"
 
 CLIENT_ID = 1
 
@@ -72,6 +79,8 @@ def main():
 	consensus_go.Start.restype = ctypes.c_int
 	consensus_go.Stop.argtypes = [ctypes.c_void_p, ConsensusCallBack, ctypes.c_void_p]
 	consensus_go.Stop.restype = ctypes.c_int
+	consensus_go.UpdateNodeAddr.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ConsensusCallBack, ctypes.c_void_p]
+	consensus_go.UpdateNodeAddr.restype = ctypes.c_int
 	consensus_go.SetEventCallback.argtypes = [ctypes.c_void_p, ConsensusCallBack]
 	consensus_go.SetEventCallback.restype = ctypes.c_int
 	consensus_go.SendOrder.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_bool, ConsensusCallBack, ctypes.c_void_p]
@@ -87,34 +96,38 @@ def main():
 	node_key = ctypes.c_char_p(p2p_client.node_key.encode('utf-8'))
 	client_id = str(CLIENT_ID).encode('ascii')
 	ctx = consensus_go.Init(client_id, root_path, node_key)
-	# node id tm d18c7b9e2c9d71531fd73640fcf45bd699a983d4
+	# node id tm 04c6ff08d435e1b3f7fde44bdab924a166071bbb
 	
 	consensus_go.SetEventCallback(ctx, eventconsensusCallBack)
-
-	consensus_go.Start(ctx, consensusCallBack, None)
-	print(f"Consensus Started")
 	
 	p2p_client.start()
 	print(f"P2P Started")
 
 	time.sleep(4)
 
-	peers_list = p2p_client.get_msg_peers()
-	peers_string = peers_list.decode('utf-8')
-	data = json.loads(peers_string)
+	if p2p_client.msg_peer_id != None:
+		peers_list = p2p_client.get_msg_peers()
+		peers_string = peers_list.decode('utf-8')
+		data = json.loads(peers_string)
 
-	for i in range(len(data)):
-		if (data[i]['peerID'] == p2p_client.msg_peer_id):
-			print(f"\nPeer at {i} is {data[i]['peerID']}")
-			remove_id = i
-		data[i]['idleTimestamp'] = datetime.now(pytz.timezone("Asia/Kolkata")).isoformat()
-
-	data.pop(remove_id)
+		num_peers = len(data)
+		for i in range(num_peers):
+			if (data[i]['peerID'] == p2p_client.msg_peer_id):
+				print(f"\nPeer at {i} is {data[i]['peerID']}")
+				remove_id = i
+			data[i]['idleTimestamp'] = datetime.now(pytz.timezone("Asia/Kolkata")).isoformat()
+		if num_peers > 1 || num_peers == 1:
+			nodeAddr = json.dumps(data[i]).encode('ascii')
+			consensus_go.UpdateNodeAddr(ctx, nodeAddr, consensusCallBack, None)
+			data.pop(remove_id)
 
 	data = json.dumps(data)
 	peer_list_w_time = data.encode('ascii')
 
 	time.sleep(4)
+
+	consensus_go.Start(ctx, consensusCallBack, None)
+	print(f"Consensus Started")
 
 	proofStr = "thisistheproof"
 	proof = ctypes.c_char_p(proofStr.encode('utf-8'))
@@ -127,15 +140,15 @@ def main():
 	consensus_go.SendOrder(ctx, proof, peer_id, node_enr, peer_list_w_time, True, consensusCallBack, None) #peer_list_w_time
 	print(f"Send Order1")	
 
-	time.sleep(14)
+	# time.sleep(14)
 
-	proofStr = "thisistheproof1"
-	proof = ctypes.c_char_p(proofStr.encode('utf-8'))
+	# proofStr = "thisistheproof1"
+	# proof = ctypes.c_char_p(proofStr.encode('utf-8'))
 
-	peer_id_str = p2p_client.msg_peer_id.encode('utf-8')
-	peer_id = ctypes.c_char_p(peer_id_str)
-	consensus_go.SendOrder(ctx, proof, peer_id, node_enr, peer_list_w_time, True, consensusCallBack, None) #node_enr
-	print(f"Send Order2")
+	# peer_id_str = p2p_client.msg_peer_id.encode('utf-8')
+	# peer_id = ctypes.c_char_p(peer_id_str)
+	# consensus_go.SendOrder(ctx, proof, peer_id, node_enr, peer_list_w_time, True, consensusCallBack, None) #node_enr
+	# print(f"Send Order2")
 
 
 	# path_str = "data"

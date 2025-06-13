@@ -64,16 +64,17 @@ type ConsensusInstance struct {
 	clientId string
 	ID uint
 	rootDir string
+	height int64 
+	node *nm.Node
+	config *cfg.Config
+	rpc *rpclocal.Local
 	orderDb *badger.DB
 	registerDb *badger.DB 
-	node *nm.Node
-	rpc *rpclocal.Local
 	cb unsafe.Pointer	
 	subscription EventListener
-	config *cfg.Config // Do not access after stopping node
-	height int64 
 	key ValidatorKey
 	sharedKey *ecdsa.PrivateKey
+	nodePeerAddr Peer
 }
 
 type EventListener struct {
@@ -133,6 +134,27 @@ func Init(clientId *C.char, rootDir *C.char, key *C.char) unsafe.Pointer {
 	return cid
 }
 
+//export UpdateNodeAddr
+func UpdateNodeAddr(ctx unsafe.Pointer, address *C.char, onErr C.ConsensusCallBack, userData unsafe.Pointer) C.int {
+	instance, err := getInstance(ctx)
+
+	if err != nil {
+		return onError(errors.New("Cannot add node address"), onErr, userData)
+	}
+
+	var nodeAddress Peer
+	addressStr := C.GoString(address)
+	err = json.Unmarshal([]byte (addressStr), &nodeAddress)
+	if err != nil {
+		fmt.Println("err:", err)
+		return onError(errors.New("Cannot parse address"), onErr, userData)
+	}
+	instance.nodePeerAddr = nodeAddress
+
+	return onError(nil, onErr, userData)
+
+}
+
 //export Start
 func Start(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointer) C.int {
 
@@ -161,7 +183,7 @@ func Start(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointe
 
 	instance.height = 0
 
-	app := NewInferSyncApp(orderDb, registerDb)
+	app := NewInferSyncApp(ctx, orderDb, registerDb)
 
 	flag.Parse()
 
@@ -173,7 +195,8 @@ func Start(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointe
 
 	instance.node = node 
 	instance.rpc = rpclocal.New(node)
-	eventCh, _ := instance.rpc.Subscribe(instance.ctx, "tastebot-subscribe", "tm.event='NewBlock'")
+	//eventCh, _ := instance.rpc.Subscribe(instance.ctx, "tastebot-subscribe", "tm.event='NewBlock'")
+	eventCh, _ := instance.rpc.Subscribe(instance.ctx, "tastebot-subscribe", "tm.event='Tx' AND order.transaction.user_id='12345'")
 	
 	instance.subscription = EventListener{
 		ctx: instance.ctx,
@@ -403,6 +426,8 @@ func (instance *ConsensusInstance) listenOnEvents() {
 					Height: height,
 				}
 				sendSignal(instance, "NewBlock", signal)
+			} else if msg.Query == "tm.event='Tx'" {
+				fmt.Println("\norder.transaction event\n")
 			}
 		}
 	}

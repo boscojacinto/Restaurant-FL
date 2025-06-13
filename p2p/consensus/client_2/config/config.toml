@@ -206,13 +206,13 @@ laddr = "tcp://0.0.0.0:26658"
 # and will introspect on the listener or use UPnP
 # to figure out the address. ip and port are required
 # example: 159.89.10.97:26656
-external_address = "192.168.1.26:26658"
+external_address = ""
 
 # Comma separated list of seed nodes to connect to
 seeds = ""
 
 # Comma separated list of nodes to keep persistent connections to
-persistent_peers = "d18c7b9e2c9d71531fd73640fcf45bd699a983d4@192.168.1.26:26656"
+persistent_peers = "dce8859ffb1f4c37ee9dc1390a5ebb75a9667374@192.168.1.26:26656"
 
 # UPNP port forwarding
 upnp = false

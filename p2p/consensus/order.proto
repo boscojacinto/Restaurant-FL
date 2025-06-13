@@ -22,9 +22,14 @@ message Peers {
     repeated string subDomain = 3;
 }
 
+message Inference {
+    string mode = 1;
+}
+
 message OrderRequest {
     Proof proof = 1;
     Timestamp timestamp = 2;
     Identity identity = 3;
-    Peers peers = 4;
+    Inference inference = 4;
+    Peers peers = 5;
 }

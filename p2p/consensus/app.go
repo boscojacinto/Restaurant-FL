@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"errors"
+	"unsafe"
 	"crypto/ecdsa"
 	"math/big"
 	"encoding/binary"
@@ -22,28 +23,30 @@ var StateKey = []byte("stateKey")
 type State struct {
 	db dbm.DB
 	NumOrders int64  `json:"num_orders"`
-	Height  int64  `json:"height"`
 }
 
 type OrderInfo struct {
-	ProofHash string
-	NumOfOrders uint64
-	NodeId string
-	NodeEnr string
-	NodeAddrInfo string
-	PeerUrl string
-	PeerDomain string
-	PeerSubDomains []string
-	NodePublicKey ecdsa.PublicKey 	
+	ProofHash string	`json:"proofHash"`
+	NumOfOrders uint64	`json:"proofhash"`
+	NodeId string	`json:"nodeId"`
+	NodeEnr string	`json:"nodeEnr"`
+	NodeAddrInfo string `json:"nodeAddrInfo"`
+	PeerUrl string	`json:"peerUrl"`
+	PeerDomain string `json:"peerDomain"`
+	PeerSubDomains []string `json:"peerSubDomains"`
+	InferenceMode string `json:"inferenceMode"`
+	NodePublicKey ecdsa.PublicKey
 }
 
 type InferSyncApp struct {
+	cCtx unsafe.Pointer
 	orderDb *badger.DB
 	registerDb *badger.DB
 	currentOrders *badger.Txn
 	currentPeers *badger.Txn
 	currentRegisters *badger.Txn
 	state State
+	nodeSubDomain string
 }
 
 var _ abcitypes.Application = (*InferSyncApp)(nil)
@@ -77,12 +80,13 @@ func saveState(state State) {
 	}
 }
 
-func NewInferSyncApp(orderDb *badger.DB, registerDb *badger.DB) *InferSyncApp {
+func NewInferSyncApp(cCtx unsafe.Pointer, orderDb *badger.DB, registerDb *badger.DB) *InferSyncApp {
 	state := loadState(dbm.NewMemDB())
 	return &InferSyncApp{
 		orderDb: orderDb,
 		registerDb: registerDb,
 		state: state,
+		cCtx: cCtx,
 	}
 }
 
@@ -100,12 +104,50 @@ func (InferSyncApp) SetOption(req abcitypes.RequestSetOption) abcitypes.Response
 func (app *InferSyncApp) CheckTx(req abcitypes.RequestCheckTx) abcitypes.ResponseCheckTx {
 	code := uint32(0)
 	
-	_, _, err := app.isTxValid(req.Tx)
+	_, orderInfo, err := app.isTxValid(req.Tx)
 	if err != nil {
 		code = uint32(3)
+		return abcitypes.ResponseCheckTx{Code: code, Codespace: "order.tx.check"}
 	}
 
-	return abcitypes.ResponseCheckTx{Code: code, Codespace: "sync", GasWanted: 1}
+	orderInfoBytes, err := json.Marshal(orderInfo)
+	if err != nil {
+		return abcitypes.ResponseCheckTx{Code: uint32(3), Codespace: "order.tx.check"}
+	}
+
+	//tm.event='Tx' AND tx.hash='%X'
+	var status string
+	switch orderInfo.InferenceMode {
+		case "solo": {
+			status = "solo.start"
+		}
+		case "assist": {
+			if checkIdlePeer(app, orderInfo) == true &&
+			   app.nodeSubDomain != orderInfo.PeerDomain {
+				status = "assist.ping"
+			} else if checkAssistPeer(app, orderInfo) == true {
+				status = "assist.route"
+			} else {
+				status = "assist.start"
+			}
+		}		
+		default: {
+			status = "solo.start"		
+		}
+	}
+	
+	var events []abcitypes.Event
+	events = []abcitypes.Event {
+	        {
+	            Type: "order.tx.check",
+	            Attributes: []abcitypes.EventAttribute{
+	                {Key: []byte("orderinfo"), Value: orderInfoBytes, Index: true},
+	                {Key: []byte("status"), Value: []byte(status), Index: true},
+	            },
+	        },
+	    }
+
+	return abcitypes.ResponseCheckTx{Code: code, Codespace: "order.tx.check", Events: events}
 }
 
 func (app *InferSyncApp) DeliverTx(req abcitypes.RequestDeliverTx) abcitypes.ResponseDeliverTx {
@@ -126,6 +168,7 @@ func (app *InferSyncApp) DeliverTx(req abcitypes.RequestDeliverTx) abcitypes.Res
 			if err != nil {
 				break
 			}
+			valid = true
 
 			err = makeRegisterPeerKV(app, orderInfo)
 			if err != nil {
@@ -137,7 +180,6 @@ func (app *InferSyncApp) DeliverTx(req abcitypes.RequestDeliverTx) abcitypes.Res
 				break
 			}
 
-			valid = true
 		}
 
 		case *SyncRequest_Dummy: {
@@ -149,12 +191,48 @@ func (app *InferSyncApp) DeliverTx(req abcitypes.RequestDeliverTx) abcitypes.Res
 		}	
 	}
 
+	var status string
+	switch orderInfo.InferenceMode {
+		case "solo": {
+			status = "solo.done"
+		}
+		case "assist": {
+			if checkIdlePeer(app, orderInfo) == true &&
+			   app.nodeSubDomain != orderInfo.PeerDomain {
+				status = "assist.done"
+			} else {
+				status = "assist.done"
+			}
+		}		
+		default: {
+			status = "solo.done"	
+		}
+	}
+
+	orderInfoBytes, err := json.Marshal(orderInfo)
+	if err != nil {
+		return abcitypes.ResponseDeliverTx{Code: uint32(3), Codespace: "order.tx.deliver"}
+	}
+
+	var events []abcitypes.Event
+	fmt.Println("\nSending event\n")
+	events = []abcitypes.Event {
+	        {
+	            Type: "order.tx.deliver",
+	            Attributes: []abcitypes.EventAttribute{
+	                {Key: []byte("orderinfo"), Value: orderInfoBytes, Index: true},
+	                {Key: []byte("status"), Value: []byte(status), Index: true},
+	            },
+	        },
+	    }
+
 	if valid == true {
 		app.state.NumOrders++ 
 		saveState(app.state)
+		fmt.Println("\nSaving state\n")
 	}
 
-	return abcitypes.ResponseDeliverTx{Code: 0, Codespace: "sync"}
+	return abcitypes.ResponseDeliverTx{Code: 0, Codespace: "order.tx.deliver", Events: events}
 }
 
 func (app *InferSyncApp) Commit() abcitypes.ResponseCommit {
@@ -162,7 +240,6 @@ func (app *InferSyncApp) Commit() abcitypes.ResponseCommit {
 	fmt.Println("COMMIT")
 	var appHash = make([]byte, 8)
 	binary.PutVarint(appHash, app.state.NumOrders)
-	app.state.Height++
 	saveState(app.state)
 
     fmt.Println("APPHASH:", appHash)
@@ -201,13 +278,21 @@ func (InferSyncApp) InitChain(req abcitypes.RequestInitChain) abcitypes.Response
 }
 
 func (app *InferSyncApp) BeginBlock(req abcitypes.RequestBeginBlock) abcitypes.ResponseBeginBlock {
+	fmt.Println("\nin BeginBlock:prev Height:\n", req.Header.Height)
 	app.currentOrders = app.orderDb.NewTransaction(true)
 	app.currentPeers = app.orderDb.NewTransaction(true)
 	app.currentRegisters = app.registerDb.NewTransaction(true)
 	return abcitypes.ResponseBeginBlock{}
 }
 
-func (InferSyncApp) EndBlock(req abcitypes.RequestEndBlock) abcitypes.ResponseEndBlock {
+func (app *InferSyncApp) EndBlock(req abcitypes.RequestEndBlock) abcitypes.ResponseEndBlock {
+	fmt.Println("in END of block:", req.Height)
+	nodeSubDomain, err := createNodeSubDomain(app.cCtx, req.Height+1)
+	if err != nil {
+		panic(err)
+	}
+	app.nodeSubDomain = nodeSubDomain
+	fmt.Println("nodeSubDomain:", nodeSubDomain)
 	return abcitypes.ResponseEndBlock{}
 }
 
@@ -225,6 +310,26 @@ func (InferSyncApp) LoadSnapshotChunk(abcitypes.RequestLoadSnapshotChunk) abcity
 
 func (InferSyncApp) ApplySnapshotChunk(abcitypes.RequestApplySnapshotChunk) abcitypes.ResponseApplySnapshotChunk {
 	return abcitypes.ResponseApplySnapshotChunk{}
+}
+
+func createNodeSubDomain(cCtx unsafe.Pointer, height int64) (string, error) {
+	
+	instance, err := getInstance(cCtx)
+	domain := "nodes.restaurant.idle.com"
+
+	if uint(instance.height) != uint(height) {
+		return "", nil
+	}
+
+	nodeEnr, err := createLocalRegisterPeer(uint(height), domain, instance.nodePeerAddr.Addrs,
+		instance.nodePeerAddr.ID, instance.sharedKey)
+	if err != nil {
+		return "", errors.New("Unable to create local subdomain") 
+	}
+
+	nodeSubDomain := CreatePeerSubDomain(nodeEnr)	
+
+	return nodeSubDomain, nil
 }
 
 func matchOrder(req *SyncRequest) (bool) {
@@ -279,8 +384,9 @@ func verifyOrderInfo(req *OrderRequest) (*OrderInfo, error) {
 
 	orderInfo.NodeAddrInfo = nodeAddrInfo.String()
 
-	// Verify Url of Enr tree of the peers
+	orderInfo.InferenceMode = req.GetInference().GetMode()
 
+	// Verify Url of Enr tree of the peers
     idle := req.GetPeers().GetIdle() 
     if idle == true {
     	fmt.Println("Verify Idle Peers")
@@ -342,6 +448,37 @@ func getOrderKV(app *InferSyncApp, info *OrderInfo) ([]byte, []byte, error) {
 	}
 
 	return key, value, err
+}
+
+func checkIdlePeer(app *InferSyncApp, info *OrderInfo) bool {
+
+	fmt.Println("checkIdlePeer:PeerURL:", info.PeerUrl)
+	fmt.Println("checkIdlePeer:len(PeerSubDomains):", len(info.PeerSubDomains))
+	fmt.Println("checkIdlePeer:app.nodeSubDomain:", app.nodeSubDomain)
+	fmt.Println("checkIdlePeer.PeerSubDomains:", info.PeerSubDomains)
+
+	for _, peerSubDomain := range(info.PeerSubDomains) {
+
+		if peerSubDomain == app.nodeSubDomain {
+			fmt.Println("Matched with local NodeSubdomain")
+			return true
+		}
+	}
+
+	return false
+}
+
+func checkAssistPeer(app *InferSyncApp, info *OrderInfo) bool {
+
+	fmt.Println("checkAssistPeer:app.nodeSubDomain:", app.nodeSubDomain)
+	fmt.Println("checkAssistPeer.PeerDomain:", info.PeerDomain)
+
+	if info.PeerDomain == app.nodeSubDomain {
+		fmt.Println("Matched PeerDomain with local NodeSubdomain")
+		return true
+	}
+
+	return false
 }
 
 func makeOrderKV(app *InferSyncApp, info *OrderInfo,
