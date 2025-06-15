@@ -17,9 +17,8 @@ message Identity {
 }
 
 message Peers {
-    bool idle = 1;
-    string url = 2;
-    repeated string subDomain = 3;
+    string url = 1;
+    repeated string subDomain = 2;
 }
 
 message Inference {

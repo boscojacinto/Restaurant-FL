@@ -61,15 +61,20 @@ type ValidatorKey struct {
 type ConsensusInstance struct {
 	ctx context.Context
 	cancel context.CancelFunc
+
 	clientId string
 	ID uint
+
 	rootDir string
 	height int64 
 	node *nm.Node
 	config *cfg.Config
 	rpc *rpclocal.Local
+
 	orderDb *badger.DB
 	registerDb *badger.DB 
+	peersDb *badger.DB
+
 	cb unsafe.Pointer	
 	subscription EventListener
 	key ValidatorKey
@@ -181,9 +186,16 @@ func Start(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointe
 	}
 	instance.registerDb = registerDb
 
+	peersDb, err := badger.Open(badger.DefaultOptions(dir + "/tmp/register"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to open register db: %v", err)
+		os.Exit(1)
+	}
+	instance.peersDb = peersDb
+
 	instance.height = 0
 
-	app := NewInferSyncApp(ctx, orderDb, registerDb)
+	app := NewInferSyncApp(ctx, orderDb, registerDb, peersDb)
 
 	flag.Parse()
 
@@ -239,12 +251,18 @@ func Stop(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointer
 
 //export SendOrder
 func SendOrder(ctx unsafe.Pointer, proof *C.char, id *C.char, enr *C.char,
-	peers *C.char, idle C.bool, onErr C.ConsensusCallBack, userData unsafe.Pointer) C.int {
+	peers *C.char, mode *C.char, onErr C.ConsensusCallBack, userData unsafe.Pointer) C.int {
 
 	if unsafe.Pointer(proof) == nil ||
 	   unsafe.Pointer(id) == nil ||
-	   unsafe.Pointer(enr) == nil {
-		return onError(errors.New("Proof, id, enr invalie"), onErr, userData)
+	   unsafe.Pointer(enr) == nil ||
+	   unsafe.Pointer(mode) == nil {
+		return onError(errors.New("Proof, id, enr, mode invalid"), onErr, userData)
+	}
+
+	modeStr := C.GoString(mode)
+	if !(modeStr == "solo" || modeStr == "assist") {
+		return onError(errors.New("Invalid inference mode"), onErr, userData)
 	}
 
 	instance, err := getInstance(ctx)
@@ -264,14 +282,14 @@ func SendOrder(ctx unsafe.Pointer, proof *C.char, id *C.char, enr *C.char,
 	var peerSubDomains []string
 
 	if unsafe.Pointer(peers) != nil {
-		nodeEnr, url, peerSubDomains, err = createPeerSubDomains(instance, enrString, peers, idle)
+		nodeEnr, url, peerSubDomains, err = createPeerSubDomains(instance, enrString, peers, modeStr)
 		if err != nil {
 			return onError(errors.New("Failed to add peers"), onErr, userData)			
 		}
 	}
 
 	tx, err := makeTxOrder(proofBytes, idStr, nodeEnr, timestampStr,
-						url, peerSubDomains, idle)
+						url, peerSubDomains, modeStr)
 	if err != nil {
 		return onError(errors.New("Cannot create order "), onErr, userData)
 	}
@@ -294,24 +312,59 @@ func Query(ctx unsafe.Pointer, path *C.char, key *C.char, cb C.ConsensusCallBack
 	abciPath := C.GoString(path)
 	abciKey := []byte(C.GoString(key))
 
-	qres, err := instance.rpc.ABCIQuery(c, abciPath, abciKey)
-	if err != nil {
-		return onError(errors.New("Cannot stop"), cb, userData)
-	}
-
-	if qres.Response.IsErr() {
-		return onError(errors.New("ABCIQuery failed"), cb, userData)
-	}
-	if !bytes.Equal(qres.Response.Key, abciKey) {
-		return onError(errors.New("returned key does not match queried key"), cb, userData)
-	}
-	
-	result := string(qres.Response.Value)
+	result, err := queryKV(instance, c, abciPath, abciKey)
 	return onSuccesfulResponse(result, cb, userData)
 }
 
+func queryKV(instance *ConsensusInstance, c context.Context,
+		path string, key []byte) (string, error) {
+
+	qres, err := instance.rpc.ABCIQuery(c, path, key)
+	if err != nil {
+		return "", errors.New("Cannot query")
+	}
+
+	if qres.Response.IsErr() {
+		return "", errors.New("Query response error")
+	}
+	if !bytes.Equal(qres.Response.Key, key) {
+		return "", errors.New("returned key does not match queried key")
+	}
+	
+	result := string(qres.Response.Value)
+	return result, nil
+}
+
+func createPeerGroup(seq uint, domain string, privKey *ecdsa.PrivateKey,
+	pAddrs [][]ma.Multiaddr, pIds []peer.ID, sharedKey *ecdsa.PrivateKey, 
+	nodeEnr string) (string, string, []string, error) {
+
+    // TODO: use safe int64 to uint
+    var url string
+    var subDomains []string		
+	url, subDomains = createLocalPeer(seq, domain, privKey,
+						pAddrs, pIds, sharedKey)
+
+	fmt.Println("URL:", url)
+	fmt.Println("subDomains:", subDomains)
+
+	nodeAddrInfo, err := EnodeToPeerInfo(nodeEnr)
+	if err != nil {
+		return "", "", nil, err
+	}
+
+    var newNodeEnr string
+
+	newNodeEnr, err = createLocalRegisterPeer(seq, domain, 
+		nodeAddrInfo.Addrs,  nodeAddrInfo.ID, sharedKey)		
+	fmt.Println("newNodeEnr:", newNodeEnr)
+	fmt.Println("\n\nENRR:", CreatePeerSubDomain(newNodeEnr))
+
+	return newNodeEnr, url, subDomains, nil
+}
+
 func createPeerSubDomains(instance *ConsensusInstance, nodeEnr string, peers *C.char,
-	idle C.bool) (string, string, []string, error) {
+	mode string) (string, string, []string, error) {
 
 	var idleCutoffTime time.Time
 	c := context.Background()
@@ -319,7 +372,6 @@ func createPeerSubDomains(instance *ConsensusInstance, nodeEnr string, peers *C.
 	block, err := instance.rpc.Block(c, &instance.height)
 	if err == nil {
 		blockTime := block.Block.Header.Time
-		//blockHeight := block.Block.Header.Height
 		blockInterval := instance.config.Consensus.TimeoutCommit
 		graceTime := blockInterval * IdleCutOffPercentage/100
 		idleCutoffTime = blockTime.Add(blockInterval-graceTime)
@@ -332,18 +384,19 @@ func createPeerSubDomains(instance *ConsensusInstance, nodeEnr string, peers *C.
 	qres, err := instance.rpc.Validators(c, nil, nil, nil)
 	fmt.Println("qres:", qres)
 	fmt.Println("instance.key.Address:", instance.key.Address)
+
 /*	if err != nil {
 		return "", "", []string{}, errors.New("Cannot query validators")
 	}
-*/
-/*	if qres.Count == 0 || qres.Total == 0 {
+
+	if qres.Count == 0 || qres.Total == 0 {
 		return "", "", []string{}, errors.New("ABCIQuery failed")
 	}
-*//*	if !bytes.Equal(qres.Response.Key, "validators") {
+	if !bytes.Equal(qres.Response.Key, "validators") {
 		return "", "", []string{}, errors.New("returned key does not match queried key")
 	}
-*/	
-/*	var validatorAddr []byte
+	
+	var validatorAddr []byte
 	lastCommitHeight := block.Block.LastCommit.Height
 	validatorsSig := block.Block.LastCommit.Signatures
 	for i, validator := range(validatorsSig) {
@@ -351,10 +404,15 @@ func createPeerSubDomains(instance *ConsensusInstance, nodeEnr string, peers *C.
 		if len(validatorAddr) != 20 {
 			continue
 		}
-	}*/
+	}
+*/
 
 	var peerIds []Peer
 	peerList := C.GoString(peers)
+
+	if len(peerList) == 0 {
+		return "", "", nil, errors.New("Peers not provided")
+	}
 
 	err = json.Unmarshal([]byte(peerList), &peerIds)
 	if err != nil {
@@ -385,30 +443,26 @@ func createPeerSubDomains(instance *ConsensusInstance, nodeEnr string, peers *C.
     }
 
     var domain string 
-	if idle == true {
+	var newNodeEnr string
+    var url string
+    var subDomains []string		
+
+	if mode == "solo" {
+
 		domain = "nodes.restaurant.idle.com"
+	} else if mode == "assist" {
+		domain = "nodes.restaurant.assist.com"
 	} else {
-		domain = "nodes.restaurant.busy.com"		
+		return "", "", nil, errors.New("Invalid mode") 		
 	}
 
-    // TODO: use safe int64 to uint
-	url, subDomains := createLocalPeer(uint(instance.height), 
-		domain, instance.key.PrivateKeyEcdsa, pAddrs, pIds, instance.sharedKey)
+	newNodeEnr, url, subDomains, err = createPeerGroup(
+		uint(instance.height), domain, 
+		instance.key.PrivateKeyEcdsa,
+		pAddrs, pIds, instance.sharedKey,
+		nodeEnr)
 
-	fmt.Println("URL:", url)
-	fmt.Println("subDomains:", subDomains)
-
-	nodeAddrInfo, err := EnodeToPeerInfo(nodeEnr)
-	if err != nil {
-		return "", "", nil, err
-	}	
-
-	newNodeEnr, err := createLocalRegisterPeer(uint(instance.height), domain, 
-		nodeAddrInfo.Addrs,  nodeAddrInfo.ID, instance.sharedKey)		
-	fmt.Println("newNodeEnr:", newNodeEnr)
-	fmt.Println("\n\nENRR:", CreatePeerSubDomain(newNodeEnr))
-
-	return newNodeEnr, url, subDomains, nil 
+	return newNodeEnr, url, subDomains, err 
 }
 
 func (instance *ConsensusInstance) listenOnEvents() {
@@ -468,19 +522,13 @@ func sendSignal(instance *ConsensusInstance, eventType string, event interface{}
 }
 
 func makeTxOrder(proof []byte, id string, enr string, timestamp string,
-	url string, peerSubDomains []string, idle C.bool) ([]byte, error) {
+	url string, peerSubDomains []string, mode string) ([]byte, error) {
 	
 	var req *SyncRequest
 	var peers Peers
 
 	if len(url) != 0 && len(peerSubDomains) != 0 {
-		var isIdle bool 
-		if idle == true {
-			isIdle = true
-		} else {
-			isIdle = false
-		}
-		peers = Peers{Idle: isIdle, Url: url, SubDomain: peerSubDomains}
+		peers = Peers{Url: url, SubDomain: peerSubDomains}
 	}
 
 	req = &SyncRequest{
@@ -488,6 +536,7 @@ func makeTxOrder(proof []byte, id string, enr string, timestamp string,
 				Order: &OrderRequest{
 					Proof: &Proof{Buf: proof},
 					Timestamp: &Timestamp{Now: timestamp},
+					Inference: &Inference{Mode: mode},
 					Identity: &Identity{ID: id, ENR: enr},
 					Peers: &peers,
 				},

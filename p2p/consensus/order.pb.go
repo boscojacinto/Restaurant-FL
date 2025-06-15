@@ -163,9 +163,8 @@ func (x *Identity) GetENR() string {
 
 type Peers struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Idle          bool                   `protobuf:"varint,1,opt,name=idle,proto3" json:"idle,omitempty"`
-	Url           string                 `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
-	SubDomain     []string               `protobuf:"bytes,3,rep,name=subDomain,proto3" json:"subDomain,omitempty"`
+	Url           string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
+	SubDomain     []string               `protobuf:"bytes,2,rep,name=subDomain,proto3" json:"subDomain,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -200,13 +199,6 @@ func (*Peers) Descriptor() ([]byte, []int) {
 	return file_order_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *Peers) GetIdle() bool {
-	if x != nil {
-		return x.Idle
-	}
-	return false
-}
-
 func (x *Peers) GetUrl() string {
 	if x != nil {
 		return x.Url
@@ -221,19 +213,64 @@ func (x *Peers) GetSubDomain() []string {
 	return nil
 }
 
+type Inference struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Mode          string                 `protobuf:"bytes,1,opt,name=mode,proto3" json:"mode,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Inference) Reset() {
+	*x = Inference{}
+	mi := &file_order_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Inference) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Inference) ProtoMessage() {}
+
+func (x *Inference) ProtoReflect() protoreflect.Message {
+	mi := &file_order_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Inference.ProtoReflect.Descriptor instead.
+func (*Inference) Descriptor() ([]byte, []int) {
+	return file_order_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *Inference) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
+}
+
 type OrderRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Proof         *Proof                 `protobuf:"bytes,1,opt,name=proof,proto3" json:"proof,omitempty"`
 	Timestamp     *Timestamp             `protobuf:"bytes,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	Identity      *Identity              `protobuf:"bytes,3,opt,name=identity,proto3" json:"identity,omitempty"`
-	Peers         *Peers                 `protobuf:"bytes,4,opt,name=peers,proto3" json:"peers,omitempty"`
+	Inference     *Inference             `protobuf:"bytes,4,opt,name=inference,proto3" json:"inference,omitempty"`
+	Peers         *Peers                 `protobuf:"bytes,5,opt,name=peers,proto3" json:"peers,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *OrderRequest) Reset() {
 	*x = OrderRequest{}
-	mi := &file_order_proto_msgTypes[4]
+	mi := &file_order_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -245,7 +282,7 @@ func (x *OrderRequest) String() string {
 func (*OrderRequest) ProtoMessage() {}
 
 func (x *OrderRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_order_proto_msgTypes[4]
+	mi := &file_order_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -258,7 +295,7 @@ func (x *OrderRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderRequest.ProtoReflect.Descriptor instead.
 func (*OrderRequest) Descriptor() ([]byte, []int) {
-	return file_order_proto_rawDescGZIP(), []int{4}
+	return file_order_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *OrderRequest) GetProof() *Proof {
@@ -282,6 +319,13 @@ func (x *OrderRequest) GetIdentity() *Identity {
 	return nil
 }
 
+func (x *OrderRequest) GetInference() *Inference {
+	if x != nil {
+		return x.Inference
+	}
+	return nil
+}
+
 func (x *OrderRequest) GetPeers() *Peers {
 	if x != nil {
 		return x.Peers
@@ -300,16 +344,18 @@ const file_order_proto_rawDesc = "" +
 	"\x03now\x18\x01 \x01(\tR\x03now\",\n" +
 	"\bIdentity\x12\x0e\n" +
 	"\x02ID\x18\x01 \x01(\tR\x02ID\x12\x10\n" +
-	"\x03ENR\x18\x02 \x01(\tR\x03ENR\"K\n" +
-	"\x05Peers\x12\x12\n" +
-	"\x04idle\x18\x01 \x01(\bR\x04idle\x12\x10\n" +
-	"\x03url\x18\x02 \x01(\tR\x03url\x12\x1c\n" +
-	"\tsubDomain\x18\x03 \x03(\tR\tsubDomain\"\xaf\x01\n" +
+	"\x03ENR\x18\x02 \x01(\tR\x03ENR\"7\n" +
+	"\x05Peers\x12\x10\n" +
+	"\x03url\x18\x01 \x01(\tR\x03url\x12\x1c\n" +
+	"\tsubDomain\x18\x02 \x03(\tR\tsubDomain\"\x1f\n" +
+	"\tInference\x12\x12\n" +
+	"\x04mode\x18\x01 \x01(\tR\x04mode\"\xde\x01\n" +
 	"\fOrderRequest\x12!\n" +
 	"\x05proof\x18\x01 \x01(\v2\v.main.ProofR\x05proof\x12-\n" +
 	"\ttimestamp\x18\x02 \x01(\v2\x0f.main.TimestampR\ttimestamp\x12*\n" +
-	"\bidentity\x18\x03 \x01(\v2\x0e.main.IdentityR\bidentity\x12!\n" +
-	"\x05peers\x18\x04 \x01(\v2\v.main.PeersR\x05peersB\tZ\a./;mainb\x06proto3"
+	"\bidentity\x18\x03 \x01(\v2\x0e.main.IdentityR\bidentity\x12-\n" +
+	"\tinference\x18\x04 \x01(\v2\x0f.main.InferenceR\tinference\x12!\n" +
+	"\x05peers\x18\x05 \x01(\v2\v.main.PeersR\x05peersB\tZ\a./;mainb\x06proto3"
 
 var (
 	file_order_proto_rawDescOnce sync.Once
@@ -323,24 +369,26 @@ func file_order_proto_rawDescGZIP() []byte {
 	return file_order_proto_rawDescData
 }
 
-var file_order_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_order_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_order_proto_goTypes = []any{
 	(*Proof)(nil),        // 0: main.Proof
 	(*Timestamp)(nil),    // 1: main.Timestamp
 	(*Identity)(nil),     // 2: main.Identity
 	(*Peers)(nil),        // 3: main.Peers
-	(*OrderRequest)(nil), // 4: main.OrderRequest
+	(*Inference)(nil),    // 4: main.Inference
+	(*OrderRequest)(nil), // 5: main.OrderRequest
 }
 var file_order_proto_depIdxs = []int32{
 	0, // 0: main.OrderRequest.proof:type_name -> main.Proof
 	1, // 1: main.OrderRequest.timestamp:type_name -> main.Timestamp
 	2, // 2: main.OrderRequest.identity:type_name -> main.Identity
-	3, // 3: main.OrderRequest.peers:type_name -> main.Peers
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	4, // 3: main.OrderRequest.inference:type_name -> main.Inference
+	3, // 4: main.OrderRequest.peers:type_name -> main.Peers
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_order_proto_init() }
@@ -354,7 +402,7 @@ func file_order_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_order_proto_rawDesc), len(file_order_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

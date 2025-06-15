@@ -42,6 +42,7 @@ type InferSyncApp struct {
 	cCtx unsafe.Pointer
 	orderDb *badger.DB
 	registerDb *badger.DB
+	peersDb *badger.DB
 	currentOrders *badger.Txn
 	currentPeers *badger.Txn
 	currentRegisters *badger.Txn
@@ -80,11 +81,13 @@ func saveState(state State) {
 	}
 }
 
-func NewInferSyncApp(cCtx unsafe.Pointer, orderDb *badger.DB, registerDb *badger.DB) *InferSyncApp {
+func NewInferSyncApp(cCtx unsafe.Pointer, orderDb *badger.DB,
+	registerDb *badger.DB, peersDb *badger.DB) *InferSyncApp {
 	state := loadState(dbm.NewMemDB())
 	return &InferSyncApp{
 		orderDb: orderDb,
 		registerDb: registerDb,
+		peersDb: peersDb,
 		state: state,
 		cCtx: cCtx,
 	}
@@ -122,13 +125,14 @@ func (app *InferSyncApp) CheckTx(req abcitypes.RequestCheckTx) abcitypes.Respons
 			status = "solo.start"
 		}
 		case "assist": {
-			if checkIdlePeer(app, orderInfo) == true &&
+			if isAssistPeer(app, orderInfo) == true &&
 			   app.nodeSubDomain != orderInfo.PeerDomain {
 				status = "assist.ping"
-			} else if checkAssistPeer(app, orderInfo) == true {
+			} else if isRoutePeer(app, orderInfo) == true {
 				status = "assist.route"
 			} else {
 				status = "assist.start"
+
 			}
 		}		
 		default: {
@@ -197,8 +201,10 @@ func (app *InferSyncApp) DeliverTx(req abcitypes.RequestDeliverTx) abcitypes.Res
 			status = "solo.done"
 		}
 		case "assist": {
-			if checkIdlePeer(app, orderInfo) == true &&
+			if isAssistPeer(app, orderInfo) == true &&
 			   app.nodeSubDomain != orderInfo.PeerDomain {
+				status = "assist.done"
+			} else if isRoutePeer(app, orderInfo) == true {
 				status = "assist.done"
 			} else {
 				status = "assist.done"
@@ -251,26 +257,49 @@ func (app *InferSyncApp) Commit() abcitypes.ResponseCommit {
 
 func (app *InferSyncApp) Query(reqQuery abcitypes.RequestQuery) (resQuery abcitypes.ResponseQuery) {
 	resQuery.Key = reqQuery.Data
-	err := app.orderDb.View(func(txn *badger.Txn) error {
-		item, err := txn.Get(reqQuery.Data)
-		if err != nil && err != badger.ErrKeyNotFound {
-			return err
+
+	var cb = func(txn *badger.Txn) error {
+			item, err := txn.Get(reqQuery.Data)
+			if err != nil && err != badger.ErrKeyNotFound {
+				return err
+			}
+			if err == badger.ErrKeyNotFound {
+				resQuery.Log = "does not exist"
+			} else {
+				return item.Value(func(val []byte) error {
+					resQuery.Log = "exists"
+					resQuery.Value = val
+					return nil
+				})
+			}
+			return nil
 		}
-		if err == badger.ErrKeyNotFound {
-			resQuery.Log = "does not exist"
-		} else {
-			return item.Value(func(val []byte) error {
-				resQuery.Log = "exists"
-				resQuery.Value = val
-				return nil
-			})
+
+	if reqQuery.Path == "orders" {
+
+		err := app.orderDb.View(cb)
+		if err != nil {
+			panic(err)
 		}
-		return nil
-	})
-	if err != nil {
-		panic(err)
+		return resQuery
+
+	} else if reqQuery.Path == "peers" {
+
+		err := app.peersDb.View(cb)
+		if err != nil {
+			panic(err)
+		}
+		return resQuery		
+	} else if reqQuery.Path == "registers" {
+
+		err := app.registerDb.View(cb)
+		if err != nil {
+			panic(err)
+		}
+		return resQuery
 	}
-	return
+
+	return resQuery
 }
 
 func (InferSyncApp) InitChain(req abcitypes.RequestInitChain) abcitypes.ResponseInitChain {
@@ -280,7 +309,7 @@ func (InferSyncApp) InitChain(req abcitypes.RequestInitChain) abcitypes.Response
 func (app *InferSyncApp) BeginBlock(req abcitypes.RequestBeginBlock) abcitypes.ResponseBeginBlock {
 	fmt.Println("\nin BeginBlock:prev Height:\n", req.Header.Height)
 	app.currentOrders = app.orderDb.NewTransaction(true)
-	app.currentPeers = app.orderDb.NewTransaction(true)
+	app.currentPeers = app.peersDb.NewTransaction(true)
 	app.currentRegisters = app.registerDb.NewTransaction(true)
 	return abcitypes.ResponseBeginBlock{}
 }
@@ -387,34 +416,36 @@ func verifyOrderInfo(req *OrderRequest) (*OrderInfo, error) {
 	orderInfo.InferenceMode = req.GetInference().GetMode()
 
 	// Verify Url of Enr tree of the peers
-    idle := req.GetPeers().GetIdle() 
-    if idle == true {
-    	fmt.Println("Verify Idle Peers")
-    	
-    	idlePeers := req.GetPeers()
-		peerUrl := idlePeers.GetUrl()
-		peerSubDomains := idlePeers.GetSubDomain()
-		
-		// TODO: Check is subdomains correspond to unlisted idle peers 
-		nodeId := req.GetIdentity().GetID()
-		domain, pubKey, err := CheckURL(peerUrl, nodeId)
-		if err != nil {
-			return nil, err
+    peers := req.GetPeers() 
+    if peers != nil {
+    	mode := req.GetInference().GetMode()
+	    if mode == "solo" {
+	    	fmt.Println("Verify Idle Peers")
+	    	
+	    	idlePeers := req.GetPeers()
+			peerUrl := idlePeers.GetUrl()
+			peerSubDomains := idlePeers.GetSubDomain()
+			
+			// TODO: Check is subdomains correspond to unlisted idle peers 
+			nodeId := req.GetIdentity().GetID()
+			domain, pubKey, err := CheckURL(peerUrl, nodeId)
+			if err != nil {
+				return nil, err
+			}
+
+			orderInfo.NodePublicKey = ecdsa.PublicKey{
+		  		Curve: pubKey.Curve,
+		        X:     new(big.Int).Set(pubKey.X),
+		        Y:     new(big.Int).Set(pubKey.Y),			
+			}
+
+			orderInfo.PeerUrl = peerUrl
+			orderInfo.PeerDomain = domain
+			orderInfo.PeerSubDomains = peerSubDomains
+		} else if mode == "assist"{
+	    	fmt.Println("Verify Assist Peers")		
 		}
-
-		orderInfo.NodePublicKey = ecdsa.PublicKey{
-	  		Curve: pubKey.Curve,
-	        X:     new(big.Int).Set(pubKey.X),
-	        Y:     new(big.Int).Set(pubKey.Y),			
-		}
-
-		orderInfo.PeerUrl = peerUrl
-		orderInfo.PeerDomain = domain
-		orderInfo.PeerSubDomains = peerSubDomains
-	} else {
-    	fmt.Println("Verify Busy Peers")		
-	}
-
+    }
 	return orderInfo, nil
 }
 
@@ -450,12 +481,12 @@ func getOrderKV(app *InferSyncApp, info *OrderInfo) ([]byte, []byte, error) {
 	return key, value, err
 }
 
-func checkIdlePeer(app *InferSyncApp, info *OrderInfo) bool {
+func isAssistPeer(app *InferSyncApp, info *OrderInfo) bool {
 
-	fmt.Println("checkIdlePeer:PeerURL:", info.PeerUrl)
-	fmt.Println("checkIdlePeer:len(PeerSubDomains):", len(info.PeerSubDomains))
-	fmt.Println("checkIdlePeer:app.nodeSubDomain:", app.nodeSubDomain)
-	fmt.Println("checkIdlePeer.PeerSubDomains:", info.PeerSubDomains)
+	fmt.Println("isAssistPeer:PeerURL:", info.PeerUrl)
+	fmt.Println("isAssistPeer:len(PeerSubDomains):", len(info.PeerSubDomains))
+	fmt.Println("isAssistPeer:app.nodeSubDomain:", app.nodeSubDomain)
+	fmt.Println("isAssistPeer.PeerSubDomains:", info.PeerSubDomains)
 
 	for _, peerSubDomain := range(info.PeerSubDomains) {
 
@@ -468,14 +499,55 @@ func checkIdlePeer(app *InferSyncApp, info *OrderInfo) bool {
 	return false
 }
 
-func checkAssistPeer(app *InferSyncApp, info *OrderInfo) bool {
+func isRoutePeer(app *InferSyncApp, info *OrderInfo) bool {
 
-	fmt.Println("checkAssistPeer:app.nodeSubDomain:", app.nodeSubDomain)
-	fmt.Println("checkAssistPeer.PeerDomain:", info.PeerDomain)
+	fmt.Println("isRoutePeer:app.nodeSubDomain:", app.nodeSubDomain)
+	fmt.Println("isRoutePeer.PeerDomain:", info.PeerDomain)
 
 	if info.PeerDomain == app.nodeSubDomain {
 		fmt.Println("Matched PeerDomain with local NodeSubdomain")
 		return true
+	}
+
+	return false
+}
+
+func presentInPeerDb(app *InferSyncApp, info *OrderInfo) bool {
+
+	var value []byte 
+
+	var cb = func(txn *badger.Txn) error {
+			item, err := txn.Get(reqQuery.Data)
+			if err != nil && err != badger.ErrKeyNotFound {
+				return err
+			}
+			if err == badger.ErrKeyNotFound {
+			} else {
+				return item.Value(func(val []byte) error {
+					value = val
+					return nil
+				})
+			}
+			return nil
+		}
+
+	err := app.peersDb.View(cb)
+	if err != nil {
+		panic(err)
+	}
+	return resQuery
+
+	fmt.Println("isAssistPeer:PeerURL:", info.PeerUrl)
+	fmt.Println("isAssistPeer:len(PeerSubDomains):", len(info.PeerSubDomains))
+	fmt.Println("isAssistPeer:app.nodeSubDomain:", app.nodeSubDomain)
+	fmt.Println("isAssistPeer.PeerSubDomains:", info.PeerSubDomains)
+
+	for _, peerSubDomain := range(info.PeerSubDomains) {
+
+		if peerSubDomain == app.nodeSubDomain {
+			fmt.Println("Matched with local NodeSubdomain")
+			return true
+		}
 	}
 
 	return false
