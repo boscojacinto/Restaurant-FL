@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"errors"
 	"unsafe"
+	"hash"
 	"crypto/ecdsa"
 	"math/big"
 	"encoding/binary"
@@ -36,6 +37,7 @@ type OrderInfo struct {
 	PeerSubDomains []string `json:"peerSubDomains"`
 	InferenceMode string `json:"inferenceMode"`
 	NodePublicKey ecdsa.PublicKey
+	Approved bool `json:"approved"`
 }
 
 type InferSyncApp struct {
@@ -132,7 +134,6 @@ func (app *InferSyncApp) CheckTx(req abcitypes.RequestCheckTx) abcitypes.Respons
 				status = "assist.route"
 			} else {
 				status = "assist.start"
-
 			}
 		}		
 		default: {
@@ -391,13 +392,14 @@ func verifyOrderProof(req *OrderRequest) (string, uint64, error) {
 	return orderProofHash, numOfOrders, nil
 }
 
-func verifyOrderInfo(req *OrderRequest) (*OrderInfo, error) {
+func verifyOrderInfo(app *InferSyncApp, req *OrderRequest) (*OrderInfo, error) {
 
 	var orderInfo = &OrderInfo{}
 
 	// Verify Node Id
 	orderInfo.NodeId = req.GetIdentity().GetID()
-	
+	orderInfo.Approved = false
+
 	// Verify Node ENR
 	nodeEnr := req.GetIdentity().GetENR()
 	fmt.Println("Node ENR is:", nodeEnr)
@@ -419,34 +421,58 @@ func verifyOrderInfo(req *OrderRequest) (*OrderInfo, error) {
     peers := req.GetPeers() 
     if peers != nil {
     	mode := req.GetInference().GetMode()
-	    if mode == "solo" {
-	    	fmt.Println("Verify Idle Peers")
-	    	
-	    	idlePeers := req.GetPeers()
-			peerUrl := idlePeers.GetUrl()
-			peerSubDomains := idlePeers.GetSubDomain()
-			
-			// TODO: Check is subdomains correspond to unlisted idle peers 
-			nodeId := req.GetIdentity().GetID()
-			domain, pubKey, err := CheckURL(peerUrl, nodeId)
-			if err != nil {
-				return nil, err
-			}
-
-			orderInfo.NodePublicKey = ecdsa.PublicKey{
-		  		Curve: pubKey.Curve,
-		        X:     new(big.Int).Set(pubKey.X),
-		        Y:     new(big.Int).Set(pubKey.Y),			
-			}
-
-			orderInfo.PeerUrl = peerUrl
-			orderInfo.PeerDomain = domain
-			orderInfo.PeerSubDomains = peerSubDomains
-		} else if mode == "assist"{
-	    	fmt.Println("Verify Assist Peers")		
+    	fmt.Println("Verify Idle Peers")
+    	
+    	idlePeers := req.GetPeers()
+		peerUrl := idlePeers.GetUrl()
+		peerSubDomains := idlePeers.GetSubDomain()
+		peerSignatures := idlePeers.GetApproval().GetSignature()
+		
+		// TODO: Check is subdomains correspond to unlisted idle peers 
+		nodeId := req.GetIdentity().GetID()
+		domain, pubKey, err := CheckURL(peerUrl, nodeId)
+		if err != nil {
+			return nil, err
 		}
+
+		orderInfo.NodePublicKey = ecdsa.PublicKey{
+	  		Curve: pubKey.Curve,
+	        X:     new(big.Int).Set(pubKey.X),
+	        Y:     new(big.Int).Set(pubKey.Y),			
+		}
+
+		var keccak hash.Hash
+		var peerEnr string
+
+		orderInfo.Approved = true
+		if mode == "assist" {
+	    	fmt.Println("Verify Assist Peers")		
+
+	    	approved = true
+			for i, subDomain := range(peerSubDomains) {
+				keccak = sha3.NewLegacyKeccak256()
+				keccak.Write([]byte(subDomain))
+
+				peerEnr, err = getPeerInRegisterDb(app, subDomain)
+				if err != nil {
+					orderInfo.Approved = false
+					break
+				}
+				if !verifyPeerSignature(keccak.Sum(nil),
+						peerSignatures[i], peerEnr) {
+					orderInfo.Approved = false
+					break
+				}
+			}			
+		} else {
+			orderInfo.Approved = true
+		}
+
+		orderInfo.PeerUrl = peerUrl
+		orderInfo.PeerDomain = domain
+		orderInfo.PeerSubDomains = peerSubDomains
     }
-	return orderInfo, nil
+	return orderInfo, nil 
 }
 
 func getOrderKV(app *InferSyncApp, info *OrderInfo) ([]byte, []byte, error) {
@@ -512,7 +538,34 @@ func isRoutePeer(app *InferSyncApp, info *OrderInfo) bool {
 	return false
 }
 
-func presentInPeerDb(app *InferSyncApp, info *OrderInfo) bool {
+func getPeerInRegisterDb(app *InferSyncApp, peerSubDomain string) (string, error) {
+
+	key := []byte(peerSubDomain + "-" + "register")
+	var value []byte
+
+	var cb = func(txn *badger.Txn) error {
+			item, err := txn.Get(key)
+			if err != nil && err != badger.ErrKeyNotFound {
+				return err
+			}
+			if err == badger.ErrKeyNotFound {
+			} else {
+				value = make([]byte, item.ValueSize())
+				_, _ = item.ValueCopy(value)
+				return nil
+			}
+			return nil
+		}
+
+	err := app.registerDb.View(cb)
+	if err != nil {
+		return "", err
+	}
+
+	return string(value), nil
+}
+
+/*func presentInPeerDb(app *InferSyncApp, info *OrderInfo) bool {
 
 	var value []byte 
 
@@ -552,7 +605,7 @@ func presentInPeerDb(app *InferSyncApp, info *OrderInfo) bool {
 
 	return false
 }
-
+*/
 func makeOrderKV(app *InferSyncApp, info *OrderInfo,
 	prevOrderHash []byte) error {
 	
@@ -655,9 +708,13 @@ func (app *InferSyncApp) isTxValid(tx []byte) (*SyncRequest, *OrderInfo, error) 
 				return nil, nil, errors.New("Invalid order proof")
 			}
 
-			orderInfo, err := verifyOrderInfo(req.GetOrder())
+			orderInfo, err := verifyOrderInfo(app, req.GetOrder())
 			if err != nil {
 				return nil, nil, errors.New("Invalid tx")
+			}
+
+			if orderInfo.Approved == false {
+				return nil, nil, errors.New("Assist not approved")				
 			}
 
 			orderInfo.ProofHash = orderProofHash	

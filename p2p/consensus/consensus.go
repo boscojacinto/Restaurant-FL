@@ -103,6 +103,7 @@ type Peer struct {
 	Connected    bool           `json:"connected"`
 	PubsubTopics []string       `json:"pubsubTopics"`
 	IdleTimestamp time.Time     `json:"idleTimestamp"`
+	Signature 	 []byte         `json:"signature"`
 }
 
 const Version = "1.0.0"
@@ -280,16 +281,18 @@ func SendOrder(ctx unsafe.Pointer, proof *C.char, id *C.char, enr *C.char,
 	var nodeEnr string
 	var url string
 	var peerSubDomains []string
+	var peerSignatures [][]byte
 
 	if unsafe.Pointer(peers) != nil {
-		nodeEnr, url, peerSubDomains, err = createPeerSubDomains(instance, enrString, peers, modeStr)
+		nodeEnr, url, peerSubDomains, peerSignatures, err = 
+			createPeerSubDomains(instance, enrString, peers, modeStr)
 		if err != nil {
 			return onError(errors.New("Failed to add peers"), onErr, userData)			
 		}
 	}
 
 	tx, err := makeTxOrder(proofBytes, idStr, nodeEnr, timestampStr,
-						url, peerSubDomains, modeStr)
+						url, peerSubDomains, peerSignatures, modeStr)
 	if err != nil {
 		return onError(errors.New("Cannot create order "), onErr, userData)
 	}
@@ -364,7 +367,7 @@ func createPeerGroup(seq uint, domain string, privKey *ecdsa.PrivateKey,
 }
 
 func createPeerSubDomains(instance *ConsensusInstance, nodeEnr string, peers *C.char,
-	mode string) (string, string, []string, error) {
+	mode string) (string, string, []string, [][]byte, error) {
 
 	var idleCutoffTime time.Time
 	c := context.Background()
@@ -411,17 +414,18 @@ func createPeerSubDomains(instance *ConsensusInstance, nodeEnr string, peers *C.
 	peerList := C.GoString(peers)
 
 	if len(peerList) == 0 {
-		return "", "", nil, errors.New("Peers not provided")
+		return "", "", nil, nil, errors.New("Peers not provided")
 	}
 
 	err = json.Unmarshal([]byte(peerList), &peerIds)
 	if err != nil {
 		fmt.Println("err:", err)
-		return "", "", nil, errors.New("Parsing peers failed")
+		return "", "", nil, nil, errors.New("Parsing peers failed")
 	}
 
 	var pAddrs [][]ma.Multiaddr
 	var pIds []peer.ID
+	var pSignatures [][]byte
 
 	for i, p := range peerIds {
         fmt.Printf("Peer %d:\n", i+1)
@@ -439,6 +443,7 @@ func createPeerSubDomains(instance *ConsensusInstance, nodeEnr string, peers *C.
         //} else {
 	        pAddrs = append(pAddrs, p.Addrs)        
 	        pIds = append(pIds, p.ID)        	
+	        pSignatures = append(pSignatures, p.Signature)
         //}
     }
 
@@ -448,12 +453,12 @@ func createPeerSubDomains(instance *ConsensusInstance, nodeEnr string, peers *C.
     var subDomains []string		
 
 	if mode == "solo" {
-
 		domain = "nodes.restaurant.idle.com"
 	} else if mode == "assist" {
 		domain = "nodes.restaurant.assist.com"
+		// check for signature
 	} else {
-		return "", "", nil, errors.New("Invalid mode") 		
+		return "", "", nil, nil, errors.New("Invalid mode") 		
 	}
 
 	newNodeEnr, url, subDomains, err = createPeerGroup(
@@ -462,7 +467,7 @@ func createPeerSubDomains(instance *ConsensusInstance, nodeEnr string, peers *C.
 		pAddrs, pIds, instance.sharedKey,
 		nodeEnr)
 
-	return newNodeEnr, url, subDomains, err 
+	return newNodeEnr, url, subDomains, pSignatures, err 
 }
 
 func (instance *ConsensusInstance) listenOnEvents() {
@@ -522,13 +527,18 @@ func sendSignal(instance *ConsensusInstance, eventType string, event interface{}
 }
 
 func makeTxOrder(proof []byte, id string, enr string, timestamp string,
-	url string, peerSubDomains []string, mode string) ([]byte, error) {
+	url string, peerSubDomains []string, peerSignatures [][]byte, mode string) ([]byte, error) {
 	
 	var req *SyncRequest
 	var peers Peers
 
 	if len(url) != 0 && len(peerSubDomains) != 0 {
-		peers = Peers{Url: url, SubDomain: peerSubDomains}
+		if mode == "assist" {
+			peers = Peers{ Url: url, SubDomain: peerSubDomains,
+					   Approval: &Approval{ Signature: peerSignatures } }
+		} else {
+			peers = Peers{ Url: url, SubDomain: peerSubDomains }
+		}
 	}
 
 	req = &SyncRequest{

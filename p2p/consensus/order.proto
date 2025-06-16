@@ -16,9 +16,14 @@ message Identity {
     string ENR = 2;     
 }
 
+message Approval {
+    repeated bytes signature = 1; 
+}
+
 message Peers {
     string url = 1;
     repeated string subDomain = 2;
+    optional Approval approval = 3;
 }
 
 message Inference {

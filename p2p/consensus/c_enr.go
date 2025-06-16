@@ -22,6 +22,7 @@ import (
     "github.com/ethereum/go-ethereum/crypto"
     "github.com/ethereum/go-ethereum/p2p/dnsdisc"
     "github.com/libp2p/go-libp2p/core/peer"
+    esecp256k1 "github.com/ethereum/go-ethereum/crypto/secp256k1"
     "github.com/decred/dcrd/dcrec/secp256k1/v4"
     p2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
     ma "github.com/multiformats/go-multiaddr"
@@ -594,4 +595,43 @@ func getAddress(pubBytes []byte) []byte {
     _, _ = hasherRIPEMD160.Write(sha)
 
     return hasherRIPEMD160.Sum(nil)
+}
+
+func getPublicKeyBytesFromEnr(nodeEnr string) ([] byte, error) {
+
+    node, err := enode.Parse(enode.V4ID{}, nodeEnr)
+
+    publicKeyBytes := []byte{}
+    err = node.Record().Load(enr.WithEntry("secp256k1", &publicKeyBytes))
+    if err != nil {
+        return nil, err
+    }
+
+    if len(publicKeyBytes) == 0 {
+        return nil, err
+    }
+
+    compPublicKey, err := base64.RawURLEncoding.DecodeString(string(publicKeyBytes))
+    if err != nil {
+        return nil, err
+    }
+
+    publicKey, err := crypto.DecompressPubkey(compPublicKey)
+    if err != nil {
+        return nil, err
+    }
+
+    pubKeyBytes := crypto.FromECDSAPub(publicKey)
+
+    return pubKeyBytes, nil
+}
+
+func verifyPeerSignature(msgHash []byte, signature []byte, nodeEnr string) bool {
+
+    pubKeyBytes, err := getPublicKeyBytesFromEnr(nodeEnr)
+    if err != nil {
+        return false
+    }
+
+    return esecp256k1.VerifySignature(pubKeyBytes, msgHash, signature)
 }
