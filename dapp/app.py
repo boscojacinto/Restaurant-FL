@@ -1,20 +1,16 @@
 import os
+import sys
 import pytz 
 import time
 import json
 import ctypes
+import base64
 from ctypes import CDLL
 from datetime import datetime
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../'))
 from p2p.client import P2PClient
 
-	# ID           peer.ID        `json:"peerID"`
-	# Protocols    []protocol.ID  `json:"protocols"`
-	# Addrs        []ma.Multiaddr `json:"addrs"`
-	# Connected    bool           `json:"connected"`
-	# PubsubTopics []string       `json:"pubsubTopics"`
-	# IdleTimestamp time.Time     `json:"idleTimestamp"`
-
-CONSENSUS_LIB = "./libconsensus.so.0"
+CONSENSUS_LIB = "p2p/build/lib/libconsensus.so.0"
 
 CLIENT_ID = 1
 
@@ -37,6 +33,7 @@ ConsensusCallBack = ctypes.CFUNCTYPE(
 )
 
 consensus_go = None
+p2p_client = None
 
 @ConsensusCallBack
 def consensusCallBack(ret_code, msg: str, user_data):
@@ -67,11 +64,20 @@ def eventconsensusCallBack(ret_code, msg: str, user_data):
 	if ret_code != 0:
 		return
 
-	event_str = msg.decode('utf-8')
-	event = json.loads(event_str)
+	signal_str = msg.decode('utf-8')
+	signal = json.loads(signal_str)
+	if signal['type'] == "NewBlock":
+		print("fNew Block incoming..")
+		pId = "16Uiu2HAmHk5rdpnfYGDh2XchPsQxvqB3j4zb9owzfFjV7fMWbQNs"
+		peer_list = json.dumps(['16Uiu2HAmHk5rdpnfYGDh2XchPsQxvqB3j4zb9owzfFjV7fMWbQNs']).encode('utf-8')		
+		p2p_client.get_msg_idle_peer(signal['event']['height'], peer_list)
+
+def CreateOrder():
+	pass
 
 def main():
 	global consensus_go
+	global p2p_client
 	consensus_go = CDLL(CONSENSUS_LIB)
 	consensus_go.Init.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
 	consensus_go.Init.restype = ctypes.c_void_p
@@ -79,11 +85,11 @@ def main():
 	consensus_go.Start.restype = ctypes.c_int
 	consensus_go.Stop.argtypes = [ctypes.c_void_p, ConsensusCallBack, ctypes.c_void_p]
 	consensus_go.Stop.restype = ctypes.c_int
-	consensus_go.UpdateNodeAddr.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ConsensusCallBack, ctypes.c_void_p]
-	consensus_go.UpdateNodeAddr.restype = ctypes.c_int
+	# consensus_go.UpdateNodeAddr.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ConsensusCallBack, ctypes.c_void_p]
+	# consensus_go.UpdateNodeAddr.restype = ctypes.c_int
 	consensus_go.SetEventCallback.argtypes = [ctypes.c_void_p, ConsensusCallBack]
 	consensus_go.SetEventCallback.restype = ctypes.c_int
-	consensus_go.SendOrder.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_bool, ConsensusCallBack, ctypes.c_void_p]
+	consensus_go.SendOrder.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ConsensusCallBack, ctypes.c_void_p]
 	consensus_go.SendOrder.restype = ctypes.c_int
 	consensus_go.Query.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ConsensusCallBack, ctypes.c_void_p]
 	consensus_go.Query.restype = ctypes.c_int
@@ -116,15 +122,18 @@ def main():
 				print(f"\nPeer at {i} is {data[i]['peerID']}")
 				remove_id = i
 			data[i]['idleTimestamp'] = datetime.now(pytz.timezone("Asia/Kolkata")).isoformat()
-		if num_peers > 1 || num_peers == 1:
-			nodeAddr = json.dumps(data[i]).encode('ascii')
-			consensus_go.UpdateNodeAddr(ctx, nodeAddr, consensusCallBack, None)
-			data.pop(remove_id)
+			encoded = base64.b64encode("a12be".encode()).decode()
+			data[i]['signature'] = encoded
+
+		# if (num_peers > 1 || num_peers == 1):
+		# 	nodeAddr = json.dumps(data[i]).encode('ascii')
+		# 	consensus_go.UpdateNodeAddr(ctx, nodeAddr, consensusCallBack, None)
+		data.pop(remove_id)
 
 	data = json.dumps(data)
 	peer_list_w_time = data.encode('ascii')
 
-	time.sleep(4)
+	# time.sleep(4)
 
 	consensus_go.Start(ctx, consensusCallBack, None)
 	print(f"Consensus Started")
@@ -136,9 +145,14 @@ def main():
 	peer_id = ctypes.c_char_p(peer_id_str)
 	node_enr_bytes = p2p_client.get_msg_enr()	
 	node_enr = ctypes.c_char_p(node_enr_bytes)
+	inf_mode = "solo".encode('utf-8')
 
-	consensus_go.SendOrder(ctx, proof, peer_id, node_enr, peer_list_w_time, True, consensusCallBack, None) #peer_list_w_time
+	consensus_go.SendOrder(ctx, proof, peer_id, node_enr, peer_list_w_time, inf_mode, consensusCallBack, None) #peer_list_w_time
 	print(f"Send Order1")	
+
+
+
+
 
 	# time.sleep(14)
 

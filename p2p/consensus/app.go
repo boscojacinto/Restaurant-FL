@@ -448,7 +448,7 @@ func verifyOrderInfo(app *InferSyncApp, req *OrderRequest) (*OrderInfo, error) {
 		if mode == "assist" {
 	    	fmt.Println("Verify Assist Peers")		
 
-	    	approved = true
+	    	orderInfo.Approved = true
 			for i, subDomain := range(peerSubDomains) {
 				keccak = sha3.NewLegacyKeccak256()
 				keccak.Write([]byte(subDomain))

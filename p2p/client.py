@@ -22,8 +22,10 @@ MSG_STORE_TIME = (5*60) # 5 minutes
 MSG_CLUSTER_ID = 89
 MSG_SHARD_ID = 0
 
+MSG_PUBLISH_TIMEOUT = (30)
+
 TASTEBOT_PUBSUB_TOPIC_1 = '/tastbot/1/rs/88/0' #'/waku/2/rs/88/0'
-TASTEBOT_PUBSUB_TOPIC_2 = '/tastbot/1/rs/89/0' #'/waku/2/rs/89/0'
+PUBSUB_IDLE_TOPIC = '/tastbot/1/rs/89/0' #'/waku/2/rs/89/0'
 
 WakuCallBack = ctypes.CFUNCTYPE(
 	None,
@@ -33,8 +35,7 @@ WakuCallBack = ctypes.CFUNCTYPE(
 )
 
 waku_go = None
-setup_content_topic = None
-msg_request_topic = None 
+cur_msg_topic_id = None
 
 class P2PClient:
     def __init__(self, client_id, node_key, host, setup_port, setup_discv5_port, setup_bs_enr, msg_port, msg_discv5_port, msg_bs_enr):
@@ -57,15 +58,13 @@ class P2PClient:
     	waku_lib_init()
 
     def start(self):
-    	(self.setup_ctx, setup_connected, self.setup_peer_id,
-    		setup_address, setup_content_topic) = self.init_setup_node()
-    	print(f"Started Setup node: {self.setup_peer_id}, {setup_address}, {setup_content_topic}")
-
-    	time.sleep(4)
+    	# (self.setup_ctx, setup_connected, self.setup_peer_id,
+    	# 	setup_address) = self.init_setup_node()
+    	# print(f"Started Setup node: {self.setup_peer_id}, {setup_address}")
 
     	(self.msg_ctx, msg_connected, self.msg_peer_id,
-    		msg_address, msg_content_topic) = self.init_msg_node()
-    	print(f"Started MSG node: {self.msg_peer_id}, {msg_address}, {msg_content_topic}")
+    		msg_address) = self.init_msg_node()
+    	print(f"Started MSG node: {self.msg_peer_id}, {msg_address}")
 
     def init_setup_node(self):
     	node_config = "{ \"host\": \"%s\", \"port\": %d, \"nodeKey\": \"%s\", \"store\": %s, \"clusterID\": %d, \"shards\": [%d], \"databaseURL\": \"%s\", \"discV5\": %s, \"discV5UDPPort\": %d, \"discV5BootstrapNodes\": [\"%s\"]}" \
@@ -87,15 +86,9 @@ class P2PClient:
     	ret = waku_go.waku_listen_addresses(ctx, wakuCallBack, ctypes.byref(address))
     	address = address.value.decode('utf-8')
 
-    	topic = self.get_setup_content_topic()
-
-    	subscription = "{ \"pubsubTopic\": \"%s\", \"contentTopics\":[\"%s\"]}" % (TASTEBOT_PUBSUB_TOPIC_1, topic.decode('utf-8'))
-    	subscription = subscription.encode('ascii')
-    	ret = waku_go.waku_relay_subscribe(ctx, subscription, wakuCallBack, None)
-
     	connected = True
 
-    	return ctx, connected, peer_id, address, topic
+    	return ctx, connected, peer_id, address
 
     def init_msg_node(self):
     	node_config = "{ \"host\": \"%s\", \"port\": %d, \"nodeKey\": \"%s\", \"store\": %s, \"clusterID\": %d, \"shards\": [%d], \"databaseURL\": \"%s\", \"discV5\": %s, \"discV5UDPPort\": %d, \"discV5BootstrapNodes\": [\"%s\"]}" \
@@ -117,30 +110,25 @@ class P2PClient:
     	ret = waku_go.waku_listen_addresses(ctx, wakuCallBack, ctypes.byref(address))
     	address = address.value.decode('utf-8')
 
-    	#current_time = datetime.now().strftime("%H:%M:%S")	
-    	topic = self.get_msg_content_topic(1)
-
-    	subscription = "{ \"pubsubTopic\": \"%s\", \"contentTopics\":[\"%s\"]}" % (TASTEBOT_PUBSUB_TOPIC_2, topic.decode('utf-8'))
-    	subscription = subscription.encode('ascii')
-    	ret = waku_go.waku_relay_subscribe(ctx, subscription, wakuCallBack, None)
-
-    	peers_list = ctypes.c_char_p(None)
-    	waku_go.waku_peers(ctx, wakuCallBack, ctypes.byref(peers_list))
-    	print(f"\n\npeers_list:{peers_list.value}")
-
-    	# peer = json.loads(peers_list.value.decode('utf-8'))[1]
-
-    	# peer_str = f"{peer['addrs'][0]}/p2p/{peer['peerID']}"
-    	# peer = ctypes.c_char_p(peer_str.encode('utf-8'))
-    	# connected = waku_go.waku_connect(ctx, peer, 20000, wakuCallBack, None)
     	connected = True
 
-    	return ctx, connected, peer_id, address, topic 
+    	return ctx, connected, peer_id, address 
 
-    def get_setup_content_topic(self):
+    # def get_setup_content_topic(self):
+    # 	app_name = ctypes.c_char_p("tastebot".encode('utf-8'))
+    # 	app_version = ctypes.c_char_p("1".encode('utf-8'))
+    # 	topic_name = ctypes.c_char_p("setup".encode('utf-8'))
+    # 	encoding = ctypes.c_char_p('proto'.encode('utf-8'))
+
+    # 	content_topic = ctypes.c_char_p(None)
+    # 	ret = waku_go.waku_content_topic(app_name, app_version, topic_name,
+    # 		encoding, wakuCallBack, ctypes.byref(content_topic))
+    # 	return content_topic.value
+
+    def get_msg_content_topic(self, i):
     	app_name = ctypes.c_char_p("tastebot".encode('utf-8'))
     	app_version = ctypes.c_char_p("1".encode('utf-8'))
-    	topic_name = ctypes.c_char_p("setup".encode('utf-8'))
+    	topic_name = ctypes.c_char_p(f"msg-{i}".encode('utf-8'))
     	encoding = ctypes.c_char_p('proto'.encode('utf-8'))
 
     	content_topic = ctypes.c_char_p(None)
@@ -148,44 +136,80 @@ class P2PClient:
     		encoding, wakuCallBack, ctypes.byref(content_topic))
     	return content_topic.value
 
-    def get_msg_content_topic(self, timestamp):
-    	app_name = ctypes.c_char_p("tastebot".encode('utf-8'))
-    	app_version = ctypes.c_char_p("1".encode('utf-8'))
-    	topic_name = ctypes.c_char_p(f"msg-{timestamp}".encode('utf-8'))
-    	encoding = ctypes.c_char_p('proto'.encode('utf-8'))
+    def get_msg_idle_peer(self, height, peer_list):
+    	ret = waku_go.waku_pex_from_peerlist(ctx, peer_list, 89, 0, wakuCallBack, None)
+    	print(f"RET:{ret}")
 
-    	content_topic = ctypes.c_char_p(None)
-    	ret = waku_go.waku_content_topic(app_name, app_version, topic_name,
-    		encoding, wakuCallBack, ctypes.byref(content_topic))
-    	return content_topic.value
+    # def update_msg_topic(self, i):
+    # 	global cur_msg_topic_id
+    # 	cur_msg_topic_id = i+1
+    # 	print(f"\nUpdate msg topic:{cur_msg_topic_id}")
 
-    def get_setup_peers(self):
-    	peers_list = ctypes.c_char_p(None)
-    	waku_go.waku_peers(self.setup_ctx, wakuCallBack, ctypes.byref(peers_list))
-    	return peers_list.value
+    # 	topics_list = ctypes.c_char_p(None)
+    # 	waku_go.waku_relay_topics(self.msg_ctx, wakuCallBack, ctypes.byref(topics_list))
+    # 	print(f"\ntopics_list.value:{topics_list.value}")
+    # 	topics = topics_list.value.decode('utf-8')
+
+    # 	topic = self.get_msg_content_topic(i)
+    # 	subscription = "{ \"pubsubTopic\": \"%s\", \"contentTopics\":[\"%s\"]}" % (TASTEBOT_PUBSUB_TOPIC_2, topic.decode('utf-8'))
+    # 	subscription = subscription.encode('ascii')
+
+    # 	if isTopicSubscribed(topics, subscription) == True:
+    # 		ret = waku_go.waku_relay_unsubscribe(self.msg_ctx, subscription, wakuCallBack, None)
+    	
+    # 	topic = self.get_msg_content_topic(i+1)
+    # 	subscription = "{ \"pubsubTopic\": \"%s\", \"contentTopics\":[\"%s\"]}" % (TASTEBOT_PUBSUB_TOPIC_2, topic.decode('utf-8'))
+    # 	subscription = subscription.encode('ascii')
+    # 	ret = waku_go.waku_relay_subscribe(self.msg_ctx, subscription, wakuCallBack, None)
+
+    def publish_msg(self, msg):
+    	topic = self.get_msg_content_topic(self.msg_topic_id)
+    	current_time = int(datetime.now().timestamp())
+    	message = "{ \"payload\": \"%s\", \"contentTopic\":\"%s\", \"timestamp\":%d}" % (msg, topic.decode('utf-8'), current_time)
+    	message = message.encode('ascii')    	
+    	waku_go.waku_relay_publish(ctx, message, topic, MSG_PUBLISH_TIMEOUT, wakuCallBack, None)
+
+    # def get_setup_peers(self):
+    # 	peers_list = ctypes.c_char_p(None)
+    # 	waku_go.waku_peers(self.setup_ctx, wakuCallBack, ctypes.byref(peers_list))
+    # 	return peers_list.value
 
     def get_msg_peers(self):
     	peers_list = ctypes.c_char_p(None)
     	waku_go.waku_peers(self.msg_ctx, wakuCallBack, ctypes.byref(peers_list))
     	return peers_list.value
 
-    def connect_setup_to_peer(self, peerId):
-    	peer = ctypes.c_char_p(peerId.encode('utf-8'))
-    	connected = waku_go.waku_connect(self.setup_ctx, peer, 20000, wakuCallBack, None)
+    # def connect_setup_to_peer(self, peerId):
+    # 	peer = ctypes.c_char_p(peerId.encode('utf-8'))
+    # 	connected = waku_go.waku_connect(self.setup_ctx, peer, 20000, wakuCallBack, None)
 
     def connect_msg_to_peer(self, peerId):
     	peer = ctypes.c_char_p(peerId.encode('utf-8'))
     	connected = waku_go.waku_connect(self.msg_ctx, peer, 20000, wakuCallBack, None)
 
-    def get_setup_enr(self):
-    	enr = ctypes.c_char_p(None)
-    	waku_go.waku_get_enr(self.setup_ctx, wakuCallBack, ctypes.byref(enr))
-    	return enr.value
+    # def get_setup_enr(self):
+    # 	enr = ctypes.c_char_p(None)
+    # 	waku_go.waku_get_enr(self.setup_ctx, wakuCallBack, ctypes.byref(enr))
+    # 	return enr.value
 
     def get_msg_enr(self):
     	enr = ctypes.c_char_p(None)
     	waku_go.waku_get_enr(self.msg_ctx, wakuCallBack, ctypes.byref(enr))
     	return enr.value
+
+def isTopicSubscribed(topics_list, subscription):
+	print(f"topics_list:{topics_list}")
+	if topics_list == 'null':
+		return False
+
+	topics = json.loads(topics_list)
+	num_topics = len(topics)
+	for i in range(num_topics):
+		print(f"topics[i]:{topics[i]}")
+		if subscription == topics[i]:
+			return True
+
+	return False
 
 
 @WakuCallBack
@@ -211,26 +235,26 @@ def wakuCallBack(ret_code, msg: str, user_data):
 		data_ref[0] = ctypes.cast(msg_ptr, ctypes.c_char_p)
 		data_ptr = data_ref[0]
 
-@WakuCallBack
-def setupEventCallBack(ret_code, msg: str, user_data):
-	print(f"EVENT ret: {ret_code}, msg: {msg}, user_data:{user_data}")
-	if ret_code != 0:
-		return
+# @WakuCallBack
+# def setupEventCallBack(ret_code, msg: str, user_data):
+# 	print(f"EVENT ret: {ret_code}, msg: {msg}, user_data:{user_data}")
+# 	if ret_code != 0:
+# 		return
 
-	event_str = msg.decode('utf-8')
-	event = json.loads(event_str)
-	if event['type'] == "message":
-		msgId = event['event']['messageId']
-		pubsub_topic = event['event']['pubsubTopic']
-		waku_message = event['event']['wakuMessage']
-		print(f"messageId:{msgId}")
-		if pubsub_topic == TASTEBOT_PUBSUB_TOPIC_1:
-			content_topic = waku_message['contentTopic']
-			payload_b64 = waku_message['payload']
-			if content_topic == "/tastebot/1/customer-list/proto":
-				print(f"Setup (server) -- instore")
-			else:
-				print(f"Other")
+# 	event_str = msg.decode('utf-8')
+# 	event = json.loads(event_str)
+# 	if event['type'] == "message":
+# 		msgId = event['event']['messageId']
+# 		pubsub_topic = event['event']['pubsubTopic']
+# 		waku_message = event['event']['wakuMessage']
+# 		print(f"messageId:{msgId}")
+# 		if pubsub_topic == TASTEBOT_PUBSUB_TOPIC_1:
+# 			content_topic = waku_message['contentTopic']
+# 			payload_b64 = waku_message['payload']
+# 			if content_topic == "/tastebot/1/customer-list/proto":
+# 				print(f"Setup (server) -- instore")
+# 			else:
+# 				print(f"Other")
 
 @WakuCallBack
 def msgEventCallBack(ret_code, msg: str, user_data):
@@ -248,7 +272,7 @@ def msgEventCallBack(ret_code, msg: str, user_data):
 		if pubsub_topic == TASTEBOT_PUBSUB_TOPIC_2:
 			content_topic = waku_message['contentTopic']
 			payload_b64 = waku_message['payload']
-			if content_topic == "/tastebot/1/customer-list/proto":
+			if content_topic == f"/tastebot/1/msg-{cur_msg_topic_id}/proto":
 				print(f"Setup (server) -- instore")
 			else:
 				print(f"Other")
@@ -283,6 +307,8 @@ def waku_lib_init():
 	waku_go.waku_peer_cnt.restype = ctypes.c_int
 	waku_go.waku_relay_subscribe.argtypes = [ctypes.c_void_p, ctypes.c_char_p, WakuCallBack, ctypes.c_void_p]
 	waku_go.waku_relay_subscribe.restype = ctypes.c_int
+	waku_go.waku_relay_unsubscribe.argtypes = [ctypes.c_void_p, ctypes.c_char_p, WakuCallBack, ctypes.c_void_p]
+	waku_go.waku_relay_unsubscribe.restype = ctypes.c_int
 	waku_go.waku_set_event_callback.argtypes = [ctypes.c_void_p, WakuCallBack]
 	waku_go.waku_relay_topics.argtypes = [ctypes.c_void_p, WakuCallBack, ctypes.c_void_p]
 	waku_go.waku_relay_topics.restype = ctypes.c_int
@@ -290,6 +316,13 @@ def waku_lib_init():
 	waku_go.waku_store_local_query.restype = ctypes.c_int
 	waku_go.waku_get_enr.argtypes = [ctypes.c_void_p, WakuCallBack, ctypes.c_void_p]
 	waku_go.waku_get_enr.restype = ctypes.c_int
+	waku_go.waku_relay_publish.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int, WakuCallBack, ctypes.c_void_p]
+	waku_go.waku_relay_publish.restype = ctypes.c_int
+	waku_go.waku_pex_from_peerid.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int, ctypes.c_int, WakuCallBack, ctypes.c_void_p]
+	waku_go.waku_pex_from_peerid.restype = ctypes.c_int
+	waku_go.waku_pex_from_peerlist.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int, ctypes.c_int, WakuCallBack, ctypes.c_void_p]
+	waku_go.waku_pex_from_peerlist.restype = ctypes.c_int
+
 
 if __name__ == "__main__":
 	host = "192.168.1.26"

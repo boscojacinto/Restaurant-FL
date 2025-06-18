@@ -187,7 +187,7 @@ func Start(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointe
 	}
 	instance.registerDb = registerDb
 
-	peersDb, err := badger.Open(badger.DefaultOptions(dir + "/tmp/register"))
+	peersDb, err := badger.Open(badger.DefaultOptions(dir + "/tmp/peers"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to open register db: %v", err)
 		os.Exit(1)
@@ -208,8 +208,8 @@ func Start(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointe
 
 	instance.node = node 
 	instance.rpc = rpclocal.New(node)
-	//eventCh, _ := instance.rpc.Subscribe(instance.ctx, "tastebot-subscribe", "tm.event='NewBlock'")
-	eventCh, _ := instance.rpc.Subscribe(instance.ctx, "tastebot-subscribe", "tm.event='Tx' AND order.transaction.user_id='12345'")
+	eventCh, _ := instance.rpc.Subscribe(instance.ctx, "tastebot-subscribe", "tm.event='NewBlock'")
+	//eventCh, _ := instance.rpc.Subscribe(instance.ctx, "tastebot-subscribe", "tm.event='Tx' AND order.transaction.user_id='12345'")
 	
 	instance.subscription = EventListener{
 		ctx: instance.ctx,
