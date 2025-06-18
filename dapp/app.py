@@ -13,6 +13,7 @@ from p2p.client import P2PClient
 CONSENSUS_LIB = "p2p/build/lib/libconsensus.so.0"
 
 CLIENT_ID = 1
+ROOT_PATH = f"/home/boscojacinto/projects/TasteBot/Restaurant-FL/p2p/consensus/client_{CLIENT_ID}"
 
 HOST = "192.168.1.26"
 NODE_KEY = 'fbcf082527559a8c79544373f78845f81b14b2d0cc2de55998d75e06b60c5b5e'
@@ -34,6 +35,71 @@ ConsensusCallBack = ctypes.CFUNCTYPE(
 
 consensus_go = None
 p2p_client = None
+
+class AppClient:
+    def __init__(self):
+    	global consensus_go
+    	
+    	consensus_go = CDLL(CONSENSUS_LIB)
+    	consensus_go.Init.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+    	consensus_go.Init.restype = ctypes.c_void_p
+    	consensus_go.Start.argtypes = [ctypes.c_void_p, ConsensusCallBack, ctypes.c_void_p]
+    	consensus_go.Start.restype = ctypes.c_int
+    	consensus_go.Stop.argtypes = [ctypes.c_void_p, ConsensusCallBack, ctypes.c_void_p]
+    	consensus_go.Stop.restype = ctypes.c_int
+    	consensus_go.SetEventCallback.argtypes = [ctypes.c_void_p, ConsensusCallBack]
+    	consensus_go.SetEventCallback.restype = ctypes.c_int
+    	consensus_go.SendOrder.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ConsensusCallBack, ctypes.c_void_p]
+    	consensus_go.SendOrder.restype = ctypes.c_int
+    	consensus_go.Query.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ConsensusCallBack, ctypes.c_void_p]
+    	consensus_go.Query.restype = ctypes.c_int
+
+    	self.p2p_client = P2PClient(CLIENT_ID, NODE_KEY, HOST, SETUP_PORT, SETUP_DISCV5_PORT, SETUP_BS_ENR,
+    			MSG_PORT, MSG_DISCV5_PORT, MSG_BS_ENR)
+    	root_path = ctypes.c_char_p(ROOT_PATH.encode('utf-8'))
+    	node_key = ctypes.c_char_p(self.p2p_client.node_key.encode('utf-8'))
+    	client_id = str(CLIENT_ID).encode('ascii')
+
+    	self.consensus_ctx = consensus_go.Init(client_id, root_path, node_key)
+
+    def start(self, consensus_cb):
+    	global consensus_go
+
+    	self.p2p_client.start()
+    	self.cb = ConsensusCallBack(consensus_cb)
+    	consensus_go.SetEventCallback(self.consensus_ctx, self.cb)
+    	consensus_go.Start(self.consensus_ctx, consensusCallBack, None)
+
+    def stop(self):
+    	consensus_go.Stop(self.consensus_ctx, consensusCallBack, None)
+
+    def createOrder(self):
+    	global consensus_go
+    	
+    	proofStr = "thisistheproof"
+    	proof = ctypes.c_char_p(proofStr.encode('utf-8'))
+
+    	peer_id_str = self.p2p_client.msg_peer_id.encode('utf-8')
+    	peer_id = ctypes.c_char_p(peer_id_str)
+    	node_enr_bytes = self.p2p_client.get_msg_enr()	
+    	node_enr = ctypes.c_char_p(node_enr_bytes)
+    	inf_mode = "solo".encode('utf-8')
+
+    	consensus_go.SendOrder(self.consensus_ctx, proof, peer_id, node_enr, peer_list_w_time, inf_mode, consensusCallBack, None) #peer_list_w_time
+    	print(f"Send Order1")
+
+    def on_consensus_cb(self, ret_code, msg: str, user_data):
+    	print(f"EVENT ret: {ret_code}, msg: {msg}, user_data:{user_data}")
+    	if ret_code != 0:
+    		return
+
+    	signal_str = msg.decode('utf-8')
+    	signal = json.loads(signal_str)
+    	if signal['type'] == "NewBlock":
+    		print("fNew Block incoming..")
+    		pId = "16Uiu2HAmHk5rdpnfYGDh2XchPsQxvqB3j4zb9owzfFjV7fMWbQNs"
+    		peer_list = json.dumps(['16Uiu2HAmHk5rdpnfYGDh2XchPsQxvqB3j4zb9owzfFjV7fMWbQNs']).encode('utf-8')		
+    		#p2p_client.get_msg_idle_peer(signal['event']['height'], peer_list)
 
 @ConsensusCallBack
 def consensusCallBack(ret_code, msg: str, user_data):
@@ -58,59 +124,7 @@ def consensusCallBack(ret_code, msg: str, user_data):
 		data_ref[0] = ctypes.cast(msg_ptr, ctypes.c_char_p)
 		data_ptr = data_ref[0]
 
-@ConsensusCallBack
-def eventconsensusCallBack(ret_code, msg: str, user_data):
-	print(f"EVENT ret: {ret_code}, msg: {msg}, user_data:{user_data}")
-	if ret_code != 0:
-		return
-
-	signal_str = msg.decode('utf-8')
-	signal = json.loads(signal_str)
-	if signal['type'] == "NewBlock":
-		print("fNew Block incoming..")
-		pId = "16Uiu2HAmHk5rdpnfYGDh2XchPsQxvqB3j4zb9owzfFjV7fMWbQNs"
-		peer_list = json.dumps(['16Uiu2HAmHk5rdpnfYGDh2XchPsQxvqB3j4zb9owzfFjV7fMWbQNs']).encode('utf-8')		
-		p2p_client.get_msg_idle_peer(signal['event']['height'], peer_list)
-
-def CreateOrder():
-	pass
-
-def main():
-	global consensus_go
-	global p2p_client
-	consensus_go = CDLL(CONSENSUS_LIB)
-	consensus_go.Init.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
-	consensus_go.Init.restype = ctypes.c_void_p
-	consensus_go.Start.argtypes = [ctypes.c_void_p, ConsensusCallBack, ctypes.c_void_p]
-	consensus_go.Start.restype = ctypes.c_int
-	consensus_go.Stop.argtypes = [ctypes.c_void_p, ConsensusCallBack, ctypes.c_void_p]
-	consensus_go.Stop.restype = ctypes.c_int
-	# consensus_go.UpdateNodeAddr.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ConsensusCallBack, ctypes.c_void_p]
-	# consensus_go.UpdateNodeAddr.restype = ctypes.c_int
-	consensus_go.SetEventCallback.argtypes = [ctypes.c_void_p, ConsensusCallBack]
-	consensus_go.SetEventCallback.restype = ctypes.c_int
-	consensus_go.SendOrder.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ConsensusCallBack, ctypes.c_void_p]
-	consensus_go.SendOrder.restype = ctypes.c_int
-	consensus_go.Query.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ConsensusCallBack, ctypes.c_void_p]
-	consensus_go.Query.restype = ctypes.c_int
-
-	root_path_str = f"/home/boscojacinto/projects/TasteBot/Restaurant-FL/p2p/consensus/client_{CLIENT_ID}"
-	root_path = ctypes.c_char_p(root_path_str.encode('utf-8'))
-	p2p_client = P2PClient(CLIENT_ID, NODE_KEY, HOST, SETUP_PORT, SETUP_DISCV5_PORT, SETUP_BS_ENR,
-					MSG_PORT, MSG_DISCV5_PORT, MSG_BS_ENR)
-
-	node_key = ctypes.c_char_p(p2p_client.node_key.encode('utf-8'))
-	client_id = str(CLIENT_ID).encode('ascii')
-	ctx = consensus_go.Init(client_id, root_path, node_key)
-	# node id tm 04c6ff08d435e1b3f7fde44bdab924a166071bbb
-	
-	consensus_go.SetEventCallback(ctx, eventconsensusCallBack)
-	
-	p2p_client.start()
-	print(f"P2P Started")
-
-	time.sleep(4)
-
+def getPeers(p2p_client):
 	if p2p_client.msg_peer_id != None:
 		peers_list = p2p_client.get_msg_peers()
 		peers_string = peers_list.decode('utf-8')
@@ -125,77 +139,24 @@ def main():
 			encoded = base64.b64encode("a12be".encode()).decode()
 			data[i]['signature'] = encoded
 
-		# if (num_peers > 1 || num_peers == 1):
-		# 	nodeAddr = json.dumps(data[i]).encode('ascii')
-		# 	consensus_go.UpdateNodeAddr(ctx, nodeAddr, consensusCallBack, None)
 		data.pop(remove_id)
 
 	data = json.dumps(data)
 	peer_list_w_time = data.encode('ascii')
 
-	# time.sleep(4)
-
-	consensus_go.Start(ctx, consensusCallBack, None)
-	print(f"Consensus Started")
-
-	proofStr = "thisistheproof"
-	proof = ctypes.c_char_p(proofStr.encode('utf-8'))
-
-	peer_id_str = p2p_client.msg_peer_id.encode('utf-8')
-	peer_id = ctypes.c_char_p(peer_id_str)
-	node_enr_bytes = p2p_client.get_msg_enr()	
-	node_enr = ctypes.c_char_p(node_enr_bytes)
-	inf_mode = "solo".encode('utf-8')
-
-	consensus_go.SendOrder(ctx, proof, peer_id, node_enr, peer_list_w_time, inf_mode, consensusCallBack, None) #peer_list_w_time
-	print(f"Send Order1")	
-
-
-
-
-
-	# time.sleep(14)
-
-	# proofStr = "thisistheproof1"
-	# proof = ctypes.c_char_p(proofStr.encode('utf-8'))
-
-	# peer_id_str = p2p_client.msg_peer_id.encode('utf-8')
-	# peer_id = ctypes.c_char_p(peer_id_str)
-	# consensus_go.SendOrder(ctx, proof, peer_id, node_enr, peer_list_w_time, True, consensusCallBack, None) #node_enr
-	# print(f"Send Order2")
-
-
-	# path_str = "data"
-	# path = ctypes.c_char_p(path_str.encode('utf-8'))
-	# key_str = "order"
-	# key = ctypes.c_char_p(key_str.encode('utf-8'))
-	# value = ctypes.c_char_p(None)
-	# consensus_go.Query(ctx, path, key, consensusCallBack, ctypes.byref(value))
-	# value = value.value.decode('utf-8')
-	# print(f"Value:{value}")
-
-	# proofStr = "thisistheproof2"
-	# proof = ctypes.c_char_p(proofStr.encode('utf-8'))
-	# consensus_go.SendOrder(ctx, proof, consensusCallBack, None)
-	# print(f"Send Order2")	
-
-
-	# # consensus_go.Stop(ctx, consensusCallBack, None)
-	# # print(f"STOPPED")	
-
-	while True:
-		time.sleep(1)
+def query(consensus_ctx):
+	path_str = "data"
+	path = ctypes.c_char_p(path_str.encode('utf-8'))
+	key_str = "order"
+	key = ctypes.c_char_p(key_str.encode('utf-8'))
+	value = ctypes.c_char_p(None)
+	consensus_go.Query(consensus_ctx, path, key, consensusCallBack, ctypes.byref(value))
+	value = value.value.decode('utf-8')
+	print(f"Value:{value}")
 
 if __name__ == "__main__":
-	main()
+	app = AppClient()
+	app.start(consensus_cb=app.on_consensus_cb)
 
-
-	# req = consenus_proto.SyncRequest()
-	# order = req.order
-	# dummy = req.dummy
-
-	# dummy.state = "test"
-	# order.proof.buf = b"thisistheproof"
-	# order.timestamp.now = datetime.now().strftime("%H:%M:%S")
-	# order.identity.publicKey = '4ddecde332eff9353c8a7df4b429299af13bbfe2f5baa7f4474c93faf2fea0b5'
-	# print(req.SerializeToString())
+	while True:
+		time.sleep(0.2)
