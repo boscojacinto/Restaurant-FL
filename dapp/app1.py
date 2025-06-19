@@ -85,7 +85,9 @@ class AppClient:
     	node_enr = ctypes.c_char_p(node_enr_bytes)
     	inf_mode = "solo".encode('utf-8')
 
-    	consensus_go.SendOrder(self.consensus_ctx, proof, peer_id, node_enr, peer_list_w_time, inf_mode, consensusCallBack, None) #peer_list_w_time
+    	peer_list = getPeers(self.p2p_client)
+
+    	consensus_go.SendOrder(self.consensus_ctx, proof, peer_id, node_enr, peer_list, inf_mode, consensusCallBack, None) #peer_list_w_time
     	print(f"Send Order1")
 
     def on_consensus_cb(self, ret_code, msg: str, user_data):
@@ -125,24 +127,26 @@ def consensusCallBack(ret_code, msg: str, user_data):
 		data_ptr = data_ref[0]
 
 def getPeers(p2p_client):
+
 	if p2p_client.msg_peer_id != None:
-		peers_list = p2p_client.get_msg_peers()
-		peers_string = peers_list.decode('utf-8')
-		data = json.loads(peers_string)
+		plist = p2p_client.get_msg_peers()
+		peers_string = plist.decode('utf-8')
+		peers = json.loads(peers_string)
 
-		num_peers = len(data)
+		num_peers = len(peers)
 		for i in range(num_peers):
-			if (data[i]['peerID'] == p2p_client.msg_peer_id):
-				print(f"\nPeer at {i} is {data[i]['peerID']}")
+			if (peers[i]['peerID'] == p2p_client.msg_peer_id):
+				print(f"\nPeer at {i} is {peers[i]['peerID']}")
 				remove_id = i
-			data[i]['idleTimestamp'] = datetime.now(pytz.timezone("Asia/Kolkata")).isoformat()
+			peers[i]['idleTimestamp'] = datetime.now(pytz.timezone("Asia/Kolkata")).isoformat()
 			encoded = base64.b64encode("a12be".encode()).decode()
-			data[i]['signature'] = encoded
+			peers[i]['signature'] = encoded
 
-		data.pop(remove_id)
+		peers.pop(remove_id)
 
-	data = json.dumps(data)
-	peer_list_w_time = data.encode('ascii')
+	peers = json.dumps(peers)
+	peer_list = peers.encode('ascii')
+	return peer_list
 
 def query(consensus_ctx):
 	path_str = "data"
@@ -157,6 +161,9 @@ def query(consensus_ctx):
 if __name__ == "__main__":
 	app = AppClient()
 	app.start(consensus_cb=app.on_consensus_cb)
+
+	time.sleep(4)
+	app.createOrder()
 
 	while True:
 		time.sleep(0.2)

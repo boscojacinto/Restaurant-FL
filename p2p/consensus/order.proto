@@ -17,7 +17,7 @@ message Identity {
 }
 
 message Approval {
-    repeated bytes signature = 1; 
+    repeated string signature = 1; 
 }
 
 message Peers {

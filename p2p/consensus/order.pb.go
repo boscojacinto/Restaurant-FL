@@ -163,7 +163,7 @@ func (x *Identity) GetENR() string {
 
 type Approval struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Signature     [][]byte               `protobuf:"bytes,1,rep,name=signature,proto3" json:"signature,omitempty"`
+	Signature     []string               `protobuf:"bytes,1,rep,name=signature,proto3" json:"signature,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -198,7 +198,7 @@ func (*Approval) Descriptor() ([]byte, []int) {
 	return file_order_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *Approval) GetSignature() [][]byte {
+func (x *Approval) GetSignature() []string {
 	if x != nil {
 		return x.Signature
 	}
@@ -398,7 +398,7 @@ const file_order_proto_rawDesc = "" +
 	"\x02ID\x18\x01 \x01(\tR\x02ID\x12\x10\n" +
 	"\x03ENR\x18\x02 \x01(\tR\x03ENR\"(\n" +
 	"\bApproval\x12\x1c\n" +
-	"\tsignature\x18\x01 \x03(\fR\tsignature\"u\n" +
+	"\tsignature\x18\x01 \x03(\tR\tsignature\"u\n" +
 	"\x05Peers\x12\x10\n" +
 	"\x03url\x18\x01 \x01(\tR\x03url\x12\x1c\n" +
 	"\tsubDomain\x18\x02 \x03(\tR\tsubDomain\x12/\n" +

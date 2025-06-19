@@ -28,8 +28,8 @@ MSG_CLUSTER_ID = 89
 MSG_SHARD_ID = [0]
 MSG_STORE_DB = "sqlite3://msg_store.db"
 
-TASTEBOT_PUBSUB_TOPIC_1 = '/tastbot/1/rs/88/0' #'/waku/2/rs/88/0'
-TASTEBOT_PUBSUB_TOPIC_2 = '/tastbot/1/rs/89/0' #'/waku/2/rs/89/0'
+TASTEBOT_PUBSUB_TOPIC_1 = '/waku/2/rs/88/0'
+TASTEBOT_PUBSUB_TOPIC_2 = '/waku/2/rs/89/0'
 
 WakuCallBack = ctypes.CFUNCTYPE(
 	None,

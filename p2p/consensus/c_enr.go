@@ -626,12 +626,12 @@ func getPublicKeyBytesFromEnr(nodeEnr string) ([] byte, error) {
     return pubKeyBytes, nil
 }
 
-func verifyPeerSignature(msgHash []byte, signature []byte, nodeEnr string) bool {
+func verifyPeerSignature(msgHash []byte, signature string, nodeEnr string) bool {
 
     pubKeyBytes, err := getPublicKeyBytesFromEnr(nodeEnr)
     if err != nil {
         return false
     }
 
-    return esecp256k1.VerifySignature(pubKeyBytes, msgHash, signature)
+    return esecp256k1.VerifySignature(pubKeyBytes, msgHash, []byte(signature))
 }

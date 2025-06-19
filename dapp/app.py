@@ -5,6 +5,8 @@ import time
 import json
 import ctypes
 import base64
+import threading
+import asyncio
 from ctypes import CDLL
 from datetime import datetime
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../'))
@@ -40,6 +42,10 @@ class AppClient:
     def __init__(self):
     	global consensus_go
     	
+    	self.thread = None
+    	self.lock = threading.Lock()
+    	self.creating_order = False
+
     	consensus_go = CDLL(CONSENSUS_LIB)
     	consensus_go.Init.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
     	consensus_go.Init.restype = ctypes.c_void_p
@@ -66,16 +72,42 @@ class AppClient:
     	global consensus_go
 
     	self.p2p_client.start()
-    	self.cb = ConsensusCallBack(consensus_cb)
-    	consensus_go.SetEventCallback(self.consensus_ctx, self.cb)
+    	
+    	self.consensus_cb = ConsensusCallBack(consensus_cb)
+    	consensus_go.SetEventCallback(self.consensus_ctx, self.consensus_cb)
     	consensus_go.Start(self.consensus_ctx, consensusCallBack, None)
+    	
+    	self.thread = threading.Thread(target=self.run)
+    	self.thread.start()
 
     def stop(self):
     	consensus_go.Stop(self.consensus_ctx, consensusCallBack, None)
+    	if self.thread:
+    		self.thread.join()
 
-    def createOrder(self):
+    def run(self):
+
+    	while True:
+    		with self.lock:
+    			if self.creating_order == True:
+    				print(f"\nCreating Order..\n")
+    				ret = asyncio.run(self.create_order())
+    				print(f"\nDone creating Order.\n")
+    				self.creating_order = False
+
+    def initiate_order(self):
+    	with self.lock:
+    		try:
+    			self.creating_order = True
+    		except Exception as e:
+    			print(f"Order already in process:{e}")
+
+    async def create_order(self):
     	global consensus_go
     	
+    	if self.p2p_client.msg_peer_id == None:
+    		return False
+
     	proofStr = "thisistheproof"
     	proof = ctypes.c_char_p(proofStr.encode('utf-8'))
 
@@ -85,7 +117,12 @@ class AppClient:
     	node_enr = ctypes.c_char_p(node_enr_bytes)
     	inf_mode = "solo".encode('utf-8')
 
-    	consensus_go.SendOrder(self.consensus_ctx, proof, peer_id, node_enr, peer_list_w_time, inf_mode, consensusCallBack, None) #peer_list_w_time
+    	peer_list = await find_peers(self.p2p_client, self.consensus_ctx, 1, None)
+    	peer_list = json.dumps(peer_list)
+    	print(f"PEER_LIST:{peer_list}")
+
+    	consensus_go.SendOrder(self.consensus_ctx, proof, peer_id, node_enr, 
+    		peer_list.encode('ascii'), inf_mode, consensusCallBack, None)
     	print(f"Send Order1")
 
     def on_consensus_cb(self, ret_code, msg: str, user_data):
@@ -124,39 +161,38 @@ def consensusCallBack(ret_code, msg: str, user_data):
 		data_ref[0] = ctypes.cast(msg_ptr, ctypes.c_char_p)
 		data_ptr = data_ref[0]
 
-def getPeers(p2p_client):
-	if p2p_client.msg_peer_id != None:
-		peers_list = p2p_client.get_msg_peers()
-		peers_string = peers_list.decode('utf-8')
-		data = json.loads(peers_string)
+async def find_peers(p2p_client, consensus_ctx, height, url):
+	
+	# if height != 0:
+	# 	from_peers = query(consensus_ctx, "peers", f"{url}-peers")
+	# else:
+	# 	from_peers = None
 
-		num_peers = len(data)
-		for i in range(num_peers):
-			if (data[i]['peerID'] == p2p_client.msg_peer_id):
-				print(f"\nPeer at {i} is {data[i]['peerID']}")
-				remove_id = i
-			data[i]['idleTimestamp'] = datetime.now(pytz.timezone("Asia/Kolkata")).isoformat()
-			encoded = base64.b64encode("a12be".encode()).decode()
-			data[i]['signature'] = encoded
+	from_peers = json.dumps(['16Uiu2HAmHk5rdpnfYGDh2XchPsQxvqB3j4zb9owzfFjV7fMWbQNs']).encode('utf-8')
+	peers = await p2p_client.req_msg_idle_peer(from_peers)
+	
+	peer_list = []
+	for peer in peers:
+		peer_list.append(json.loads(peer.to_json()))
 
-		data.pop(remove_id)
+	print(f"ppppeer_list:{peer_list}")
+	return peer_list
 
-	data = json.dumps(data)
-	peer_list_w_time = data.encode('ascii')
-
-def query(consensus_ctx):
-	path_str = "data"
-	path = ctypes.c_char_p(path_str.encode('utf-8'))
-	key_str = "order"
-	key = ctypes.c_char_p(key_str.encode('utf-8'))
+def query(consensus_ctx, key, path):
+	path = ctypes.c_char_p(path.encode('utf-8'))
+	key = ctypes.c_char_p(key.encode('utf-8'))
 	value = ctypes.c_char_p(None)
 	consensus_go.Query(consensus_ctx, path, key, consensusCallBack, ctypes.byref(value))
 	value = value.value.decode('utf-8')
 	print(f"Value:{value}")
+	return value
 
 if __name__ == "__main__":
 	app = AppClient()
 	app.start(consensus_cb=app.on_consensus_cb)
+
+	time.sleep(4)
+	app.initiate_order()
 
 	while True:
 		time.sleep(0.2)

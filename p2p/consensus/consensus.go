@@ -102,8 +102,8 @@ type Peer struct {
 	Addrs        []ma.Multiaddr `json:"addrs"`
 	Connected    bool           `json:"connected"`
 	PubsubTopics []string       `json:"pubsubTopics"`
-	IdleTimestamp time.Time     `json:"idleTimestamp"`
-	Signature 	 []byte         `json:"signature"`
+	Timestamp time.Time     	`json:"timestamp"`
+	Signature 	 string         `json:"signature"`
 }
 
 const Version = "1.0.0"
@@ -281,7 +281,7 @@ func SendOrder(ctx unsafe.Pointer, proof *C.char, id *C.char, enr *C.char,
 	var nodeEnr string
 	var url string
 	var peerSubDomains []string
-	var peerSignatures [][]byte
+	var peerSignatures []string
 
 	if unsafe.Pointer(peers) != nil {
 		nodeEnr, url, peerSubDomains, peerSignatures, err = 
@@ -367,7 +367,7 @@ func createPeerGroup(seq uint, domain string, privKey *ecdsa.PrivateKey,
 }
 
 func createPeerSubDomains(instance *ConsensusInstance, nodeEnr string, peers *C.char,
-	mode string) (string, string, []string, [][]byte, error) {
+	mode string) (string, string, []string, []string, error) {
 
 	var idleCutoffTime time.Time
 	c := context.Background()
@@ -425,7 +425,7 @@ func createPeerSubDomains(instance *ConsensusInstance, nodeEnr string, peers *C.
 
 	var pAddrs [][]ma.Multiaddr
 	var pIds []peer.ID
-	var pSignatures [][]byte
+	var pSignatures []string
 
 	for i, p := range peerIds {
         fmt.Printf("Peer %d:\n", i+1)
@@ -434,10 +434,11 @@ func createPeerSubDomains(instance *ConsensusInstance, nodeEnr string, peers *C.
         fmt.Printf("  Addrs: %v\n", p.Addrs)
         fmt.Printf("  Connected: %v\n", p.Connected)
         fmt.Printf("  PubsubTopics: %v\n", p.PubsubTopics)
-        fmt.Printf("  IdleTimestamp: %v\n", p.IdleTimestamp)
+        fmt.Printf("  Timestamp: %v\n", p.Timestamp)
+        fmt.Printf("  Signature: %v\n", p.Signature)
 
         //if idleCutoffTime != (0 * time.Second) {
-	        //if p.IdleTimestamp.Compare(idleCutoffTime) >= 0  {
+	        //if p.Timestamp.Compare(idleCutoffTime) >= 0  {
 	        //	pAddrs = append(pAddrs, p.Addrs)
 	        //}        	
         //} else {
@@ -527,7 +528,7 @@ func sendSignal(instance *ConsensusInstance, eventType string, event interface{}
 }
 
 func makeTxOrder(proof []byte, id string, enr string, timestamp string,
-	url string, peerSubDomains []string, peerSignatures [][]byte, mode string) ([]byte, error) {
+	url string, peerSubDomains []string, peerSignatures []string, mode string) ([]byte, error) {
 	
 	var req *SyncRequest
 	var peers Peers

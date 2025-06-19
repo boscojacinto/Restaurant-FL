@@ -2,10 +2,15 @@ import os
 import sys
 import time
 import json
+import pytz
 import ctypes
 import base64
+import threading
 from ctypes import CDLL
+from typing import List, Optional
 from datetime import datetime
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json, Undefined
 #import restaurant_pb2
 
 DISC_URL = "enrtree://AKP74RJLRUIRLPUD3KHFKX23B5LKQYSTWE4KPXZUMJQZSLG4LYMY2@nodes.restaurants.com"
@@ -24,8 +29,8 @@ MSG_SHARD_ID = 0
 
 MSG_PUBLISH_TIMEOUT = (30)
 
-TASTEBOT_PUBSUB_TOPIC_1 = '/tastbot/1/rs/88/0' #'/waku/2/rs/88/0'
-PUBSUB_IDLE_TOPIC = '/tastbot/1/rs/89/0' #'/waku/2/rs/89/0'
+TASTEBOT_PUBSUB_TOPIC_1 = '/waku/2/rs/88/0'
+PUBSUB_IDLE_TOPIC = '/waku/2/rs/89/0'
 
 WakuCallBack = ctypes.CFUNCTYPE(
 	None,
@@ -36,6 +41,17 @@ WakuCallBack = ctypes.CFUNCTYPE(
 
 waku_go = None
 cur_msg_topic_id = None
+
+@dataclass_json #(undefined=Undefined.EXCLUDE)
+@dataclass
+class Peer:
+    peerID: str
+    protocols: List[str]
+    addrs: List[str]
+    connected: bool
+    pubsubTopics: List[str]
+    timestamp: Optional[str] = ""
+    signature: Optional[str] = "123abc"
 
 class P2PClient:
     def __init__(self, client_id, node_key, host, setup_port, setup_discv5_port, setup_bs_enr, msg_port, msg_discv5_port, msg_bs_enr):
@@ -58,6 +74,7 @@ class P2PClient:
     	waku_lib_init()
 
     def start(self):
+    	
     	# (self.setup_ctx, setup_connected, self.setup_peer_id,
     	# 	setup_address) = self.init_setup_node()
     	# print(f"Started Setup node: {self.setup_peer_id}, {setup_address}")
@@ -136,9 +153,10 @@ class P2PClient:
     		encoding, wakuCallBack, ctypes.byref(content_topic))
     	return content_topic.value
 
-    def get_msg_idle_peer(self, height, peer_list):
-    	ret = waku_go.waku_pex_from_peerlist(ctx, peer_list, 89, 0, wakuCallBack, None)
-    	print(f"RET:{ret}")
+    async def req_msg_idle_peer(self, peer_list):
+    	ret = waku_go.waku_pex_from_peerlist(self.msg_ctx, peer_list, 89, 0, wakuCallBack, None)
+    	time.sleep(3)
+    	return filter_idle_peers(self)
 
     # def update_msg_topic(self, i):
     # 	global cur_msg_topic_id
@@ -196,6 +214,26 @@ class P2PClient:
     	enr = ctypes.c_char_p(None)
     	waku_go.waku_get_enr(self.msg_ctx, wakuCallBack, ctypes.byref(enr))
     	return enr.value
+
+def filter_idle_peers(client):
+	plist = client.get_msg_peers()
+	peers_string = plist.decode('utf-8')
+	peers = Peer.schema().loads(peers_string, many=True)
+	
+	idle_filter = lambda p: p.peerID != client.msg_peer_id and PUBSUB_IDLE_TOPIC in p.pubsubTopics
+	pl = iter(peers)
+	plist = list(filter(idle_filter, pl))
+	for peer in plist:
+		print(f"Peer ID: {peer.peerID}")
+		print(f"Protocols: {peer.protocols}")
+		print(f"Addresses: {peer.addrs}")
+		print(f"Connected: {peer.connected}")
+		print(f"Pubsub Topics: {peer.pubsubTopics}")
+		peer.timestamp = datetime.now(pytz.timezone("Asia/Kolkata")).isoformat()
+		print(f"Timestamp: {peer.timestamp}")
+		print(f"Signature: {peer.signature}")
+			
+	return plist
 
 def isTopicSubscribed(topics_list, subscription):
 	print(f"topics_list:{topics_list}")
