@@ -162,8 +162,8 @@ if __name__ == "__main__":
 	app = AppClient()
 	app.start(consensus_cb=app.on_consensus_cb)
 
-	time.sleep(4)
-	app.createOrder()
+	#time.sleep(4)
+	#app.createOrder()
 
 	while True:
 		time.sleep(0.2)

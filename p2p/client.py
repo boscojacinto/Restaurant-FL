@@ -31,6 +31,7 @@ MSG_PUBLISH_TIMEOUT = (30)
 
 TASTEBOT_PUBSUB_TOPIC_1 = '/waku/2/rs/88/0'
 PUBSUB_IDLE_TOPIC = '/waku/2/rs/89/0'
+PUBSUB_BUSY_TOPIC = '/waku/2/rs/90/0'
 
 WakuCallBack = ctypes.CFUNCTYPE(
 	None,
@@ -42,7 +43,7 @@ WakuCallBack = ctypes.CFUNCTYPE(
 waku_go = None
 cur_msg_topic_id = None
 
-@dataclass_json #(undefined=Undefined.EXCLUDE)
+@dataclass_json
 @dataclass
 class Peer:
     peerID: str
@@ -158,27 +159,29 @@ class P2PClient:
     	time.sleep(3)
     	return filter_idle_peers(self)
 
-    # def update_msg_topic(self, i):
-    # 	global cur_msg_topic_id
-    # 	cur_msg_topic_id = i+1
-    # 	print(f"\nUpdate msg topic:{cur_msg_topic_id}")
+    def update_msg_topics(self, state):
+    	if state == "idle":
+    		topic = PUBSUB_BUSY_TOPIC
+    	elif state == "busy":
+    		topic = PUBSUB_IDLE_TOPIC
 
-    # 	topics_list = ctypes.c_char_p(None)
-    # 	waku_go.waku_relay_topics(self.msg_ctx, wakuCallBack, ctypes.byref(topics_list))
-    # 	print(f"\ntopics_list.value:{topics_list.value}")
-    # 	topics = topics_list.value.decode('utf-8')
+    	topics_list = ctypes.c_char_p(None)
+    	waku_go.waku_relay_topics(self.msg_ctx, wakuCallBack, ctypes.byref(topics_list))
+    	subs = topics_list.value.decode('utf-8')
 
-    # 	topic = self.get_msg_content_topic(i)
-    # 	subscription = "{ \"pubsubTopic\": \"%s\", \"contentTopics\":[\"%s\"]}" % (TASTEBOT_PUBSUB_TOPIC_2, topic.decode('utf-8'))
-    # 	subscription = subscription.encode('ascii')
+    	if isTopicSubscribed(subs, topic) == True:
+    		sub = "{ \"pubsubTopic\": \"%s\"}" % topic.decode('utf-8')
+    		sub = sub.encode('ascii')
+    		ret = waku_go.waku_relay_unsubscribe(self.msg_ctx, sub, wakuCallBack, None)
 
-    # 	if isTopicSubscribed(topics, subscription) == True:
-    # 		ret = waku_go.waku_relay_unsubscribe(self.msg_ctx, subscription, wakuCallBack, None)
+    	if state == "idle":
+    		topic = PUBSUB_IDLE_TOPIC
+    	elif state == "busy":
+    		topic = PUBSUB_BUSY_TOPIC
     	
-    # 	topic = self.get_msg_content_topic(i+1)
-    # 	subscription = "{ \"pubsubTopic\": \"%s\", \"contentTopics\":[\"%s\"]}" % (TASTEBOT_PUBSUB_TOPIC_2, topic.decode('utf-8'))
-    # 	subscription = subscription.encode('ascii')
-    # 	ret = waku_go.waku_relay_subscribe(self.msg_ctx, subscription, wakuCallBack, None)
+    	sub = "{ \"pubsubTopic\": \"%s\"}" % topic.decode('utf-8')
+    	sub = sub.encode('ascii')
+    	ret = waku_go.waku_relay_subscribe(self.msg_ctx, sub, wakuCallBack, None)
 
     def publish_msg(self, msg):
     	topic = self.get_msg_content_topic(self.msg_topic_id)
@@ -235,16 +238,16 @@ def filter_idle_peers(client):
 			
 	return plist
 
-def isTopicSubscribed(topics_list, subscription):
-	print(f"topics_list:{topics_list}")
-	if topics_list == 'null':
+def isTopicSubscribed(subscription_list, topic):
+	print(f"subscription_list:{subscription_list}")
+	if subscription_list == 'null':
 		return False
 
-	topics = json.loads(topics_list)
-	num_topics = len(topics)
-	for i in range(num_topics):
-		print(f"topics[i]:{topics[i]}")
-		if subscription == topics[i]:
+	subs = json.loads(subscription_list)
+	num_subs = len(subs)
+	for i in range(num_subs):
+		print(f"subs[i]:{subs[i]}")
+		if topic == subs[i]:
 			return True
 
 	return False

@@ -14,6 +14,7 @@ import (
 	dbm "github.com/tendermint/tm-db"	
 	"google.golang.org/protobuf/proto"
 	abcitypes "github.com/tendermint/tendermint/abci/types"
+	tmquery "github.com/tendermint/tendermint/libs/pubsub/query"
 )
 
 const AppVersion = 1
@@ -50,6 +51,7 @@ type InferSyncApp struct {
 	currentRegisters *badger.Txn
 	state State
 	nodeSubDomain string
+	subCheckTxEvents []string
 }
 
 var _ abcitypes.Application = (*InferSyncApp)(nil)
@@ -84,7 +86,7 @@ func saveState(state State) {
 }
 
 func NewInferSyncApp(cCtx unsafe.Pointer, orderDb *badger.DB,
-	registerDb *badger.DB, peersDb *badger.DB) *InferSyncApp {
+	registerDb *badger.DB, peersDb *badger.DB, events []string) *InferSyncApp {
 	state := loadState(dbm.NewMemDB())
 	return &InferSyncApp{
 		orderDb: orderDb,
@@ -92,6 +94,7 @@ func NewInferSyncApp(cCtx unsafe.Pointer, orderDb *badger.DB,
 		peersDb: peersDb,
 		state: state,
 		cCtx: cCtx,
+		subCheckTxEvents: events,
 	}
 }
 
@@ -120,37 +123,41 @@ func (app *InferSyncApp) CheckTx(req abcitypes.RequestCheckTx) abcitypes.Respons
 		return abcitypes.ResponseCheckTx{Code: uint32(3), Codespace: "order.tx.check"}
 	}
 
-	//tm.event='Tx' AND tx.hash='%X'
 	var status string
 	switch orderInfo.InferenceMode {
 		case "solo": {
-			status = "solo.start"
+			status = "solo_start"
 		}
 		case "assist": {
 			if isAssistPeer(app, orderInfo) == true &&
 			   app.nodeSubDomain != orderInfo.PeerDomain {
-				status = "assist.ping"
+				status = "assist_ping"
 			} else if isRoutePeer(app, orderInfo) == true {
-				status = "assist.route"
+				status = "assist_route"
 			} else {
-				status = "assist.start"
+				status = "assist_start"
 			}
 		}		
 		default: {
-			status = "solo.start"		
+			status = "solo_start"		
 		}
 	}
 	
 	var events []abcitypes.Event
 	events = []abcitypes.Event {
 	        {
-	            Type: "order.tx.check",
+	            Type: CheckTxEventType,
 	            Attributes: []abcitypes.EventAttribute{
-	                {Key: []byte("orderinfo"), Value: orderInfoBytes, Index: true},
+	                {Key: []byte("orderInfo"), Value: orderInfoBytes, Index: true},
 	                {Key: []byte("status"), Value: []byte(status), Index: true},
 	            },
 	        },
 	    }
+
+	sent := sendCheckTxEvent(app, events)
+	if sent == true {
+		fmt.Println("Sent Event to Application")
+	}    
 
 	return abcitypes.ResponseCheckTx{Code: code, Codespace: "order.tx.check", Events: events}
 }
@@ -199,20 +206,20 @@ func (app *InferSyncApp) DeliverTx(req abcitypes.RequestDeliverTx) abcitypes.Res
 	var status string
 	switch orderInfo.InferenceMode {
 		case "solo": {
-			status = "solo.done"
+			status = "solo_done"
 		}
 		case "assist": {
 			if isAssistPeer(app, orderInfo) == true &&
 			   app.nodeSubDomain != orderInfo.PeerDomain {
-				status = "assist.done"
+				status = "assist_done"
 			} else if isRoutePeer(app, orderInfo) == true {
-				status = "assist.done"
+				status = "assist_done"
 			} else {
-				status = "assist.done"
+				status = "assist_done"
 			}
 		}		
 		default: {
-			status = "solo.done"	
+			status = "solo_done"	
 		}
 	}
 
@@ -225,9 +232,9 @@ func (app *InferSyncApp) DeliverTx(req abcitypes.RequestDeliverTx) abcitypes.Res
 	fmt.Println("\nSending event\n")
 	events = []abcitypes.Event {
 	        {
-	            Type: "order.tx.deliver",
+	            Type: DeliverTxEventType,
 	            Attributes: []abcitypes.EventAttribute{
-	                {Key: []byte("orderinfo"), Value: orderInfoBytes, Index: true},
+	                {Key: []byte("orderInfo"), Value: orderInfoBytes, Index: true},
 	                {Key: []byte("status"), Value: []byte(status), Index: true},
 	            },
 	        },
@@ -340,6 +347,68 @@ func (InferSyncApp) LoadSnapshotChunk(abcitypes.RequestLoadSnapshotChunk) abcity
 
 func (InferSyncApp) ApplySnapshotChunk(abcitypes.RequestApplySnapshotChunk) abcitypes.ResponseApplySnapshotChunk {
 	return abcitypes.ResponseApplySnapshotChunk{}
+}
+
+func sendCheckTxEvent(app *InferSyncApp, events []abcitypes.Event) (bool) {
+
+	var ret bool = false
+	
+	instance, err := getInstance(app.cCtx)
+	if err != nil {
+		return ret
+	}
+
+	if len(app.subCheckTxEvents) == 0 {
+		return ret
+	}
+
+	var eventType string = ""
+	result := make(map[string][][]byte)
+	
+	checkInSubsEvents := func(eventType string) bool {
+		for _, subsEventType := range app.subCheckTxEvents {
+			if eventType == subsEventType {
+				fmt.Println("Match")
+				return true
+			}
+		}
+
+		return false
+	} 
+
+	// Only one event for now
+	for _, event := range events {
+		if len(event.Type) == 0 {
+			continue
+		}
+
+		if checkInSubsEvents(event.Type) == false {
+			continue
+		}
+
+		for _, attr := range event.Attributes {
+			if len(attr.Key) == 0 {
+				continue
+			}
+
+			ret = true
+			compositeTag := fmt.Sprintf("%s.%s", event.Type, attr.Key)
+			result[compositeTag] = append(result[compositeTag], attr.Value)
+		}
+
+		eventType = event.Type
+	}
+
+	if eventType == "" {
+		return false
+	}
+
+	var query *tmquery.Query
+	query = tmquery.MustParse(fmt.Sprintf("%s='%s' AND %s EXISTS",
+				"tm.event", "Tx", eventType))
+	instance.subscription.checkTxCh <- CheckTxEvent{Query: query.String(), Events: result}
+
+	return ret
 }
 
 func createNodeSubDomain(cCtx unsafe.Pointer, height int64) (string, error) {

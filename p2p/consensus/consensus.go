@@ -51,6 +51,11 @@ import (
  "github.com/libp2p/go-libp2p/core/protocol"
 )
 
+const (
+	CheckTxEventType = "order_tx_check"
+	DeliverTxEventType = "order_tx_deliver"
+)
+
 type ValidatorKey struct {
     Address string
     PublicKey string
@@ -82,9 +87,16 @@ type ConsensusInstance struct {
 	nodePeerAddr Peer
 }
 
+type CheckTxEvent struct {
+	Query  string              `json:"query"`
+	Events map[string][][]byte `json:"events"`
+}
+
 type EventListener struct {
 	ctx context.Context
-	eventCh <-chan ctypes.ResultEvent
+	newBlockCh <-chan ctypes.ResultEvent
+	deliverTxCh <-chan ctypes.ResultEvent
+	checkTxCh chan CheckTxEvent
 }
 
 type SignalData struct {
@@ -94,6 +106,15 @@ type SignalData struct {
 
 type SignalNewBlock struct {
 	Height int64 `json:"height"`
+}
+
+type OrderTx struct {
+	OrderInfo OrderInfo `json:"orderInfo"`
+	Status int64 `json:"status"`
+} 
+
+type SignalOrderTx struct {
+	Type string `json:"type"`
 }
 
 type Peer struct {
@@ -196,7 +217,8 @@ func Start(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointe
 
 	instance.height = 0
 
-	app := NewInferSyncApp(ctx, orderDb, registerDb, peersDb)
+	appSubsEvents := []string{ CheckTxEventType }
+	app := NewInferSyncApp(ctx, orderDb, registerDb, peersDb, appSubsEvents)
 
 	flag.Parse()
 
@@ -208,14 +230,19 @@ func Start(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointe
 
 	instance.node = node 
 	instance.rpc = rpclocal.New(node)
-	eventCh, _ := instance.rpc.Subscribe(instance.ctx, "tastebot-subscribe", "tm.event='NewBlock'")
-	//eventCh, _ := instance.rpc.Subscribe(instance.ctx, "tastebot-subscribe", "tm.event='Tx' AND order.transaction.user_id='12345'")
-	
+
+	ch_0, _ := instance.rpc.Subscribe(instance.ctx, "tastebot-subscribe", "tm.event='NewBlock'")
+	ch_1, _ := instance.rpc.Subscribe(instance.ctx, "tastebot-subscribe", "tm.event='Tx' AND " + DeliverTxEventType + " EXISTS") //
+	ch_2 := make(chan CheckTxEvent)
+
 	instance.subscription = EventListener{
 		ctx: instance.ctx,
-		eventCh: eventCh,
 	}	
 	
+	instance.subscription.newBlockCh = ch_0
+	instance.subscription.deliverTxCh = ch_1
+	instance.subscription.checkTxCh = ch_2
+		
 	go instance.listenOnEvents()
 	instance.node.Start()
 	return onError(nil, onErr, userData)
@@ -471,25 +498,93 @@ func createPeerSubDomains(instance *ConsensusInstance, nodeEnr string, peers *C.
 	return newNodeEnr, url, subDomains, pSignatures, err 
 }
 
+func createAndSendSignal(instance *ConsensusInstance, eventType string, msg interface{}) {
+	
+	fmt.Println("in createAndSendSignal:", eventType)
+	if eventType == "NewBlock" {
+		block := msg.(ctypes.ResultEvent).Data.(types.EventDataNewBlock).Block
+		height := block.Height
+		instance.height = height
+		signal := SignalNewBlock{
+			Height: height,
+		}
+		sendSignal(instance, "NewBlock", signal)
+
+	} else if eventType == CheckTxEventType {
+		events := msg.(CheckTxEvent).Events
+		
+		var orderInfo OrderInfo
+		var status string
+
+		orderInfoKey := eventType+".orderInfo"
+	    orderInfoKey = string([]byte(orderInfoKey))
+	    statusKey := eventType+".status"
+	    statusKey = string([]byte(statusKey))
+
+	    for key, values := range events {
+	        fmt.Printf("Key: %s\n", key)
+	        //fmt.Printf("Values: %v\n", values)
+
+	        if string(key) == orderInfoKey {
+	        	fmt.Println("MatchorderInfoKey")
+	        	json.Unmarshal(values[0], &orderInfo)
+	        	fmt.Println("orderInfo.ProofHash:", orderInfo.ProofHash) 
+	        } else if string(key) == statusKey {
+	        	fmt.Println("MatchstatusKey")
+	        	status = string(values[0])
+	        	fmt.Println("status:", status)
+	        }
+	    }		
+
+/*		orderInfo := events.GetAttributes()[0]
+		status := events.GetAttributes()[1]
+		
+		if orderInfo.GetKey() != "orderInfo" || status.GetKey() != "status" {
+			break
+		}
+		
+		orderInfo = orderInfo.GetValue()
+		status = status.GetValue() 
+*/
+/*		signal := SignalOrderTx{
+			Type: "order.tx",
+			OrderInfo: orderInfo,
+			Status: status,
+		}
+		sendSignal(instance, eventType, signal)
+*/	} else if eventType == DeliverTxEventType {
+		//fmt.Println("\nmsg deliver:", msg.(ctypes.ResultEvent))
+	}
+}
+
 func (instance *ConsensusInstance) listenOnEvents() {
 	for {
 		select {
 		case <-instance.ctx.Done():
 			return
-		case msg := <-instance.subscription.eventCh:
-			fmt.Println("EVENT:", msg.Query)
+		case msg := <-instance.subscription.newBlockCh:
+			fmt.Println("CH0 EVENT:", msg.Query)
+
 			if msg.Query == "tm.event='NewBlock'" {
-				block := msg.Data.(types.EventDataNewBlock).Block
-				height := block.Height
-				instance.height = height
-				signal := SignalNewBlock{
-					Height: height,
-				}
-				sendSignal(instance, "NewBlock", signal)
-			} else if msg.Query == "tm.event='Tx'" {
-				fmt.Println("\norder.transaction event\n")
+				instance.height = msg.Data.(types.EventDataNewBlock).Block.Height
+				createAndSendSignal(instance, "NewBlock", msg)
 			}
-		}
+
+		case msg := <-instance.subscription.deliverTxCh:
+			fmt.Println("CH1 EVENT:", msg.Query)
+
+			if msg.Query == "tm.event='Tx' AND " + DeliverTxEventType + " EXISTS" {
+				fmt.Println("\norder.tx.deliver = solo.done\n")
+				createAndSendSignal(instance, DeliverTxEventType, msg)			
+			}
+
+		case msg := <-instance.subscription.checkTxCh:
+			fmt.Println("CH3 EVENT:", msg.Query)
+
+			if msg.Query == "tm.event='Tx' AND "+ CheckTxEventType + " EXISTS" {
+				createAndSendSignal(instance, CheckTxEventType, msg)	
+			}
+		}			
 	}
 }
 

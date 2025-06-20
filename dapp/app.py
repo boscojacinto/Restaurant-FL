@@ -3,14 +3,18 @@ import sys
 import pytz 
 import time
 import json
+import queue
 import ctypes
 import base64
 import threading
 import asyncio
 from ctypes import CDLL
 from datetime import datetime
+from typing import List, Optional
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../'))
 from p2p.client import P2PClient
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json, Undefined
 
 CONSENSUS_LIB = "p2p/build/lib/libconsensus.so.0"
 
@@ -35,6 +39,21 @@ ConsensusCallBack = ctypes.CFUNCTYPE(
 	ctypes.c_void_p
 )
 
+@dataclass_json
+@dataclass
+class OrderInfo:
+	ProofHash: str
+	NumOfOrders: int
+	NodeId: str
+	NodeEnr: str
+	NodeAddrInfo: str
+	PeerUrl: str
+	PeerDomain: str
+	PeerSubDomains: List[str]
+	InferenceMode: str
+	#NodePublicKey ecdsa.PublicKey
+	Approved: bool
+
 consensus_go = None
 p2p_client = None
 
@@ -43,7 +62,8 @@ class AppClient:
     	global consensus_go
     	
     	self.thread = None
-    	self.lock = threading.Lock()
+    	#self.lock = threading.Lock()
+    	self.order_queue = queue.Queue()
     	self.creating_order = False
 
     	consensus_go = CDLL(CONSENSUS_LIB)
@@ -86,23 +106,45 @@ class AppClient:
     		self.thread.join()
 
     def run(self):
+    	while True: #not self.order_queue.empty():
+    		order = self.order_queue.get()
+    		#print("\nIN RUN\n")
+    		#with self.lock:
+    		time.sleep(2)
+    		#print(f"IN LOOP:{self.creating_order}")
+    		#if self.creating_order == False:
+    		print("\nIn thread")
+    		print(f"\nCreating Order..{order}\n")
+    		ret = asyncio.run(self.create_order(order))
+    		print(f"\nDone creating Order.{order}\n")
+    		self.order_queue.task_done()
+    		self.creating_order = False
 
-    	while True:
-    		with self.lock:
-    			if self.creating_order == True:
-    				print(f"\nCreating Order..\n")
-    				ret = asyncio.run(self.create_order())
-    				print(f"\nDone creating Order.\n")
-    				self.creating_order = False
 
-    def initiate_order(self):
-    	with self.lock:
-    		try:
-    			self.creating_order = True
-    		except Exception as e:
-    			print(f"Order already in process:{e}")
+    def on_consensus_cb(self, ret_code, msg: str, user_data):
+    	print(f"EVENT ret: {ret_code}, msg: {msg}, user_data:{user_data}")
+    	if ret_code != 0:
+    		return
 
-    async def create_order(self):
+    	signal_str = msg.decode('utf-8')
+    	signal = json.loads(signal_str)
+    	if signal['type'] == "NewBlock":
+    		print("fNew Block incoming..")
+    		pId = "16Uiu2HAmHk5rdpnfYGDh2XchPsQxvqB3j4zb9owzfFjV7fMWbQNs"
+    		peer_list = json.dumps(['16Uiu2HAmHk5rdpnfYGDh2XchPsQxvqB3j4zb9owzfFjV7fMWbQNs']).encode('utf-8')		
+    		#p2p_client.get_msg_idle_peer(signal['event']['height'], peer_list)
+
+    def add_order(self, order):
+    	self.order_queue.put(order)
+    	print(f"\nAdding order:{self.order_queue.empty()}")
+    	#with self.lock:
+    	try:
+    		self.creating_order = False
+    		print(f"creating_order:{self.creating_order}")
+    	except Exception as e:
+    		print(f"Order already in process:{e}")
+
+    async def create_order(self, order):
     	global consensus_go
     	
     	if self.p2p_client.msg_peer_id == None:
@@ -125,18 +167,9 @@ class AppClient:
     		peer_list.encode('ascii'), inf_mode, consensusCallBack, None)
     	print(f"Send Order1")
 
-    def on_consensus_cb(self, ret_code, msg: str, user_data):
-    	print(f"EVENT ret: {ret_code}, msg: {msg}, user_data:{user_data}")
-    	if ret_code != 0:
-    		return
+    def compelete_order(self, order):
+    	self.p2p_client.update_msg_topics()
 
-    	signal_str = msg.decode('utf-8')
-    	signal = json.loads(signal_str)
-    	if signal['type'] == "NewBlock":
-    		print("fNew Block incoming..")
-    		pId = "16Uiu2HAmHk5rdpnfYGDh2XchPsQxvqB3j4zb9owzfFjV7fMWbQNs"
-    		peer_list = json.dumps(['16Uiu2HAmHk5rdpnfYGDh2XchPsQxvqB3j4zb9owzfFjV7fMWbQNs']).encode('utf-8')		
-    		#p2p_client.get_msg_idle_peer(signal['event']['height'], peer_list)
 
 @ConsensusCallBack
 def consensusCallBack(ret_code, msg: str, user_data):
@@ -192,7 +225,7 @@ if __name__ == "__main__":
 	app.start(consensus_cb=app.on_consensus_cb)
 
 	time.sleep(4)
-	app.initiate_order()
+	app.add_order("Hello")
 
 	while True:
 		time.sleep(0.2)
