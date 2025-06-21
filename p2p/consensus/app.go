@@ -363,7 +363,7 @@ func sendCheckTxEvent(app *InferSyncApp, events []abcitypes.Event) (bool) {
 	}
 
 	var eventType string = ""
-	result := make(map[string][][]byte)
+	result := make(map[string][]string)
 	
 	checkInSubsEvents := func(eventType string) bool {
 		for _, subsEventType := range app.subCheckTxEvents {
@@ -392,8 +392,8 @@ func sendCheckTxEvent(app *InferSyncApp, events []abcitypes.Event) (bool) {
 			}
 
 			ret = true
-			compositeTag := fmt.Sprintf("%s.%s", event.Type, attr.Key)
-			result[compositeTag] = append(result[compositeTag], attr.Value)
+			compositeTag := fmt.Sprintf("%s.%s", event.Type, string(attr.Key))
+			result[compositeTag] = append(result[compositeTag], string(attr.Value))
 		}
 
 		eventType = event.Type

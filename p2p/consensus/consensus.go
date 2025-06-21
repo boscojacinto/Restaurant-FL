@@ -89,7 +89,7 @@ type ConsensusInstance struct {
 
 type CheckTxEvent struct {
 	Query  string              `json:"query"`
-	Events map[string][][]byte `json:"events"`
+	Events map[string][]string `json:"events"`
 }
 
 type EventListener struct {
@@ -105,16 +105,27 @@ type SignalData struct {
 }
 
 type SignalNewBlock struct {
-	Height int64 `json:"height"`
+	NewBlock NewBlock
+}
+
+type NewBlock struct {
+	Height  int64 `json:"height,omitempty"`
+	Time time.Time `json:"time"`
+	LastBlockID types.BlockID `json:"last_block_id"`
+	DataHash []byte `json:"data_hash,omitempty"`
+	AppHash []byte `json:"app_hash,omitempty"`
+	ProposerAddress []byte `json:"proposer_address,omitempty"`
+	Signatures []types.CommitSig `json:"signatures"`
 }
 
 type OrderTx struct {
 	OrderInfo OrderInfo `json:"orderInfo"`
-	Status int64 `json:"status"`
+	Status string `json:"status"`
 } 
 
 type SignalOrderTx struct {
 	Type string `json:"type"`
+	Order OrderTx
 }
 
 type Peer struct {
@@ -498,62 +509,87 @@ func createPeerSubDomains(instance *ConsensusInstance, nodeEnr string, peers *C.
 	return newNodeEnr, url, subDomains, pSignatures, err 
 }
 
+func extractBlockFromTxEvent(data types.EventDataNewBlock) (*NewBlock, error) {
+	block := data.Block
+	return &NewBlock{
+		Height: block.Header.Height,
+		Time: block.Header.Time,
+		LastBlockID: block.Header.LastBlockID,
+		DataHash: block.Header.DataHash,
+		AppHash: block.Header.AppHash,
+		ProposerAddress: block.Header.ProposerAddress,
+		Signatures: block.LastCommit.Signatures,
+	}, nil
+}
+
+func extractOrderFromTxEvent(eventType string, events map[string][]string) (*OrderTx, error) {
+	var orderInfo OrderInfo
+	var status string
+	var keysFound uint = 0
+
+	orderInfoKey := eventType+".orderInfo"
+    statusKey := eventType+".status"
+
+    for key, values := range events {
+
+        if key == orderInfoKey {
+        	json.Unmarshal([]byte(values[0]), &orderInfo)
+        	keysFound++
+        } else if key == statusKey {
+        	status = values[0]
+        	keysFound++
+        }
+    }
+
+    if keysFound == 2 {
+    	return &OrderTx{ OrderInfo: orderInfo, Status: status }, nil
+    }
+
+    return nil, errors.New("No valid keys found in event")
+}
+
 func createAndSendSignal(instance *ConsensusInstance, eventType string, msg interface{}) {
 	
 	fmt.Println("in createAndSendSignal:", eventType)
 	if eventType == "NewBlock" {
-		block := msg.(ctypes.ResultEvent).Data.(types.EventDataNewBlock).Block
-		height := block.Height
-		instance.height = height
+		data := msg.(ctypes.ResultEvent).Data.(types.EventDataNewBlock) 
+		
+		newBlock, _ := extractBlockFromTxEvent(data)
+		
+		instance.height = newBlock.Height
+		
 		signal := SignalNewBlock{
-			Height: height,
+			NewBlock: *newBlock,
 		}
 		sendSignal(instance, "NewBlock", signal)
 
 	} else if eventType == CheckTxEventType {
 		events := msg.(CheckTxEvent).Events
 		
-		var orderInfo OrderInfo
-		var status string
-
-		orderInfoKey := eventType+".orderInfo"
-	    orderInfoKey = string([]byte(orderInfoKey))
-	    statusKey := eventType+".status"
-	    statusKey = string([]byte(statusKey))
-
-	    for key, values := range events {
-	        fmt.Printf("Key: %s\n", key)
-	        //fmt.Printf("Values: %v\n", values)
-
-	        if string(key) == orderInfoKey {
-	        	fmt.Println("MatchorderInfoKey")
-	        	json.Unmarshal(values[0], &orderInfo)
-	        	fmt.Println("orderInfo.ProofHash:", orderInfo.ProofHash) 
-	        } else if string(key) == statusKey {
-	        	fmt.Println("MatchstatusKey")
-	        	status = string(values[0])
-	        	fmt.Println("status:", status)
-	        }
-	    }		
-
-/*		orderInfo := events.GetAttributes()[0]
-		status := events.GetAttributes()[1]
-		
-		if orderInfo.GetKey() != "orderInfo" || status.GetKey() != "status" {
-			break
+		order, err := extractOrderFromTxEvent(eventType, events)
+		if err != nil {
+			return
 		}
-		
-		orderInfo = orderInfo.GetValue()
-		status = status.GetValue() 
-*/
-/*		signal := SignalOrderTx{
-			Type: "order.tx",
-			OrderInfo: orderInfo,
-			Status: status,
+
+		signal := SignalOrderTx{
+			Type: eventType,
+			Order: *order,
 		}
 		sendSignal(instance, eventType, signal)
-*/	} else if eventType == DeliverTxEventType {
-		//fmt.Println("\nmsg deliver:", msg.(ctypes.ResultEvent))
+	} else if eventType == DeliverTxEventType {
+		fmt.Println("\nmsg deliver:")
+		events := msg.(ctypes.ResultEvent).Events
+		
+		order, err := extractOrderFromTxEvent(eventType, events)
+		if err != nil {
+			return
+		}
+
+		signal := SignalOrderTx{
+			Type: eventType,
+			Order: *order,
+		}
+		sendSignal(instance, eventType, signal)
 	}
 }
 
