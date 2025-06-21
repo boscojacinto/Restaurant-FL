@@ -109,17 +109,130 @@ func (x *Timestamp) GetNow() string {
 	return ""
 }
 
+type SignedPreKey struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SignedPreKey  []byte                 `protobuf:"bytes,1,opt,name=signed_pre_key,json=signedPreKey,proto3" json:"signed_pre_key,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SignedPreKey) Reset() {
+	*x = SignedPreKey{}
+	mi := &file_order_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SignedPreKey) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SignedPreKey) ProtoMessage() {}
+
+func (x *SignedPreKey) ProtoReflect() protoreflect.Message {
+	mi := &file_order_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SignedPreKey.ProtoReflect.Descriptor instead.
+func (*SignedPreKey) Descriptor() ([]byte, []int) {
+	return file_order_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *SignedPreKey) GetSignedPreKey() []byte {
+	if x != nil {
+		return x.SignedPreKey
+	}
+	return nil
+}
+
+type Bundle struct {
+	state         protoimpl.MessageState   `protogen:"open.v1"`
+	Identity      []byte                   `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	SignedPreKeys map[string]*SignedPreKey `protobuf:"bytes,2,rep,name=signed_pre_keys,json=signedPreKeys,proto3" json:"signed_pre_keys,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Signature     []byte                   `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
+	Timestamp     int64                    `protobuf:"varint,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Bundle) Reset() {
+	*x = Bundle{}
+	mi := &file_order_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Bundle) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Bundle) ProtoMessage() {}
+
+func (x *Bundle) ProtoReflect() protoreflect.Message {
+	mi := &file_order_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Bundle.ProtoReflect.Descriptor instead.
+func (*Bundle) Descriptor() ([]byte, []int) {
+	return file_order_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *Bundle) GetIdentity() []byte {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+func (x *Bundle) GetSignedPreKeys() map[string]*SignedPreKey {
+	if x != nil {
+		return x.SignedPreKeys
+	}
+	return nil
+}
+
+func (x *Bundle) GetSignature() []byte {
+	if x != nil {
+		return x.Signature
+	}
+	return nil
+}
+
+func (x *Bundle) GetTimestamp() int64 {
+	if x != nil {
+		return x.Timestamp
+	}
+	return 0
+}
+
 type Identity struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ID            string                 `protobuf:"bytes,1,opt,name=ID,proto3" json:"ID,omitempty"`
 	ENR           string                 `protobuf:"bytes,2,opt,name=ENR,proto3" json:"ENR,omitempty"`
+	Bundle        *Bundle                `protobuf:"bytes,3,opt,name=Bundle,proto3" json:"Bundle,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Identity) Reset() {
 	*x = Identity{}
-	mi := &file_order_proto_msgTypes[2]
+	mi := &file_order_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -131,7 +244,7 @@ func (x *Identity) String() string {
 func (*Identity) ProtoMessage() {}
 
 func (x *Identity) ProtoReflect() protoreflect.Message {
-	mi := &file_order_proto_msgTypes[2]
+	mi := &file_order_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -144,7 +257,7 @@ func (x *Identity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Identity.ProtoReflect.Descriptor instead.
 func (*Identity) Descriptor() ([]byte, []int) {
-	return file_order_proto_rawDescGZIP(), []int{2}
+	return file_order_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Identity) GetID() string {
@@ -161,6 +274,13 @@ func (x *Identity) GetENR() string {
 	return ""
 }
 
+func (x *Identity) GetBundle() *Bundle {
+	if x != nil {
+		return x.Bundle
+	}
+	return nil
+}
+
 type Approval struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Signature     []string               `protobuf:"bytes,1,rep,name=signature,proto3" json:"signature,omitempty"`
@@ -170,7 +290,7 @@ type Approval struct {
 
 func (x *Approval) Reset() {
 	*x = Approval{}
-	mi := &file_order_proto_msgTypes[3]
+	mi := &file_order_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -182,7 +302,7 @@ func (x *Approval) String() string {
 func (*Approval) ProtoMessage() {}
 
 func (x *Approval) ProtoReflect() protoreflect.Message {
-	mi := &file_order_proto_msgTypes[3]
+	mi := &file_order_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -195,7 +315,7 @@ func (x *Approval) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Approval.ProtoReflect.Descriptor instead.
 func (*Approval) Descriptor() ([]byte, []int) {
-	return file_order_proto_rawDescGZIP(), []int{3}
+	return file_order_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Approval) GetSignature() []string {
@@ -216,7 +336,7 @@ type Peers struct {
 
 func (x *Peers) Reset() {
 	*x = Peers{}
-	mi := &file_order_proto_msgTypes[4]
+	mi := &file_order_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -228,7 +348,7 @@ func (x *Peers) String() string {
 func (*Peers) ProtoMessage() {}
 
 func (x *Peers) ProtoReflect() protoreflect.Message {
-	mi := &file_order_proto_msgTypes[4]
+	mi := &file_order_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -241,7 +361,7 @@ func (x *Peers) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Peers.ProtoReflect.Descriptor instead.
 func (*Peers) Descriptor() ([]byte, []int) {
-	return file_order_proto_rawDescGZIP(), []int{4}
+	return file_order_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Peers) GetUrl() string {
@@ -274,7 +394,7 @@ type Inference struct {
 
 func (x *Inference) Reset() {
 	*x = Inference{}
-	mi := &file_order_proto_msgTypes[5]
+	mi := &file_order_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -286,7 +406,7 @@ func (x *Inference) String() string {
 func (*Inference) ProtoMessage() {}
 
 func (x *Inference) ProtoReflect() protoreflect.Message {
-	mi := &file_order_proto_msgTypes[5]
+	mi := &file_order_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -299,7 +419,7 @@ func (x *Inference) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Inference.ProtoReflect.Descriptor instead.
 func (*Inference) Descriptor() ([]byte, []int) {
-	return file_order_proto_rawDescGZIP(), []int{5}
+	return file_order_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Inference) GetMode() string {
@@ -322,7 +442,7 @@ type OrderRequest struct {
 
 func (x *OrderRequest) Reset() {
 	*x = OrderRequest{}
-	mi := &file_order_proto_msgTypes[6]
+	mi := &file_order_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -334,7 +454,7 @@ func (x *OrderRequest) String() string {
 func (*OrderRequest) ProtoMessage() {}
 
 func (x *OrderRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_order_proto_msgTypes[6]
+	mi := &file_order_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -347,7 +467,7 @@ func (x *OrderRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderRequest.ProtoReflect.Descriptor instead.
 func (*OrderRequest) Descriptor() ([]byte, []int) {
-	return file_order_proto_rawDescGZIP(), []int{6}
+	return file_order_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *OrderRequest) GetProof() *Proof {
@@ -393,10 +513,21 @@ const file_order_proto_rawDesc = "" +
 	"\x05Proof\x12\x10\n" +
 	"\x03buf\x18\x01 \x01(\fR\x03buf\"\x1d\n" +
 	"\tTimestamp\x12\x10\n" +
-	"\x03now\x18\x01 \x01(\tR\x03now\",\n" +
+	"\x03now\x18\x01 \x01(\tR\x03now\"4\n" +
+	"\fSignedPreKey\x12$\n" +
+	"\x0esigned_pre_key\x18\x01 \x01(\fR\fsignedPreKey\"\xff\x01\n" +
+	"\x06Bundle\x12\x1a\n" +
+	"\bidentity\x18\x01 \x01(\fR\bidentity\x12G\n" +
+	"\x0fsigned_pre_keys\x18\x02 \x03(\v2\x1f.main.Bundle.SignedPreKeysEntryR\rsignedPreKeys\x12\x1c\n" +
+	"\tsignature\x18\x03 \x01(\fR\tsignature\x12\x1c\n" +
+	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\x1aT\n" +
+	"\x12SignedPreKeysEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12(\n" +
+	"\x05value\x18\x02 \x01(\v2\x12.main.SignedPreKeyR\x05value:\x028\x01\"R\n" +
 	"\bIdentity\x12\x0e\n" +
 	"\x02ID\x18\x01 \x01(\tR\x02ID\x12\x10\n" +
-	"\x03ENR\x18\x02 \x01(\tR\x03ENR\"(\n" +
+	"\x03ENR\x18\x02 \x01(\tR\x03ENR\x12$\n" +
+	"\x06Bundle\x18\x03 \x01(\v2\f.main.BundleR\x06Bundle\"(\n" +
 	"\bApproval\x12\x1c\n" +
 	"\tsignature\x18\x01 \x03(\tR\tsignature\"u\n" +
 	"\x05Peers\x12\x10\n" +
@@ -425,28 +556,34 @@ func file_order_proto_rawDescGZIP() []byte {
 	return file_order_proto_rawDescData
 }
 
-var file_order_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_order_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_order_proto_goTypes = []any{
 	(*Proof)(nil),        // 0: main.Proof
 	(*Timestamp)(nil),    // 1: main.Timestamp
-	(*Identity)(nil),     // 2: main.Identity
-	(*Approval)(nil),     // 3: main.Approval
-	(*Peers)(nil),        // 4: main.Peers
-	(*Inference)(nil),    // 5: main.Inference
-	(*OrderRequest)(nil), // 6: main.OrderRequest
+	(*SignedPreKey)(nil), // 2: main.SignedPreKey
+	(*Bundle)(nil),       // 3: main.Bundle
+	(*Identity)(nil),     // 4: main.Identity
+	(*Approval)(nil),     // 5: main.Approval
+	(*Peers)(nil),        // 6: main.Peers
+	(*Inference)(nil),    // 7: main.Inference
+	(*OrderRequest)(nil), // 8: main.OrderRequest
+	nil,                  // 9: main.Bundle.SignedPreKeysEntry
 }
 var file_order_proto_depIdxs = []int32{
-	3, // 0: main.Peers.approval:type_name -> main.Approval
-	0, // 1: main.OrderRequest.proof:type_name -> main.Proof
-	1, // 2: main.OrderRequest.timestamp:type_name -> main.Timestamp
-	2, // 3: main.OrderRequest.identity:type_name -> main.Identity
-	5, // 4: main.OrderRequest.inference:type_name -> main.Inference
-	4, // 5: main.OrderRequest.peers:type_name -> main.Peers
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	9, // 0: main.Bundle.signed_pre_keys:type_name -> main.Bundle.SignedPreKeysEntry
+	3, // 1: main.Identity.Bundle:type_name -> main.Bundle
+	5, // 2: main.Peers.approval:type_name -> main.Approval
+	0, // 3: main.OrderRequest.proof:type_name -> main.Proof
+	1, // 4: main.OrderRequest.timestamp:type_name -> main.Timestamp
+	4, // 5: main.OrderRequest.identity:type_name -> main.Identity
+	7, // 6: main.OrderRequest.inference:type_name -> main.Inference
+	6, // 7: main.OrderRequest.peers:type_name -> main.Peers
+	2, // 8: main.Bundle.SignedPreKeysEntry.value:type_name -> main.SignedPreKey
+	9, // [9:9] is the sub-list for method output_type
+	9, // [9:9] is the sub-list for method input_type
+	9, // [9:9] is the sub-list for extension type_name
+	9, // [9:9] is the sub-list for extension extendee
+	0, // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_order_proto_init() }
@@ -454,14 +591,14 @@ func file_order_proto_init() {
 	if File_order_proto != nil {
 		return
 	}
-	file_order_proto_msgTypes[4].OneofWrappers = []any{}
+	file_order_proto_msgTypes[6].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_order_proto_rawDesc), len(file_order_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

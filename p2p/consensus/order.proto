@@ -11,9 +11,21 @@ message Timestamp {
     string now = 1;    
 }
 
+message SignedPreKey {
+  bytes signed_pre_key = 1;
+}
+
+message Bundle {
+  bytes identity = 1;
+  map<string,SignedPreKey> signed_pre_keys = 2;
+  bytes signature = 3;
+  int64 timestamp = 4;
+}
+
 message Identity {
     string ID = 1;
-    string ENR = 2;     
+    string ENR = 2;
+    Bundle Bundle = 3;
 }
 
 message Approval {

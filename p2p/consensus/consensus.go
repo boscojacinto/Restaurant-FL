@@ -23,6 +23,8 @@ import (
  "time"
  "bytes"
  "sync"
+ "sort"
+ "strconv"
  "unsafe"
  "errors"
  "context"
@@ -85,6 +87,8 @@ type ConsensusInstance struct {
 	key ValidatorKey
 	sharedKey *ecdsa.PrivateKey
 	nodePeerAddr Peer
+
+	bundle *Bundle
 }
 
 type CheckTxEvent struct {
@@ -225,8 +229,9 @@ func Start(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointe
 		os.Exit(1)
 	}
 	instance.peersDb = peersDb
-
 	instance.height = 0
+
+	instance.bundle, _ = createBundle(instance.key.PrivateKeyEcdsa, string(instance.height))
 
 	appSubsEvents := []string{ CheckTxEventType }
 	app := NewInferSyncApp(ctx, orderDb, registerDb, peersDb, appSubsEvents)
@@ -527,8 +532,8 @@ func extractOrderFromTxEvent(eventType string, events map[string][]string) (*Ord
 	var status string
 	var keysFound uint = 0
 
-	orderInfoKey := eventType+".orderInfo"
-    statusKey := eventType+".status"
+	orderInfoKey := eventType + ".orderInfo"
+    statusKey := eventType + ".status"
 
     for key, values := range events {
 
@@ -753,4 +758,70 @@ func newTendermint(instance *ConsensusInstance, app abci.Application) (*nm.Node,
 	instance.config = config
 
 	return node, nil
+}
+
+func buildBundleSignMaterial(bundle *Bundle) []byte {
+	signedPreKeys := bundle.GetSignedPreKeys()
+	timestamp := bundle.GetTimestamp()
+	var keys []string
+
+	for k := range signedPreKeys {
+		keys = append(keys, k)
+	}
+	var sMaterial []byte
+
+	sort.Strings(keys)
+
+	for _, instalID := range keys {
+		signedPreKey := signedPreKeys[instalID]
+		sMaterial = append(sMaterial, []byte(instalID)...)
+		sMaterial = append(sMaterial, signedPreKey.SignedPreKey...)
+	}
+
+	if timestamp != 0 {
+		sMaterial = append(sMaterial, []byte(strconv.FormatInt(timestamp, 10))...)
+	}
+
+	return sMaterial
+
+}
+
+func signBundle(identity *ecdsa.PrivateKey, bundle *Bundle) error {
+	bundle.Timestamp = time.Now().UnixNano()
+	sMaterial := buildBundleSignMaterial(bundle)
+
+	signature, err := crypto.Sign(crypto.Keccak256(sMaterial), identity)
+	if err != nil {
+		return err
+	}
+	bundle.Signature = signature
+	return nil
+}
+
+func createBundle(identity *ecdsa.PrivateKey, installationID string) (*Bundle, error) {
+	preKey, err := crypto.GenerateKey()
+	if err != nil {
+		return nil, err
+	}
+
+	compressedPreKey := crypto.CompressPubkey(&preKey.PublicKey)
+	compressedIdentityKey := crypto.CompressPubkey(&identity.PublicKey)
+
+	signedPreKeys := make(map[string]*SignedPreKey)
+	signedPreKeys[installationID] = &SignedPreKey{
+		SignedPreKey: compressedPreKey,
+	}
+
+	bundle := &Bundle{
+		Identity: compressedIdentityKey,
+		SignedPreKeys: signedPreKeys,
+		Timestamp: time.Now().UnixNano(),
+	}
+
+	err = signBundle(identity, bundle)
+	if err != nil {
+		return nil, errors.New("Failed to sign bundle")	
+	}
+
+	return bundle, nil
 }
