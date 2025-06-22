@@ -334,7 +334,7 @@ func SendOrder(ctx unsafe.Pointer, proof *C.char, id *C.char, enr *C.char,
 		}
 	}
 
-	tx, err := makeTxOrder(proofBytes, idStr, nodeEnr, timestampStr,
+	tx, err := makeTxOrder(instance, proofBytes, idStr, nodeEnr, timestampStr,
 						url, peerSubDomains, peerSignatures, modeStr)
 	if err != nil {
 		return onError(errors.New("Cannot create order "), onErr, userData)
@@ -663,8 +663,9 @@ func sendSignal(instance *ConsensusInstance, eventType string, event interface{}
 	C.free(unsafe.Pointer(str))
 }
 
-func makeTxOrder(proof []byte, id string, enr string, timestamp string,
-	url string, peerSubDomains []string, peerSignatures []string, mode string) ([]byte, error) {
+func makeTxOrder(instance *ConsensusInstance, proof []byte, id string,
+	enr string, timestamp string, url string, peerSubDomains []string,
+	peerSignatures []string, mode string) ([]byte, error) {
 	
 	var req *SyncRequest
 	var peers Peers
@@ -684,7 +685,7 @@ func makeTxOrder(proof []byte, id string, enr string, timestamp string,
 					Proof: &Proof{Buf: proof},
 					Timestamp: &Timestamp{Now: timestamp},
 					Inference: &Inference{Mode: mode},
-					Identity: &Identity{ID: id, ENR: enr},
+					Identity: &Identity{ID: id, ENR: enr, Bundle: instance.bundle},
 					Peers: &peers,
 				},
 		},
@@ -783,7 +784,6 @@ func buildBundleSignMaterial(bundle *Bundle) []byte {
 	}
 
 	return sMaterial
-
 }
 
 func signBundle(identity *ecdsa.PrivateKey, bundle *Bundle) error {
