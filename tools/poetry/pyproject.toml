@@ -1,0 +1,15 @@
+[project]
+name = "poetry-tastebot-plugin"
+version = "1.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "poetry>=2.0",
+    "grpcio-tools==1.69.0",
+]
+
+[project.entry-points."poetry.application.plugin"]
+tastebot = "poetry_tastebot_plugin.plugin:TasteBotPlugin"
+
+[build]
+requires = ["setuptools>=61.0", "wheel"]
+build-system = "setuptools.build_meta"
