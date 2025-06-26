@@ -36,7 +36,7 @@ Customers are usually reluctant to provide feedback or honest opinions because t
 
 3. Install and build TasteBot
 ```
-   poetry install && poetry self add poetry-tastebot-plugin && poetry build
+   poetry install && poetry self add ./poetry_tastebot_plugin-1.0.0-py3-none-any.whl && poetry build
 ```
 
 4. Run TasteBot
