@@ -20,7 +20,31 @@ of the user's time.
 
 ![Using the Status-IM app](./Bot_Chat_01.png)
 
-Customers are usually reluctant to provide feedback or honest opinions because they lack incentive to do so, this is where a natural non-pushy conversation can spark a drive to gain knowledge and facts about food. Additionally a small percentage of the price can be waived by the restaurant adding economic incentive. Keeping the identities anonymous can also help with the indulgence in the chat. In general storing data locally and not on server farms helps increase confidence. Also providing feedback of a recent but different restaurant visit can encourage a much honest review. Hence with the above in mind.
+Customers are usually reluctant to provide feedback or honest opinions because they lack incentive to do so, this is where a natural non-pushy conversation can spark a drive to gain knowledge and facts about food. Additionally a small percentage of the price can be waived by the restaurant adding economic incentive. Keeping the identities anonymous can also help with the indulgence in the chat. In general storing data locally and not on server farms helps increase confidence. Also providing feedback of a recent but different restaurant visit can encourage a much honest review.
+
+## Install
+
+1. Clone the repository
+```
+   git clone https://github.com/boscojacinto/Restaurant-FL.git && cd Restaurant-FL
+```
+
+2. Install Poetry and git lfs
+```
+   curl -sSL https://install.python-poetry.org | python3 - && curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash && sudo apt install git-lfs
+```
+
+3. Install and build TasteBot
+```
+   poetry install && poetry self add poetry-tastebot-plugin && poetry build
+```
+
+4. Run TasteBot
+```
+   poetry run client
+```
+
+## Requirements.
 
 ## For the Bot the following points served as a fundamental requirements for the design.
 ---
