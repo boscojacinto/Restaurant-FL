@@ -17,7 +17,6 @@ from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerCli
 
 graphiti = None
 
-# Configure logging
 logging.basicConfig(
     level=INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -27,8 +26,6 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-# Neo4j connection parameters
-# Make sure Neo4j Desktop is running with a local DBMS started
 neo4j_uri = os.environ.get('NEO4J_URI', 'bolt://localhost:7687')
 neo4j_user = os.environ.get('NEO4J_USER', 'neo4j')
 neo4j_password = os.environ.get('NEO4J_PASSWORD', 'neo4j123')
@@ -39,16 +36,16 @@ if not neo4j_uri or not neo4j_user or not neo4j_password:
 async def start():
 	global graphiti
 	# Initialize Graphiti with Neo4j connection
-	llm_config = LLMConfig(api_key="ollama", model="llama3.2", base_url="http://localhost:11434/v1")
-	llm_client = OpenAIGenericClient(config=llm_config)
+	# llm_config = LLMConfig(api_key="ollama", model="llama3.2", base_url="http://localhost:11434/v1")
+	# llm_client = OpenAIGenericClient(config=llm_config)
 
-	embedder_config = OpenAIEmbedderConfig(api_key="ollama", embedding_model="nomic-embed-text", base_url="http://localhost:11434/v1")
-	embedder = OpenAIEmbedder(config=embedder_config)
+	# embedder_config = OpenAIEmbedderConfig(api_key="ollama", embedding_model="nomic-embed-text", base_url="http://localhost:11434/v1")
+	# embedder = OpenAIEmbedder(config=embedder_config)
 
-	cross_llm_config = LLMConfig(api_key="ollama", model="BAAI/bge-reranker-v2-m3", base_url="http://localhost:11434/v1")	
-	cross_encoder = OpenAIRerankerClient(config=cross_llm_config)
+	# cross_llm_config = LLMConfig(api_key="ollama", model="BAAI/bge-reranker-v2-m3", base_url="http://localhost:11434/v1")	
+	# cross_encoder = OpenAIRerankerClient(config=cross_llm_config)
 
-	graphiti = Graphiti(neo4j_uri, neo4j_user, neo4j_password, llm_client=llm_client, embedder=embedder, cross_encoder=cross_encoder)
+	graphiti = Graphiti(neo4j_uri, neo4j_user, neo4j_password)#, llm_client=llm_client, embedder=embedder, cross_encoder=cross_encoder)
 
 async def add_eposides():
 	global graphiti
@@ -114,12 +111,43 @@ async def main():
 	    print(f"Done initializing")
 	    # Additional code will go here
 
-	    await add_eposides()
+	    #await add_eposides()
+	    episode = {
+	    	'content': 'Kamala Harris is the Attorney General of California. She was previously '
+	    	'the district attorney for San Francisco.',
+	    	'type': EpisodeType.text,
+	    	'description': 'podcast transcript',
+	    }
 
+	    # Add episodes to the graph
+	    await graphiti.add_episode(
+	    	name=f'Freakonomics Radio',
+	    	episode_body=episode['content']
+	    	if isinstance(episode['content'], str)
+	    	else json.dumps(episode['content']),
+	    	source=episode['type'],
+	    	source_description=episode['description'],
+	    	reference_time=datetime.now(timezone.utc),
+	    )
+	    print(f'Added episode: Freakonomics Radio: ({episode["type"].value})')
+	    # Perform a hybrid search combining semantic similarity and BM25 retrieval
+	    print("\nSearching for: 'Who is Attorney General of California?'")
+	    results = await graphiti.search('Who is the Attorney General of California?')
+
+	    # Print search results
+	    print('\nSearch Results:')
+	    for result in results:
+	    	print(f'UUID: {result.uuid}')
+	    	print(f'Fact: {result.fact}')
+	    	if hasattr(result, 'valid_at') and result.valid_at:
+	    		print(f'Valid from: {result.valid_at}')
+	    	if hasattr(result, 'invalid_at') and result.invalid_at:
+	    		print(f'Valid until: {result.invalid_at}')
+	    	print('---')
 	finally:
-	    # Close the connection
-	    await graphiti.close()
-	    print('\nConnection closed')
+		# Close the connection
+		await graphiti.close()
+		print('\nConnection closed')
 
 	pass
 
