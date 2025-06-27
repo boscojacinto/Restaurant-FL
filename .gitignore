@@ -1,4 +1,8 @@
 venv/
+tools/venv/
+tools/dist/
+tools/poetry_tastebot_plugin.egg-info/
+tools/venv/
 fl/__pycache__/
 raw/
 processed/

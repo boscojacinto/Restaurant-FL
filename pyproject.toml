@@ -97,9 +97,8 @@ nvidia-nccl-cu12 = "2.20.5"
 nvidia-nvjitlink-cu12 = "12.8.93"
 nvidia-nvtx-cu12 = "12.1.105"
 
-# [tool.poetry.group.p2p.dependencies]
-# openmined_psi = { url = "https://github.com/boscojacinto/Restaurant-FL/releases/download/v1.0.0/openmined_psi-2.0.5-cp312-cp312-manylinux_2_39_x86_64.whl" }
-# #openmined-psi = "2.0.5"
+[tool.poetry.group.p2p.dependencies]
+openmined_psi = { url = "https://github.com/boscojacinto/Restaurant-FL/releases/download/v1.0.0/openmined_psi-2.0.5-cp312-cp312-manylinux_2_39_x86_64.whl" }
 
 [tool.poetry.dependencies]
 python = "^3.12"
@@ -242,4 +241,3 @@ xxhash = "3.5.0"
 yarl = "1.18.3"
 zipp = "3.21.0"
 zstandard = "0.23.0"
-openmined_psi = { url = "https://github.com/boscojacinto/Restaurant-FL/releases/download/v1.0.0/openmined_psi-2.0.5-cp312-cp312-manylinux_2_39_x86_64.whl" }

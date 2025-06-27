@@ -57,7 +57,6 @@ def build_proto(io: IO, venv_path: Path) -> int:
         + args
         + proto_files
     )
-    io.write_line(f"<info>Invoking protoc as: {command}</>")
     protoc_result = protoc.main(command)
     if protoc_result == 0:
         io.write_line(
@@ -160,9 +159,6 @@ class TasteBotPlugin(ApplicationPlugin):
     def run_build(
         self, event: Event, event_name: str, dispatcher: EventDispatcher
     ) -> None:
-        event.io.write_line(
-            f"<info>BuildCommand:{event.command} self.application:{self.application} isinstance:{isinstance(event.command, BuildCommand)} 1:{isinstance(event, ConsoleCommandEvent)} 2:{self.application}"
-        )            
         if (
             not isinstance(event, ConsoleCommandEvent)
             or not isinstance(event.command, BuildCommand)
