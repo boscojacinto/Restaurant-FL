@@ -9,7 +9,6 @@ from google.protobuf import descriptor_pool as _descriptor_pool
 from google.protobuf import runtime_version as _runtime_version
 from google.protobuf import symbol_database as _symbol_database
 from google.protobuf.internal import builder as _builder
-import sys 
 _runtime_version.ValidateProtobufRuntimeVersion(
     _runtime_version.Domain.PUBLIC,
     5,
@@ -21,6 +20,7 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 # @@protoc_insertion_point(imports)
 
 _sym_db = _symbol_database.Default()
+
 
 import p2p.psi_pb2 as psi__pb2
 

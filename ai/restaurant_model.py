@@ -33,6 +33,8 @@ SYSTEM_PROMPT_FEEDBACK = """
 You are a customer who is providing feedback about a restaurant. The feedback should be short and straight to the point. Make sure to either keep the feedback positive or negative or neutral (i.e. mix of both). Keep it natural, like a real customer would do.
 """
 
+INITIAL_PROMPT = 'Hello'
+
 DEFAULT_STOP_WORD = "zQ3sh"
 DEFAULT_FEEDBACK_WORD = "shzQ3"
 

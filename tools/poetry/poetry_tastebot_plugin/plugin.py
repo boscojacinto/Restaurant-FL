@@ -78,7 +78,7 @@ def build_consensus(io: IO) -> int:
         f"-extldflags '-Wl,-soname,libconsensus.so.0'", consensus_dir],
         cwd=consensus_dir, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
-        io.write_line(f"<error>Error compiling libconsensus</>")
+        io.write_line(f"<error>Error compiling libconsensus:{e}</>")
         return 1
 
 def build_waku(io: IO) -> int:
@@ -91,7 +91,7 @@ def build_waku(io: IO) -> int:
         f"-extldflags '-Wl,-soname,libgowaku.so.0'", "./library/c/"],
         cwd=waku_dir, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
-        io.write_line(f"<error>Error compiling libconsensus</>")
+        io.write_line(f"<error>Error compiling libwaku:{e}</>")
         return 1
 
 
@@ -110,9 +110,9 @@ def run_build(io: IO, venv_path: Path) -> int:
         Verbosity.DEBUG,
     )
 
+    build_proto(io, venv_path)
     build_consensus(io)
     build_waku(io)
-    build_proto(io, venv_path)
 
     return 0
 
