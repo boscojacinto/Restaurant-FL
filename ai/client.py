@@ -3,8 +3,10 @@ import threading
 from .restaurant_model import AIModel as bot
 from .restaurant_model import CUSTOM_MODEL, INITIAL_PROMPT
 
+AI_MODEL = "swigg1.0-gemma3:4b"
+
 class AIClient:
-	def __init__(self, model):
+	def __init__(self):
 		self.thread = None
 		self.initial_prompt = INITIAL_PROMPT
 		self.prompt = None
@@ -13,7 +15,7 @@ class AIClient:
 		self.cb = None
 		self.bots = {}
 		self.lock = threading.Lock()
-		print(f"\n========= Launching AI model {CUSTOM_MODEL} ========\n")
+		print(f"========= Launching AI model {CUSTOM_MODEL} ========")
 
 	def run(self):
 

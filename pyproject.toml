@@ -33,6 +33,8 @@ poetry-tastebot-plugin = { url = "https://github.com/boscojacinto/Restaurant-FL/
 
 [tool.poetry.scripts]
 client = "client:main"
+server = "server:main"
+neighbor = "p2p.neighbor_restaurant:main"
 
 [tool.poetry.group.ai.dependencies]
 ollama = "0.4.7"

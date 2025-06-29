@@ -1,22 +1,17 @@
 import os
 import time
-import json
-import requests
+import asyncio
 import threading
-from flwr.server.app import run_superlink
-from flwr.cli.run import run
-
-from types import SimpleNamespace
 import flwr
-from pathlib import Path
 
 class FLServer:
 	def __init__(self):
 		self.started = False
 		self.thread = None
+		self.thread_neighbor = None
 
 	def run(self):
-		run_superlink()
+		flwr.server.app.run_superlink()
 
 	def start(self):
 		self.thread = threading.Thread(target=self.run)
@@ -25,10 +20,9 @@ class FLServer:
 
 	def federate(self):
 		print("Started Federated Learning")
-		run(federation="local-deployment")
+		flwr.cli.run(federation="local-deployment")
 
 def main():
-	print(flwr.__file__)
 
 	fl_server = FLServer()
 	time.sleep(1)
@@ -40,7 +34,7 @@ def main():
 		while True:
 			time.sleep(1)
 	except KeyboardInterrupt:
-		pass
-
+		fl_server.thread.join()
+		
 if __name__ == '__main__':
 	main()

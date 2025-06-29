@@ -6,7 +6,7 @@ class FLClient:
 		self.started = False
 		self.thread = None
 		self.id = i
-		print(f"\n========= Initializing Flower Client {i} ========\n")
+		print(f"========= Initializing Flower Client {i} ========")
 
 	def run(self, i):
 		run_supernode(i)

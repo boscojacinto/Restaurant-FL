@@ -1,30 +1,25 @@
 import os
-import re
 import sys
 import grpc
 import time
 import json
-import torch
 import queue
 import ctypes
-import random
 import signal
 import asyncio
-import requests
-import threading
-import scipy as sp
-import numpy as np
-import pandas as pd
-import multiprocessing
-import p2p.restaurant_pb2 as psi_proto
-import p2p.restaurant_pb2_grpc as r_psi
-from math import ceil, floor
-from scipy.sparse import coo_matrix
-import private_set_intersection.python as psi
+
 from im.client import StatusClient 
 from ai.client import AIClient 
-from ai.restaurant_model import AIModel as bot
 from fl.client import FLClient 
+
+import p2p.restaurant_pb2 as psi_proto
+import p2p.restaurant_pb2_grpc as r_psi
+import private_set_intersection.python as psi
+from embeddings import (
+	init_embeddings,
+	save_customer_embeddings,
+	save_restaurant_embeddings
+)
 
 status_client = None
 ai_client = None
@@ -33,125 +28,16 @@ fl_client_2 = None
 psi_client = None
 client_threads = []
 
-customer_embeddings = None
+path = None
 restaurant_service = None
 
-AI_MODEL = "swigg1.0-gemma3:4b"
 customer_ids = [{'id': 1, 'name': "Rohan", 'publicKey': "0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4", 'emojiHash': """👨‍✈️ℹ️📛🤘👩🏼‍🎤👨🏿‍🦱🏌🏼‍♀️🪣🐍🅱️👋🏼👱🏿‍♀️🙅🏼‍♂️🤨"""}]
+
 RESTAURANT_UID = "0x9f02de9e49c6784cc95120daac6211d6ae16c9cc3a6292c2394c220c312d6bec"
 # Restaurant Public key 0x043b493da25ff3f725d66185ed2094f0058ee2a577987bd89b6c9c2cf70fdf9fc13c0629449be9e76b7826335b828ac2bb2eb8cf639e6f31eca442ebb38eb7b148 
 RESTAURANT_PASSWORD = "swigg@12345"
 RESTAURANT_DEVICE = "restaurant-pc-9"
 RESTAURANT_NAME = "Restaurant9"
-MAX_CUSTOMERS = 10000
-MAX_RESTAURANTS = 1277
-CUSTOMER_FEATURES_NUM = 1024
-RESTAURANT_FEATURES_NUM = 1024
-CUSTOMER_FEATURES_FILE = 'features_customers.npz'
-RESTAURANT_FEATURES_FILE = 'features_restaurants.npz'
-NEIGHBOR_REST_CUST_FILE = 'neighbor_rest_cust.npy'
-RESTAURANT_EMBEDDINGS_FILE = 'restaurant_embeddings.pt'
-RESTAURANT_INTERACTIONS_FILE = 'restaurant_interactions.csv'
-CUSTOMER_EMBEDDINGS_FILE = 'customer_embeddings.pt' 
-
-async def create_embeddings(file):
-    df = pd.read_csv(file)
-    df = df.sample(frac=0.5, random_state=42)
-    b = bot()
-
-    async def cust_embed(x):
-        return await b.embed(x)
-
-    async def process_embed(values):
-    	tasks = [cust_embed(x) for x in values]
-    	return await asyncio.gather(*tasks) 
-
-    df["Customer's Description"] = await process_embed(df["Customer's Description"])
-
-    customer_embeds = torch.tensor(
-        df["Customer's Description"].tolist()
-    )
-    return customer_embeds
-
-async def init_embeddings():
-	customer_embeds = torch.zeros((MAX_CUSTOMERS, CUSTOMER_FEATURES_NUM),
-								 dtype=torch.float)
-	embeds = await create_embeddings(os.path.join(path, RESTAURANT_INTERACTIONS_FILE))	
-	#print(f"embeds:{embeds}")
-	random_customer_ids = torch.randperm(MAX_CUSTOMERS)[:25]
-	#print(f"random_customer_ids:{random_customer_ids.shape}")
-	torch.save(random_customer_ids, os.path.join(path, 'restaurant_customer_ids.pt'))
-	customer_embeds[random_customer_ids] = embeds
-	#print(f"customer_embeds:{customer_embeds}")
-	torch.save(customer_embeds, os.path.join(path, CUSTOMER_EMBEDDINGS_FILE))
-	
-	restaurant_embeds = torch.zeros((MAX_RESTAURANTS, RESTAURANT_FEATURES_NUM),
-								 dtype=torch.float)
-	torch.save(restaurant_embeds, os.path.join(path, RESTAURANT_EMBEDDINGS_FILE))
-	if os.path.exists(os.path.join(path, CUSTOMER_FEATURES_FILE)):
-		os.remove(os.path.join(path, CUSTOMER_FEATURES_FILE))
-	if os.path.exists(os.path.join(path, RESTAURANT_FEATURES_FILE)):
-		os.remove(os.path.join(path, RESTAURANT_FEATURES_FILE))
-
-async def save_customer_embeddings(customer_id, embeds):
-	customer_embeds = torch.load(os.path.join(path, CUSTOMER_EMBEDDINGS_FILE))
-	torch.manual_seed(42)
-	c_id = random.randint(0, MAX_CUSTOMERS - 1)
-	#print(f"customer_ids[0]['publicKey']:{customer_ids[0]['publicKey']}")
-	#print(f"customer_id:{customer_id}")
-	if customer_ids[0]['publicKey'] == customer_id:
-		print("In IF")
-		c_id = customer_ids[0]['id']
-	print(f"c_id:{c_id}")
-
-	customer_embeds[c_id] = torch.tensor(embeds, dtype=torch.float)
-	#print(f"customer_embeds.shape:{customer_embeds.shape}")
-	torch.save(customer_embeds, os.path.join(path, CUSTOMER_EMBEDDINGS_FILE))
-	customer_feats = coo_matrix(customer_embeds)
-	#print(f"customer_feats:{customer_feats}")
-	sp.sparse.save_npz(os.path.join(path, CUSTOMER_FEATURES_FILE), customer_feats)
-
-async def save_restaurant_embeddings(customer_id, embeds):
-	restaurant_embeds = torch.load(os.path.join(path, RESTAURANT_EMBEDDINGS_FILE))
-	torch.manual_seed(42)
-	#r_id = random.randint(0, MAX_RESTAURANTS - 1)
-	r_id = 1
-	torch.manual_seed(24)
-	c_id = random.randint(0, MAX_CUSTOMERS - 1)
-	
-	if customer_ids[0]['publicKey'] == customer_id:
-		c_id = customer_ids[0]['id']
-	print(f"r_id:{r_id}")
-	print(f"c_id:{c_id}")
-
-	restaurant_embeds[r_id] = torch.tensor(embeds, dtype=torch.float)
-	torch.save(restaurant_embeds, os.path.join(path, RESTAURANT_EMBEDDINGS_FILE))
-	restaurant_feats =coo_matrix(restaurant_embeds)
-	sp.sparse.save_npz(os.path.join(path, RESTAURANT_FEATURES_FILE), restaurant_feats)
-
-	customer_embeddings = torch.load(os.path.join(path, CUSTOMER_EMBEDDINGS_FILE)) 
-	r_c_adj = torch.zeros((MAX_RESTAURANTS, MAX_CUSTOMERS), dtype=torch.float)
-	for i, v in enumerate(customer_embeddings):
-		r_c_adj[r_id, i] = 1
-
-	r_c_adj_np = r_c_adj.numpy()
-	np.save(os.path.join(path, NEIGHBOR_REST_CUST_FILE), r_c_adj_np, allow_pickle=False)
-
-async def restaurant_feedback(customer_id):
-	global restaurant_service
-	global psi_client
-
-	client_key = bytes(range(32))
-	psi_client = psi.client.CreateFromKey(client_key, False)
-	try:
-		async with grpc.aio.insecure_channel('[::]:50051') as channel:
-			restaurant_service = r_psi.RestaurantNeighborStub(channel)
-			return await restaurant_setup_and_fetch(customer_id)
-
-	except grpc.RpcError as e:
-		print(f"RPC error: {e}")
-	except Exception as e:
-		print(f"Restaurant feeback error: {e}")
 
 async def restaurant_setup_and_fetch(customer_id):
 	global psi_client
@@ -171,6 +57,22 @@ async def restaurant_setup_and_fetch(customer_id):
 	intersection = psi_client.GetIntersectionSize(setup_reply.setup,
 										customer_reply.response)
 	return intersection, setup_reply.restaurantKey
+
+async def restaurant_feedback(customer_id):
+	global restaurant_service
+	global psi_client
+
+	client_key = bytes(range(32))
+	psi_client = psi.client.CreateFromKey(client_key, False)
+	try:
+		async with grpc.aio.insecure_channel('[::]:50051') as channel:
+			restaurant_service = r_psi.RestaurantNeighborStub(channel)
+			return await restaurant_setup_and_fetch(customer_id)
+
+	except grpc.RpcError as e:
+		print(f"RPC error: {e}")
+	except Exception as e:
+		print(f"Restaurant feeback error: {e}")
 
 def on_status_cb(signal: str):
 	global ai_client
@@ -204,81 +106,19 @@ def on_status_cb(signal: str):
 	return
 
 async def on_ai_client_cb(type, customer_id, message: str, embeds):
+	global path
+
 	if type == "start":
 		status_client.sendChatMessage(customer_id, message)
 	elif type == "chat":
 		status_client.sendChatMessage(customer_id, message)
 	elif type == "feedback":
-		await save_customer_embeddings(customer_id, embeds)
+		await save_customer_embeddings(path, customer_id, embeds)
 		status_client.sendChatMessage(customer_id, message)
 	elif type == "end":
-		await save_restaurant_embeddings(customer_id, embeds)
+		await save_restaurant_embeddings(path, customer_id, embeds)
 		status_client.deactivateOneToOneChat(customer_id)
 	pass
-
-def main():
-	global path
-	global ai_client
-	global fl_client_1
-	global fl_client_2
-	global status_client
-	global customer_ids
-	global AI_MODEL
-	global RESTAURANT_UID
-	global RESTAURANT_PASSWORD
-	global RESTAURANT_DEVICE
-	global RESTAURANT_NAME
-	global STATUS_BACKEND_BIN
-
-	path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'ml/')
-
-	fl_client_1 = FLClient(1)
-	fl_1_thread = fl_client_1.start()
-	client_threads.append(fl_1_thread)
-
-	fl_client_2 = FLClient(2)
-	fl_2_thread = fl_client_2.start()
-	client_threads.append(fl_2_thread)
-
-	status_client = StatusClient(root="./")
-
-	ai_client = AIClient(AI_MODEL)
-
-	register_exit_handler()
-
-	#asyncio.run(init_embeddings())
-
-	status_client.init(RESTAURANT_PASSWORD, cb=on_status_cb)
-
-	# status_client.createAccountAndLogin(RESTAURANT_NAME, RESTAURANT_PASSWORD)
-
-	status_client.login(RESTAURANT_UID, RESTAURANT_PASSWORD)
-
-	# status_client.sendContactRequest(customer_ids[0]['publicKey'], "Hello! This is your restaurant Bot")
-
-	status_thread = status_client.start()
-	client_threads.append(status_thread)
-	
-	ai_thread = ai_client.start(cb=on_ai_client_cb)
-	client_threads.append(ai_thread)
-
-	status_client.createOneToOneChat(customer_ids[0]['publicKey'])
-
-	#intersection, restaurant_key = asyncio.run(restaurant_feedback(customer_ids[0]['publicKey']))
-	restaurant_key = """🚕🔈🧩👩🏽‍🤝‍👩🏾🏌️‍♂️👆🏾👩‍👧‍👧🐀😴🧑🏼‍💻🤒💇🏼‍♂️🥞🕵️‍♀️"""
-
-	asyncio.run(ai_client.greet(customer_ids[0], restaurant_key))
-
-	while True:
-		time.sleep(0.1)		
-
-async def test():
-	b = bot()
-	await init_embeddings()
-	# embeds = await b.embed("The users show great love for mughlai food")
-	# await save_customer_embeddings("0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4", embeds)
-	# embeds = await b.embed("The restaurant is know for its mughlai food")
-	# await save_restaurant_embeddings("0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4", embeds)
 
 def register_exit_handler():
 
@@ -311,6 +151,60 @@ def register_exit_handler():
 
 	signal.signal(signal.SIGINT, exit_handler)
 	signal.signal(signal.SIGTERM, exit_handler)
+
+def main():
+	global path
+	global ai_client
+	global fl_client_1
+	global fl_client_2
+	global status_client
+	global customer_ids
+	global RESTAURANT_UID
+	global RESTAURANT_PASSWORD
+	global RESTAURANT_DEVICE
+	global RESTAURANT_NAME
+
+	path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'ml/')
+
+	fl_client_1 = FLClient(1)
+	fl_1_thread = fl_client_1.start()
+	client_threads.append(fl_1_thread)
+
+	fl_client_2 = FLClient(2)
+	fl_2_thread = fl_client_2.start()
+	client_threads.append(fl_2_thread)
+
+	status_client = StatusClient(root="./")
+
+	ai_client = AIClient()
+
+	register_exit_handler()
+
+	asyncio.run(init_embeddings(path))
+
+	status_client.init(RESTAURANT_PASSWORD, cb=on_status_cb)
+
+	# status_client.createAccountAndLogin(RESTAURANT_NAME, RESTAURANT_PASSWORD)
+
+	status_client.login(RESTAURANT_UID, RESTAURANT_PASSWORD)
+
+	# status_client.sendContactRequest(customer_ids[0]['publicKey'], "Hello! This is your restaurant Bot")
+
+	status_thread = status_client.start()
+	client_threads.append(status_thread)
+	
+	ai_thread = ai_client.start(cb=on_ai_client_cb)
+	client_threads.append(ai_thread)
+
+	status_client.createOneToOneChat(customer_ids[0]['publicKey'])
+
+	intersection, restaurant_key = asyncio.run(restaurant_feedback(customer_ids[0]['publicKey']))
+	#restaurant_key = """🚕🔈🧩👩🏽‍🤝‍👩🏾🏌️‍♂️👆🏾👩‍👧‍👧🐀😴🧑🏼‍💻🤒💇🏼‍♂️🥞🕵️‍♀️"""
+
+	asyncio.run(ai_client.greet(customer_ids[0], restaurant_key))
+
+	while True:
+		time.sleep(0.1)		
 
 if __name__ == '__main__':
 	main()

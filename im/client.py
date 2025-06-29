@@ -25,7 +25,7 @@ class StatusClient:
     	self.wakuv2_fleet = 'status.prod'
     	self.thread = None
     	self.message_queue = queue.Queue()
-    	print(f"\n========= Initializing Status Messenger ========\n")
+    	print(f"========= Initializing Status Messenger ========")
 
     def _init_lib(self):
         self.lib.InitializeApplication.argtypes = [ctypes.c_char_p]
