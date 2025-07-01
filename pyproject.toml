@@ -36,6 +36,19 @@ client = "client:main"
 server = "server:main"
 neighbor = "p2p.neighbor_restaurant:main"
 
+[tool.tastebot.app.restaurant]
+uuid = "0x9f02de9e49c6784cc95120daac6211d6ae16c9cc3a6292c2394c220c312d6bec"
+name = "Restaurant9"
+device = "restaurant-pc-9"
+password = "swigg@12345"
+# Restaurant Public key 0x043b493da25ff3f725d66185ed2094f0058ee2a577987bd89b6c9c2cf70fdf9fc13c0629449be9e76b7826335b828ac2bb2eb8cf639e6f31eca442ebb38eb7b148 
+
+[tool.tastebot.app.embeddings]
+max_customers = 10000
+max_restaurants = 1277
+customer_features_num = 1024
+restaurant_features_num = 1024
+
 [tool.poetry.group.ai.dependencies]
 ollama = "0.4.7"
 transformers = "4.49.0"
