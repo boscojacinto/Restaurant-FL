@@ -13,7 +13,6 @@ class Config():
 
 @dataclass
 class RestaurantConfig():
-	uuid: str
 	name: str
 	device: str
 	password: str

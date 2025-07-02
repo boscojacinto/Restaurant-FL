@@ -1,9 +1,18 @@
+import os
+import sys
 import json
 import time
 import queue
 import ctypes
 import threading
+from pathlib import Path
 from subprocess import Popen 
+from dataclasses import dataclass, field
+from dataclasses_json import dataclass_json, config
+from marshmallow import EXCLUDE
+
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../'))
+from config import ConfigOptions
 
 STATUS_BACKEND_PORT = 0
 STATUS_BACKEND_BIN = "im/libs/status-backend"
@@ -12,20 +21,34 @@ STATUS_GO_LIB = "im/libs/libstatus.so.0"
 status_backend = None
 SIGNAL_CB_TYPE = ctypes.CFUNCTYPE(None, ctypes.c_char_p)
 
+@dataclass_json(undefined=EXCLUDE)
+@dataclass
+class Account:
+    name: str
+    timestamp: int
+    identicon: str
+    key_uid: str = field(metadata=config(field_name="key-uid"))
+
 class StatusClient:
-    def __init__(self, root):
-    	self.lib = None
-    	self.cb = None
-    	self.root = root
-    	self.uid = ''
-    	self.password = ''
-    	self.device_name = ''
-    	self.display_name = ''
-    	self.wakuv2_nameserver = '8.8.8.8'
-    	self.wakuv2_fleet = 'status.prod'
-    	self.thread = None
-    	self.message_queue = queue.Queue()
-    	print(f"========= Initializing Status Messenger ========")
+    def __init__(self, root_dir):
+        self.lib = None
+        self.cb = None
+        self.uid = ''
+        self.password = ''
+        self.device_name = ''
+        self.display_name = ''
+        self.wakuv2_nameserver = '8.8.8.8'
+        self.wakuv2_fleet = 'status.prod'
+        self.thread = None
+        self.message_queue = queue.Queue()
+
+        config_options = ConfigOptions()
+        self.root_dir = str(Path(config_options._root_dir) / "im")
+        self.data_dir = str(Path(self.root_dir) / "data")
+        self.log_dir = str(Path(self.root_dir) / "log")
+        self.root_data_dir = str(Path(self.root_dir) / "root_data")
+
+        print(f"========= Initializing Status Messenger ========")
 
     def _init_lib(self):
         self.lib.InitializeApplication.argtypes = [ctypes.c_char_p]
@@ -40,8 +63,13 @@ class StatusClient:
         self.lib.CallPrivateRPC.restype = ctypes.c_char_p
         self.lib.SetSignalEventCallback.argtypes = [ctypes.c_void_p]
         self.lib.SetSignalEventCallback.restype = ctypes.c_char_p
+        self.lib.GetAccounts.argtypes = []
+        self.lib.GetAccounts.restype = ctypes.c_char_p
+        self.lib.Logout.argtypes = []
+        self.lib.Logout.restype = ctypes.c_char_p
 
     def init(self, device_name, cb):
+        global status_backend
         # Spawn status backend dameon
         try:
             status_backend = Popen([STATUS_BACKEND_BIN, "--address", "127.0.0.1:0"])
@@ -60,19 +88,19 @@ class StatusClient:
 
         # Intialize status-im application
         config = {
-            "dataDir": self.root,
+            "dataDir": self.data_dir,
             "mixpanelAppId": "",
             "mixpanelToken": "",
             "mediaServerEnableTLS": False,
             "sentryDSN": "",
-            "logDir": self.root,
+            "logDir": self.log_dir,
             "logEnabled": True,
             "logLevel": "INFO",
             "apiLoggingEnabled": True,
             "metricsEnabled": True,
             "metricsAddress": "",
             "deviceName": self.device_name,
-            "rootDataDir": self.root,
+            "rootDataDir": self.data_dir,
             "wakuV2LightClient": False,
             "wakuV2EnableMissingMessageVerification": True,
             "wakuV2EnableStoreConfirmationForMessagesSent": True
@@ -80,35 +108,53 @@ class StatusClient:
         config = json.dumps(config).encode('utf-8')
         self.lib.InitializeApplication(config)
 
+    def getAccounts(self):
+        accounts = self.lib.GetAccounts()
+        accounts = accounts.decode('utf-8')
+
+        if accounts == 'null':
+            return None
+
+        accounts = Account.schema().loads(accounts, many=True)
+        # for account in accounts:
+        #     print(f"Name:{account.name}")
+        #     print(f"Timestamp:{account.timestamp}")
+        #     print(f"Identicon:{account.identicon}")
+        #     print(f"KeyUID:{account.key_uid}")
+        return accounts
+
     def login(self, uid, password):
         # Store login credentials
-    	self.uid = uid
-    	self.password = password
-    	data = {
+        self.uid = uid
+        self.password = password
+        data = {
             "password": self.password,
             "keyUid": self.uid,
             "wakuV2Nameserver": self.wakuv2_nameserver,
             "wakuV2Fleet": self.wakuv2_fleet
         }
-    	payload = json.dumps(data).encode('utf-8')
-    	self.lib.LoginAccount(payload)
+        payload = json.dumps(data).encode('utf-8')
+        self.lib.LoginAccount(payload)
 
-    	time.sleep(2)
+        time.sleep(2)
 
         # Start status-im messenger
-    	data = {
+        data = {
             "method": "wakuext_startMessenger",
             "params": []
         }
-    	payload = json.dumps(data).encode('utf-8')
-    	self.lib.CallRPC(payload)
+        payload = json.dumps(data).encode('utf-8')
+        self.lib.CallRPC(payload)
+
+    def logout(self):
+        self.lib.Logout()
 
     def createAccountAndLogin(self, display_name, password):
         # Create new account and login
     	self.display_name = display_name
     	self.password = password
     	data = {
-            'rootDataDir': self.root,
+            'rootDataDir': self.data_dir,
             'kdfIterations': 256,
             'deviceName': self.device_name,
             'displayName': self.display_name,
@@ -194,8 +240,9 @@ class StatusClient:
     	self.message_queue.put(message)
 
     def stop(self):
-        pass
         # Stop client
-        #global status_backend
-        #if status_backend:
-            #status_backend.terminate()
+        print(f"Logging out..")
+        self.logout()
+        # global status_backend
+        # if status_backend:
+        #     status_backend.terminate()
