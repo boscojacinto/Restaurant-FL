@@ -10,7 +10,7 @@ import asyncio
 import threading
 from pathlib import Path
 from types import FrameType
-from typing import Callable
+from typing import Callable, List
 
 from config import ConfigOptions
 from im.client import StatusClient 
@@ -36,6 +36,13 @@ config = None
 restaurant_service = None
 restaurant_config = None
 
+class Customer:
+    PublicKey: str
+    Name: str
+    ChatKey: str
+    EmojiHash: str
+
+customers: List[Customer] = []
 customer_ids = [{'id': 1, 'name': "Rohan", 'publicKey': "0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4", 'emojiHash': """👨‍✈️ℹ️📛🤘👩🏼‍🎤👨🏿‍🦱🏌🏼‍♀️🪣🐍🅱️👋🏼👱🏿‍♀️🙅🏼‍♂️🤨"""}]
 
 async def restaurant_setup_and_fetch(customer_id):
@@ -162,6 +169,7 @@ class TasteBot():
 		self.init_thread = None
 		self.init_thread_lock = False
 		self.init_done_event = threading.Event()
+		self.init_chatkey_event = threading.Event()
 		
 		self.run_thread = None
 		self.run_thread_lock = False
@@ -177,6 +185,8 @@ class TasteBot():
 
 	def on_status_cb(self, signal: str):
 		global ai_client
+		global customers
+
 		signal = json.loads(signal)
 		#print(f"signal received!:{signal}")
 		if signal["type"] == "node.login":
@@ -186,19 +196,28 @@ class TasteBot():
 				print(f"Node Login: uid:{key_uid} publicKey:{public_key}")
 				self.public_key = public_key
 				self.uid = key_uid
-				self.init_done_event.set() 
+				self.init_chatkey_event.set() 
 			except KeyError:
 				pass
 		elif signal["type"] == "message.delivered":
 			print("Message delivered!")
 		elif signal["type"] == "messages.new":
-			#print(f"event!:{signal["event"]}")
+			print(f"event!:{signal["event"]}")
 			try:
-				new_msg = signal["event"]["chats"][0]["lastMessage"]["parsedText"][0]["children"][0]["literal"]
-				c_id = signal["event"]["chats"][0]["lastMessage"]["from"]
-				print(f"New Message received!:{new_msg}, from:{c_id}")
-				if ai_client is not None:
-					ai_client.sendMessage(c_id, new_msg)
+				chats = signal["event"]["chats"]
+				contacts = signal["event"]["contacts"]
+				for chat in chats:
+					new_msg = chat["lastMessage"]["parsedText"][0]["children"][0]["literal"]
+					c_id = chat["lastMessage"]["from"]
+					print(f"New Message received!:{new_msg}, from:{c_id}")
+					if ai_client is not None:
+						ai_client.sendMessage(c_id, new_msg)
+					break
+
+				for contact in contacts:
+					self.accept_contact_request(contact)
+					break
+
 			except KeyError:
 				pass
 		elif signal["type"] == "wakuv2.peerstats":
@@ -246,15 +265,44 @@ class TasteBot():
 				restaurant_config.password
 			)
 
-	def init_execute(self, done_event):
+	def accept_contact_request(self, contact):
+		global customers
+		global status_client
+		
+		ret = status_client.acceptContactRequest(contact["id"])
+		print(f"RET:{ret}")
+		c = Customer()
+		c.PublicKey = contact["id"]
+		c.Name = contact["primaryName"]
+		c.ChatKey = contact["compressedKey"]
+		c.EmojiHash = contact["emojiHash"]
+		customers.append(c)
+		print(f"New customer added:{c}")
+
+	async def set_chatkey(self):
+		print(f"\nIn set_chatkey:{self.public_key}")
+		global status_client
+		chat_key = status_client.getChatKey(self.public_key)
+		self.chat_key = chat_key
+		print(f"self.chat_key:{self.chat_key}")
+		await show_restaurant_code(self.chat_key)
+		self.init_done_event.set()
+
+	def init_execute(self, chat_key_event, done_event):
 		while True:
 			with self.init_thread_lock:
 				if (self.init_success is False and
+					chat_key_event.is_set() is False and
 					done_event.is_set() is False
 				):
 					self.attempt_init()
 					time.sleep(10)
+				elif (chat_key_event.is_set() is True and
+					done_event.is_set() is False
+				):
+					 asyncio.run(self.set_chatkey())
 				else:
+					print("\nRETURN")
 					return
 
 	def init_clients(self):
@@ -293,8 +341,6 @@ class TasteBot():
 		ai_thread = ai_client.start(cb=on_ai_client_cb)
 		client_threads.append(ai_thread)
 
-		show_restaurant_code(self.public_key)
-
 		await(EmbeddingOps().init_embeddings())
 
 		# status_client.sendContactRequest(
@@ -302,27 +348,30 @@ class TasteBot():
 		# 	"Hello! This is your restaurant Bot"
 		# )
 
-		# status_client.createOneToOneChat(
-		# 	customer_ids[0]['publicKey']
-		# )
+	def add_customer(self, public_key):
+		print(f"Adding customer:{public_key}")
+		status_client.createOneToOneChat(public_key)
 
-		# intersection, restaurant_key = asyncio.run(
-		# 	restaurant_feedback(customer_ids[0]['publicKey'])
-		# )
-		# #restaurant_key = """🚕🔈🧩👩🏽‍🤝‍👩🏾🏌️‍♂️👆🏾👩‍👧‍👧🐀😴🧑🏼‍💻🤒💇🏼‍♂️🥞🕵️‍♀️"""
+		intersection, restaurant_key = asyncio.run(
+			restaurant_feedback(public_key)
+		)
+		#restaurant_key = """🚕🔈🧩👩🏽‍🤝‍👩🏾🏌️‍♂️👆🏾👩‍👧‍👧🐀😴🧑🏼‍💻🤒💇🏼‍♂️🥞🕵️‍♀️"""
 
-		# asyncio.run(ai_client.greet(customer_ids[0], restaurant_key))
+		asyncio.run(ai_client.greet(customer_ids[0], restaurant_key))
 
 	def run_execute(self):
 		asyncio.run(self.start_clients())
 
 		while True:
 			with self.run_thread_lock:
+				# if customer_add_event.is_set() is True:
+				# 	pass
+				# else:
 				time.sleep(0.2)
 
 	def start(self):
 		self.init_thread = threading.Thread(target=self.init_execute,
-									args=(self.init_done_event, ))
+									args=(self.init_chatkey_event, self.init_done_event,))
 		self.init_thread_lock = threading.Lock()
 		self.run_thread = threading.Thread(target=self.run_execute)
 		self.run_thread_lock = threading.Lock()	

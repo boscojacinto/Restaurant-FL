@@ -67,6 +67,10 @@ class StatusClient:
         self.lib.GetAccounts.restype = ctypes.c_char_p
         self.lib.Logout.argtypes = []
         self.lib.Logout.restype = ctypes.c_char_p
+        self.lib.GetChatKey.argtypes = [ctypes.c_char_p]
+        self.lib.GetChatKey.restype = ctypes.c_char_p
+        self.lib.AcceptContactRequest.argtypes = [ctypes.c_char_p]
+        self.lib.AcceptContactRequest.restype = ctypes.c_char_p
 
     def init(self, device_name, cb):
         global status_backend
@@ -148,6 +152,21 @@ class StatusClient:
 
     def logout(self):
         self.lib.Logout()
+
+    def acceptContactRequest(self, contact_id):
+        data = {
+            "id": contact_id
+        }
+        payload = json.dumps(data).encode('utf-8')
+        return self.lib.AcceptContactRequest(payload)
+
+    def getChatKey(self, public_key):
+        data = {
+            "public_key": public_key
+        }
+        payload = json.dumps(data).encode('utf-8')
+        chat_key = self.lib.GetChatKey(payload)
+        return chat_key.decode('utf-8')
 
     def createAccountAndLogin(self, display_name, password):
         # Create new account and login

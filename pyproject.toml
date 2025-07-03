@@ -37,8 +37,8 @@ server = "server:main"
 neighbor = "p2p.neighbor_restaurant:main"
 
 [tool.tastebot.app.restaurant]
-name = "Restaurant9"
-device = "restaurant-pc-9"
+name = "TasteBotRestaurant"
+device = "restaurant-pc"
 password = "swigg@12345"
 # Restaurant Public key 0x043b493da25ff3f725d66185ed2094f0058ee2a577987bd89b6c9c2cf70fdf9fc13c0629449be9e76b7826335b828ac2bb2eb8cf639e6f31eca442ebb38eb7b148 
 
