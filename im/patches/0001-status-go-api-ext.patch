@@ -1,0 +1,241 @@
+diff --git a/api/geth_backend.go b/api/geth_backend.go
+index 50b21b013..703361e9d 100644
+--- a/api/geth_backend.go
++++ b/api/geth_backend.go
+@@ -265,6 +265,54 @@ func (b *GethStatusBackend) AddCentralizedMetric(metric centralizedmetricscommon
+ 
+ }
+ 
++func (b *GethStatusBackend) AcceptContactRequest(id types.HexBytes) error {
++	b.mu.Lock()
++	defer b.mu.Unlock()
++
++	messenger := b.Messenger()
++	if messenger == nil {
++		return errors.New("cannot resolve messenger instance")
++	}
++
++	_, err := messenger.AcceptContactRequest(context.Background(), &requests.AcceptContactRequest{ID: id})
++	if err != nil {
++		return errors.New("failed to accept contact request")
++	}
++
++	return nil
++}
++
++func (b *GethStatusBackend) GetContactByID(pubKey string) (*protocol.Contact, error) {
++	b.mu.Lock()
++	defer b.mu.Unlock()
++
++	messenger := b.Messenger()
++	if messenger == nil {
++		return nil, errors.New("cannot resolve messenger instance")
++	}
++
++	contact := messenger.GetContactByID(pubKey)
++
++	return contact, nil
++}
++
++func (b *GethStatusBackend) GetChatKey(publicKey string) (string, error) {
++	b.mu.Lock()
++	defer b.mu.Unlock()
++
++	messenger := b.Messenger()
++	if messenger == nil {
++		return "", errors.New("cannot resolve messenger instance")
++	}
++
++	chatKey, err := messenger.ShareUserURLWithData(publicKey)
++	if err != nil {
++		return "", errors.New("cannot get chat key")
++	}
++
++	return chatKey, nil
++}
++
+ func (b *GethStatusBackend) GetAccounts() ([]multiaccounts.Account, error) {
+ 	b.mu.Lock()
+ 	defer b.mu.Unlock()
+diff --git a/cmd/status-backend/main.go b/cmd/status-backend/main.go
+index acb46ce0f..d5fd81801 100644
+--- a/cmd/status-backend/main.go
++++ b/cmd/status-backend/main.go
+@@ -4,8 +4,8 @@ import (
+ 	"flag"
+ 	stdlog "log"
+ 	"os"
+-	"os/signal"
+-	"syscall"
++	//"os/signal"
++	//"syscall"
+ 
+ 	"golang.org/x/crypto/ssh/terminal"
+ 
+@@ -13,7 +13,7 @@ import (
+ 
+ 	"github.com/status-im/status-go/cmd/status-backend/server"
+ 	"github.com/status-im/status-go/logutils"
+-	statusgo "github.com/status-im/status-go/mobile"
++	//statusgo "github.com/status-im/status-go/mobile"
+ 	"github.com/status-im/status-go/pkg/sentry"
+ 	"github.com/status-im/status-go/pkg/version"
+ )
+@@ -43,7 +43,7 @@ func main() {
+ 	defer sentry.Recover()
+ 
+ 	flag.Parse()
+-	go handleInterrupts()
++	//go handleInterrupts()
+ 
+ 	srv := server.NewServer(
+ 		server.WithProfiling(*pprofEnabled),
+@@ -67,7 +67,7 @@ func main() {
+ 
+ // handleInterrupts catches interrupt signal (SIGTERM/SIGINT) and
+ // gracefully logouts and stops the node.
+-func handleInterrupts() {
++/*func handleInterrupts() {
+ 	ch := make(chan os.Signal, 1)
+ 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
+ 	defer signal.Stop(ch)
+@@ -76,4 +76,4 @@ func handleInterrupts() {
+ 	logger.Info("interrupt signal received", "signal", receivedSignal)
+ 	_ = statusgo.Logout()
+ 	os.Exit(0)
+-}
++}*/
+diff --git a/mobile/status.go b/mobile/status.go
+index 5c8c0a0c1..ed486759b 100644
+--- a/mobile/status.go
++++ b/mobile/status.go
+@@ -286,6 +286,129 @@ func signGroupMembership(content string) string {
+ 	return string(data)
+ }
+ 
++func AcceptContactRequest(requestJSON string) string {
++	return callWithResponse(acceptContactRequest, requestJSON)
++}
++
++// acceptContactRequest accepts the contact request
++func acceptContactRequest(requestJSON string) string {
++
++	var request requests.AcceptContactRequest
++	err := json.Unmarshal([]byte(requestJSON), &request)
++	if err != nil {
++		return makeJSONResponse(err)
++	}
++
++	err = request.Validate()
++	if err != nil {
++		return makeJSONResponse(err)
++	}
++
++	err = statusBackend.AcceptContactRequest(request.ID)
++	if err != nil {
++		return makeJSONResponse(err)
++	}
++
++	return makeJSONResponse(nil)
++}
++
++func GetContactByID(requestJSON string) string {
++	return callWithResponse(getContactByID, requestJSON)
++}
++
++// getContactByID returns the contact details
++func getContactByID(pubKey string) string {
++
++	contact, err := statusBackend.GetContactByID(pubKey)
++	if err != nil {
++		return makeJSONResponse(err)
++	}
++
++	respJSON, err := json.Marshal(contact)
++	if err != nil {
++		return makeJSONResponse(err)
++	}
++
++	return string(respJSON)
++}
++
++func GetChatKey(requestJSON string) string {
++	return callWithResponse(getChatKey, requestJSON)
++}
++
++// getChatKey returns the current account's chat key
++func getChatKey(requestJSON string) string {
++	type ChatKeyRequest struct {
++		PublicKey string `json:"public_key"`
++	}
++
++	var request ChatKeyRequest
++	err := json.Unmarshal([]byte(requestJSON), &request)
++	if err != nil {
++		return makeJSONResponse(err)
++	}
++
++	chatKey, err := statusBackend.GetChatKey(request.PublicKey)
++	if err != nil {
++		return makeJSONResponse(err)
++	}
++
++	respJSON, err := json.Marshal(chatKey)
++	if err != nil {
++		return makeJSONResponse(err)
++	}
++
++	return string(respJSON)
++}
++
++func GetAccounts() string {
++	return callWithResponse(getAccounts)
++}
++
++// getAccounts returns the current accounts of the Status node
++func getAccounts() string {
++	accounts, err := statusBackend.GetAccounts()
++	if err != nil {
++		return makeJSONResponse(err)
++	}
++
++	respJSON, err := json.Marshal(accounts)
++	if err != nil {
++		return makeJSONResponse(err)
++	}
++
++	return string(respJSON)
++}
++
++func GetQRCode(requestJSON string) string {
++	return callWithResponse(getORCode, requestJSON)
++}
++
++// getORCode returns the current account's qr code
++func getORCode(requestJSON string) string {
++	type ChatKeyRequest struct {
++		PublicKey string `json:"public_key"`
++	}
++
++	var request ChatKeyRequest
++	err := json.Unmarshal([]byte(requestJSON), &request)
++	if err != nil {
++		return makeJSONResponse(err)
++	}
++
++	chatKey, err := statusBackend.GetChatKey(request.PublicKey)
++	if err != nil {
++		return makeJSONResponse(err)
++	}
++
++	respJSON, err := json.Marshal(chatKey)
++	if err != nil {
++		return makeJSONResponse(err)
++	}
++
++	return string(respJSON)
++}
++
+ func GetNodeConfig() string {
+ 	return callWithResponse(getNodeConfig)
+ }

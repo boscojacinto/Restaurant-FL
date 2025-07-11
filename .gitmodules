@@ -7,3 +7,6 @@
 [submodule "p2p/waku"]
 	path = p2p/waku
 	url = git@github.com:waku-org/go-waku.git
+[submodule "im/status-go"]
+	path = im/status-go
+	url = git@github.com:status-im/status-go.git

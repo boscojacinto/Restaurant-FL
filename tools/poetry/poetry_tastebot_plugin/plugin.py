@@ -19,6 +19,7 @@ from poetry.console.application import Application
 from poetry.console.commands.env_command import EnvCommand
 from poetry.console.commands.update import UpdateCommand
 from poetry.console.commands.build import BuildCommand
+from poetry.console.commands.install import InstallCommand
 from poetry.core.utils.helpers import module_name
 from poetry.plugins.application_plugin import ApplicationPlugin
 
@@ -94,6 +95,53 @@ def build_waku(io: IO) -> int:
         io.write_line(f"<error>Error compiling libwaku:{e}</>")
         return 1
 
+def build_statusgo(io: IO) -> int:
+    im_dir = Path("im").resolve(strict=True)
+    statusgo_dir = Path("im/status-go").resolve(strict=True)
+    io.write_line(f"<info>Building statusgo in: {statusgo_dir}</>")
+
+    try:
+        result = subprocess.run(["make", "status-go-deps"],
+        cwd=statusgo_dir, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error downloading status-go deps:{e}</>")
+        return 1
+
+    try:
+        io.write_line("<info>Applying status-go patches..</>")
+        result = subprocess.run(["git", "apply", "../patches/0001-status-go-api-ext.patch"],
+        cwd=statusgo_dir, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error applying patches to status-go:{e}</>")
+        return 1
+
+    try:
+        result = subprocess.run(["make", "status-backend"],
+        cwd=statusgo_dir, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error compiling status-backend:{e}</>")
+        return 1
+
+    try:
+        result = subprocess.run(["make", "statusgo-shared-library"],
+        cwd=statusgo_dir, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error compiling status-go shared library:{e}</>")
+        return 1
+
+    try:
+        result = subprocess.run(["cp", "status-go/build/bin/status-backend", "libs"],
+        cwd=im_dir, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error copying im libs:{e}</>")
+        return 1
+
+    try:
+        result = subprocess.run(["cp", "status-go/build/bin/libstatus.so.0", "libs"],
+        cwd=im_dir, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error copying im libs:{e}</>")
+        return 1
 
 def run_build(io: IO, venv_path: Path) -> int:
 
@@ -113,6 +161,7 @@ def run_build(io: IO, venv_path: Path) -> int:
     build_proto(io, venv_path)
     build_consensus(io)
     build_waku(io)
+    build_statusgo(io)
 
     return 0
 
@@ -161,7 +210,7 @@ class TasteBotPlugin(ApplicationPlugin):
     ) -> None:
         if (
             not isinstance(event, ConsoleCommandEvent)
-            or not isinstance(event.command, BuildCommand)
+            or not isinstance(event.command, InstallCommand)
             or not self.application
         ):
             return

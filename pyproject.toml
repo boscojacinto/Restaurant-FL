@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "tastebot"
-version = "1.0.0"
+version = "1.1.0"
 description = "A food intellect for restaurants and customers alike"
 authors = ["BoscoJacinto <boscojac@gmail.com>"]
 readme = "README.md"
@@ -27,7 +27,7 @@ url = "https://data.pyg.org/whl/torch-2.4.0+cpu.html"
 priority = "supplemental"
 
 [tool.poetry.requires-plugins]
-poetry-tastebot-plugin = { url = "https://github.com/boscojacinto/Restaurant-FL/releases/download/v1.0.0/poetry_tastebot_plugin-1.0.0-py3-none-any.whl" }
+poetry-tastebot-plugin = { url = "https://github.com/boscojacinto/Restaurant-FL/releases/download/v1.1.0/poetry_tastebot_plugin-1.1.13-py3-none-any.whl" }
 
 # [tool.poetry.poetry-tastebot-plugin]
 
@@ -81,7 +81,7 @@ opentelemetry-sdk = "1.31.1"
 opentelemetry-semantic-conventions = "0.52b1"
 
 [tool.poetry.group.fl.dependencies]
-flwr = { url = "https://github.com/boscojacinto/Restaurant-FL/releases/download/v1.0.0/flwr-1.19.0-py3-none-any.whl" }
+flwr = { url = "https://github.com/boscojacinto/Restaurant-FL/releases/download/v1.1.0/flwr-1.19.0-py3-none-any.whl" }
 flwr-datasets = "0.5.0"
 datasets = "2.21.0"
 scikit-learn = "1.6.1"
@@ -92,7 +92,7 @@ torch = "2.4.0"
 numpy = "2.2.3"
 pandas = "2.2.3"
 torch-geometric = "2.6.1"
-pyg_lib = { url = "https://github.com/boscojacinto/Restaurant-FL/releases/download/v1.0.0/pyg_lib-0.4.0+pt24cpu-cp312-cp312-linux_x86_64.whl" }
+pyg_lib = { url = "https://github.com/boscojacinto/Restaurant-FL/releases/download/v1.1.0/pyg_lib-0.4.0+pt24cpu-cp312-cp312-linux_x86_64.whl" }
 torch_scatter = "2.1.2+pt24cpu"
 torch_sparse = { version = "0.6.18+pt24cpu", source = "torch_sparse"}
 tqdm = "4.67.1"
@@ -115,7 +115,7 @@ nvidia-nvjitlink-cu12 = "12.8.93"
 nvidia-nvtx-cu12 = "12.1.105"
 
 [tool.poetry.group.p2p.dependencies]
-openmined_psi = { url = "https://github.com/boscojacinto/Restaurant-FL/releases/download/v1.0.0/openmined_psi-2.0.5-cp312-cp312-manylinux_2_39_x86_64.whl" }
+openmined_psi = { url = "https://github.com/boscojacinto/Restaurant-FL/releases/download/v1.1.0/openmined_psi-2.0.5-cp312-cp312-manylinux_2_39_x86_64.whl" }
 
 [tool.poetry.dependencies]
 python = "^3.12"
