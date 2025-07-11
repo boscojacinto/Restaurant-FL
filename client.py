@@ -11,9 +11,11 @@ import threading
 from pathlib import Path
 from types import FrameType
 from typing import Callable, List
+from PIL import Image
+from io import BytesIO
 
 from config import ConfigOptions
-from im.client import StatusClient 
+from im.client import StatusClient, ContactRequestState 
 from ai.client import AIClient 
 from fl.client import FLClient 
 
@@ -22,7 +24,6 @@ import p2p.restaurant_pb2_grpc as r_psi
 import private_set_intersection.python as psi
 
 from embeddings import EmbeddingOps
-from qrcode import show_restaurant_code
 
 client = None
 status_client = None
@@ -42,8 +43,54 @@ class Customer:
     ChatKey: str
     EmojiHash: str
 
+class ExitCode:
+    SUCCESS = 0
+    GRACEFUL_EXIT_SIGINT = 1
+    GRACEFUL_EXIT_SIGTERM = 2
+    GRACEFUL_EXIT_SIGQUIT = 3
+
+SIGNAL_TO_EXIT_CODE: dict[int, int] = {
+    signal.SIGINT: ExitCode.GRACEFUL_EXIT_SIGINT,
+    signal.SIGTERM: ExitCode.GRACEFUL_EXIT_SIGTERM,
+}
+
 customers: List[Customer] = []
-customer_ids = [{'id': 1, 'name': "Rohan", 'publicKey': "0x04c57743b8b39210913de928ae0b8e760d8e220c5539b069527b62f1aa3a49c47ec03188ff32f13916cf28673082a25afdd924d26d768e58e872f3f794365769d4", 'emojiHash': """👨‍✈️ℹ️📛🤘👩🏼‍🎤👨🏿‍🦱🏌🏼‍♀️🪣🐍🅱️👋🏼👱🏿‍♀️🙅🏼‍♂️🤨"""}]
+
+def register_exit_handler():
+	default_handlers: dict[int, Callable[[int, FrameType], None]] = {}
+
+	def exit_handler(signum: int, _frame: FrameType):
+		global client
+		global status_client
+		global ai_client
+		global fl_client_1
+		global fl_client_2
+		global client_threads
+
+		signal.signal(signum, default_handlers[signum])
+
+		if fl_client_1 is not None:
+			fl_client_1.stop()
+
+		if fl_client_2 is not None:
+			fl_client_2.stop()
+			
+		if status_client is not None:
+			status_client.stop()
+
+		if ai_client is not None:
+			ai_client.stop()
+
+		if client_threads is not None:
+			for client_thread in client_threads:
+				client_thread.join()
+
+		if client.run_thread is not None:
+			client.run_thread.join()
+
+	for sig in SIGNAL_TO_EXIT_CODE:
+		default_handler = signal.signal(sig, exit_handler)
+		default_handlers[sig] = default_handler
 
 async def restaurant_setup_and_fetch(customer_id):
 	global psi_client
@@ -94,56 +141,9 @@ async def on_ai_client_cb(type, customer_id, message: str, embeds):
 		status_client.deactivateOneToOneChat(customer_id)
 	pass
 
-class ExitCode:
-    """Exit codes for TasteBot components."""
-
-    SUCCESS = 0
-    GRACEFUL_EXIT_SIGINT = 1
-    GRACEFUL_EXIT_SIGTERM = 2
-    GRACEFUL_EXIT_SIGQUIT = 3
-
-
-SIGNAL_TO_EXIT_CODE: dict[int, int] = {
-    signal.SIGINT: ExitCode.GRACEFUL_EXIT_SIGINT,
-    signal.SIGTERM: ExitCode.GRACEFUL_EXIT_SIGTERM,
-}
-
-def register_exit_handler():
-
-	default_handlers: dict[int, Callable[[int, FrameType], None]] = {}
-
-	def exit_handler(signum: int, _frame: FrameType):
-		global client
-		global status_client
-		global ai_client
-		global fl_client_1
-		global fl_client_2
-		global client_threads
-
-		signal.signal(signum, default_handlers[signum])
-
-		if fl_client_1 is not None:
-			fl_client_1.stop()
-
-		if fl_client_2 is not None:
-			fl_client_2.stop()
-			
-		if status_client is not None:
-			status_client.stop()
-
-		if ai_client is not None:
-			ai_client.stop()
-
-		if client_threads is not None:
-			for client_thread in client_threads:
-				client_thread.join()
-
-		if client.run_thread is not None:
-			client.run_thread.join()
-
-	for sig in SIGNAL_TO_EXIT_CODE:
-		default_handler = signal.signal(sig, exit_handler)
-		default_handlers[sig] = default_handler
+def display_qr_code(data):
+	img = Image.open(BytesIO(data))
+	img.show()
 
 class TasteBot():
 	_instance = None
@@ -158,23 +158,26 @@ class TasteBot():
 		global fl_client_1
 		global fl_client_2
 		global status_client
-		global customer_ids
 		global config
 		global restaurant_config
 		global client_threads
 
 		self.public_key = None
 		self.uid = None
+		self.init_success = False
+		self.media_port = []
 
 		self.init_thread = None
 		self.init_thread_lock = False
+		
 		self.init_done_event = threading.Event()
 		self.init_chatkey_event = threading.Event()
+		self.customer_add_event = threading.Event()
 		
 		self.run_thread = None
 		self.run_thread_lock = False
 
-		self.init_success = False
+		self.contact_request_queue = queue.Queue()
 
 		config = ConfigOptions()
 		restaurant_config = config.get_restaurant_config()
@@ -185,6 +188,7 @@ class TasteBot():
 
 	def on_status_cb(self, signal: str):
 		global ai_client
+		global status_client
 		global customers
 
 		signal = json.loads(signal)
@@ -195,31 +199,48 @@ class TasteBot():
 				public_key = signal["event"]["settings"]["current-user-status"]["publicKey"]
 				print(f"Node Login: uid:{key_uid} publicKey:{public_key}")
 				self.public_key = public_key
-				self.uid = key_uid
-				self.init_chatkey_event.set() 
+				self.uid = key_uid 
 			except KeyError:
 				pass
 		elif signal["type"] == "message.delivered":
 			print("Message delivered!")
 		elif signal["type"] == "messages.new":
-			print(f"event!:{signal["event"]}")
+			#print(f"event!:{signal["event"]}")
 			try:
 				chats = signal["event"]["chats"]
+				messages = signal["event"]["messages"]
 				contacts = signal["event"]["contacts"]
 				for chat in chats:
-					new_msg = chat["lastMessage"]["parsedText"][0]["children"][0]["literal"]
-					c_id = chat["lastMessage"]["from"]
-					print(f"New Message received!:{new_msg}, from:{c_id}")
+					was_customer_added = False
+					new_msg = chat["lastMessage"]["text"]
+					customer_id = chat["lastMessage"]["from"]
+					print(f"New Message received!:{new_msg}, from:{customer_id}")
 					if ai_client is not None:
-						ai_client.sendMessage(c_id, new_msg)
-					break
+						contact_info = status_client.getContactInfo(customer_id)
+						if ("contactRequestLocalState" in contact_info and
+							contact_info['contactRequestLocalState'] == ContactRequestState.Accepted):
+							was_customer_added = True
+
+						if was_customer_added == True:
+							customer_present = next((True for customer in customers if customer.PublicKey == customer_id), False)
+							if customer_present == False:
+								self.contact_request_queue.put(contact_info)
+								self.customer_add_event.set()
+							else:
+								ai_client.sendMessage(customer_id, new_msg)
 
 				for contact in contacts:
-					self.accept_contact_request(contact)
-					break
+					contact['msgId'] = next((msg['id'] for msg in messages if msg['chatId'] == contact['id']), None)
+					if 'msgId' in contact:
+						self.contact_request_queue.put(contact)
+						self.customer_add_event.set()
 
 			except KeyError:
 				pass
+		elif signal["type"] == "mediaserver.started":
+			self.media_port.append(signal["event"]["port"])
+			self.init_chatkey_event.set()
+			print(f"media_port:{signal["event"]["port"]}")
 		elif signal["type"] == "wakuv2.peerstats":
 			#print(f"stats!:{signal["event"]}")
 			pass
@@ -238,9 +259,6 @@ class TasteBot():
 			return False
 
 		for account in accounts:
-			# print(f"account.KeyUID:{account.key_uid}")
-			# print(f"account.Name:{account.name}")
-			# print(f"restaurant_config.name:{restaurant_config.name}")			
 			if account.name == restaurant_config.name:
 				self.attempt_login(uid=account.key_uid, create=False)
 				return True
@@ -265,27 +283,13 @@ class TasteBot():
 				restaurant_config.password
 			)
 
-	def accept_contact_request(self, contact):
-		global customers
-		global status_client
-		
-		ret = status_client.acceptContactRequest(contact["id"])
-		print(f"RET:{ret}")
-		c = Customer()
-		c.PublicKey = contact["id"]
-		c.Name = contact["primaryName"]
-		c.ChatKey = contact["compressedKey"]
-		c.EmojiHash = contact["emojiHash"]
-		customers.append(c)
-		print(f"New customer added:{c}")
-
 	async def set_chatkey(self):
-		print(f"\nIn set_chatkey:{self.public_key}")
 		global status_client
 		chat_key = status_client.getChatKey(self.public_key)
 		self.chat_key = chat_key
-		print(f"self.chat_key:{self.chat_key}")
-		await show_restaurant_code(self.chat_key)
+		
+		qr_binary = status_client.getQRCode(self.chat_key, self.media_port[0])
+		display_qr_code(qr_binary)
 		self.init_done_event.set()
 
 	def init_execute(self, chat_key_event, done_event):
@@ -300,9 +304,9 @@ class TasteBot():
 				elif (chat_key_event.is_set() is True and
 					done_event.is_set() is False
 				):
-					 asyncio.run(self.set_chatkey())
+					time.sleep(5)
+					asyncio.run(self.set_chatkey())
 				else:
-					print("\nRETURN")
 					return
 
 	def init_clients(self):
@@ -343,37 +347,46 @@ class TasteBot():
 
 		await(EmbeddingOps().init_embeddings())
 
-		# status_client.sendContactRequest(
-		# 	customer_ids[0]['publicKey'],
-		# 	"Hello! This is your restaurant Bot"
-		# )
+	async def add_customer(self, contact):
+		global customers
+				
+		customer = Customer()
+		customer.PublicKey = contact["id"]
+		customer.Name = contact["primaryName"] or contact["displayName"]
+		customer.ChatKey = contact["compressedKey"]  
+		customer.EmojiHash = contact["emojiHash"]
+		
+		customers.append(customer)
+		print(f"New customer added:{customer}")
 
-	def add_customer(self, public_key):
-		print(f"Adding customer:{public_key}")
-		status_client.createOneToOneChat(public_key)
-
-		intersection, restaurant_key = asyncio.run(
-			restaurant_feedback(public_key)
-		)
+		intersection, restaurant_key = await restaurant_feedback(customer.PublicKey)
 		#restaurant_key = """🚕🔈🧩👩🏽‍🤝‍👩🏾🏌️‍♂️👆🏾👩‍👧‍👧🐀😴🧑🏼‍💻🤒💇🏼‍♂️🥞🕵️‍♀️"""
 
-		asyncio.run(ai_client.greet(customer_ids[0], restaurant_key))
+		print(f"Creating Greeting message..")
+		await ai_client.greet(customer, restaurant_key)
 
-	def run_execute(self):
+	def run_execute(self, customer_add_event):
 		asyncio.run(self.start_clients())
 
 		while True:
 			with self.run_thread_lock:
-				# if customer_add_event.is_set() is True:
-				# 	pass
-				# else:
-				time.sleep(0.2)
+				if (customer_add_event.is_set() is True and
+					self.contact_request_queue.qsize() > 0):
+
+					contact = self.contact_request_queue.get_nowait()
+					if "msgId" in contact:
+						status_client.acceptContactRequest(contact["msgId"])
+					asyncio.run(self.add_customer(contact))
+				else:
+					time.sleep(0.2)
 
 	def start(self):
 		self.init_thread = threading.Thread(target=self.init_execute,
-									args=(self.init_chatkey_event, self.init_done_event,))
+									args=(self.init_chatkey_event, 
+										self.init_done_event,))
 		self.init_thread_lock = threading.Lock()
-		self.run_thread = threading.Thread(target=self.run_execute)
+		self.run_thread = threading.Thread(target=self.run_execute,
+									args=(self.customer_add_event,))
 		self.run_thread_lock = threading.Lock()	
 
 		self.init_thread.start()

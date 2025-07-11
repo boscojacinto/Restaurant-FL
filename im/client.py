@@ -4,7 +4,10 @@ import json
 import time
 import queue
 import ctypes
+import base64
+import requests
 import threading
+from enum import Enum
 from pathlib import Path
 from subprocess import Popen 
 from dataclasses import dataclass, field
@@ -28,6 +31,11 @@ class Account:
     timestamp: int
     identicon: str
     key_uid: str = field(metadata=config(field_name="key-uid"))
+
+class ContactRequestState(Enum):
+    Pending = 1
+    Accepted = 2
+    Dismissed = 3
 
 class StatusClient:
     def __init__(self, root_dir):
@@ -71,6 +79,8 @@ class StatusClient:
         self.lib.GetChatKey.restype = ctypes.c_char_p
         self.lib.AcceptContactRequest.argtypes = [ctypes.c_char_p]
         self.lib.AcceptContactRequest.restype = ctypes.c_char_p
+        self.lib.GetContactByID.argtypes = [ctypes.c_char_p]
+        self.lib.GetContactByID.restype = ctypes.c_char_p
 
     def init(self, device_name, cb):
         global status_backend
@@ -99,7 +109,7 @@ class StatusClient:
             "sentryDSN": "",
             "logDir": self.log_dir,
             "logEnabled": True,
-            "logLevel": "INFO",
+            "logLevel": "WARN",
             "apiLoggingEnabled": True,
             "metricsEnabled": True,
             "metricsAddress": "",
@@ -116,15 +126,10 @@ class StatusClient:
         accounts = self.lib.GetAccounts()
         accounts = accounts.decode('utf-8')
 
-        if accounts == 'null':
+        if accounts == 'null' or accounts == '{"error":"accounts db wasn\'t initialized"}':
             return None
 
         accounts = Account.schema().loads(accounts, many=True)
-        # for account in accounts:
-        #     print(f"Name:{account.name}")
-        #     print(f"Timestamp:{account.timestamp}")
-        #     print(f"Identicon:{account.identicon}")
-        #     print(f"KeyUID:{account.key_uid}")
         return accounts
 
     def login(self, uid, password):
@@ -160,13 +165,22 @@ class StatusClient:
         payload = json.dumps(data).encode('utf-8')
         return self.lib.AcceptContactRequest(payload)
 
+    def getContactInfo(self, public_key):
+        contact_info = self.lib.GetContactByID(public_key.encode('utf-8')).decode('utf-8')
+        return json.loads(contact_info)
+
     def getChatKey(self, public_key):
         data = {
             "public_key": public_key
         }
         payload = json.dumps(data).encode('utf-8')
-        chat_key = self.lib.GetChatKey(payload)
-        return chat_key.decode('utf-8')
+        return self.lib.GetChatKey(payload).decode('utf-8')
+
+    def getQRCode(self, url, port):
+        url = base64.b64encode(url.encode()).decode()
+        params = {'url': url, 'level': 3, 'allowProfileImage': False}
+        return requests.get(f'http://localhost:{port}/GenerateQRCode',
+                                params=params).content
 
     def createAccountAndLogin(self, display_name, password):
         # Create new account and login
@@ -262,6 +276,6 @@ class StatusClient:
         # Stop client
         print(f"Logging out..")
         self.logout()
-        # global status_backend
-        # if status_backend:
-        #     status_backend.terminate()
+        global status_backend
+        if status_backend:
+            status_backend.terminate()

@@ -61,14 +61,15 @@ class AIClient:
 			except KeyError:
 				print("Cannot send message to Bot, User Session closed.")
 
-	async def greet(self, customer_id, restaurant_key):
-		c_id = customer_id['publicKey']
+	async def greet(self, customer, restaurant_key):
+		customer_id = customer.PublicKey
 		try:
-			self.bots[c_id]
+			self.bots[customer_id]
 		except KeyError:			
-			self.bots[c_id] = bot(customer_id, restaurant_key)
+			self.bots[customer_id] = bot(customer, restaurant_key)
 
-		_generate = self.bots[c_id].generate
+		_generate = self.bots[customer_id].generate
+		self.customer_id = customer_id
 
 		response = await _generate(self.initial_prompt)
 		print(f"Greeting:{response}")

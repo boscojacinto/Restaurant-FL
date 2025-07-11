@@ -101,7 +101,7 @@ async def create_embeddings(cache_dir):
 	file = str(Path(__file__).parent / "ml" / RESTAURANT_INTERACTIONS_FILE)
 	df = pd.read_csv(file)
 	df = df.sample(frac=0.5, random_state=42)
-	b = bot()
+	b = bot(customer=None)
 
 	async def cust_embed(x):
 		return await b.embed(x)

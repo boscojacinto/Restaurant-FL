@@ -118,9 +118,12 @@ class AIModel_Customer:
         return response["response"]
 
 class AIModel:
-    def __init__(self, customer_id={'emojiHash': DEFAULT_STOP_WORD},
+    def __init__(self, customer,
                  restaurantKey=DEFAULT_FEEDBACK_WORD):
-        self.userKey = customer_id['emojiHash']
+        if customer is None:
+            self.userKey = DEFAULT_STOP_WORD
+        else:
+            self.userKey = customer.EmojiHash
         self.restaurantKey = restaurantKey
         self.template = TEMPLATE % (self.userKey, SUMMARY_QUERY,
                             self.restaurantKey, FEEDBACK_QUERY)
