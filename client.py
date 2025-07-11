@@ -286,7 +286,7 @@ class TasteBot():
 	async def set_chatkey(self):
 		global status_client
 		chat_key = status_client.getChatKey(self.public_key)
-		self.chat_key = chat_key
+		self.chat_key = chat_key.strip('"')
 		
 		qr_binary = status_client.getQRCode(self.chat_key, self.media_port[0])
 		display_qr_code(qr_binary)
