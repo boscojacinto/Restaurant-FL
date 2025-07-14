@@ -33,3 +33,4 @@ im/status-go
 p2p/waku
 p2p/consensus/client_1/*
 p2p/consensus/client_2/*
+.env

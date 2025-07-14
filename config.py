@@ -1,6 +1,7 @@
 import os
 import tomli
 from pathlib import Path
+from dotenv import load_dotenv
 from pydantic import BaseModel
 from dataclasses import dataclass, fields
 from typing import IO, Any, Optional, TypeVar, Union, cast, get_args
@@ -15,7 +16,7 @@ class Config():
 class RestaurantConfig():
 	name: str
 	device: str
-	password: str
+	password: Optional[str] = None
 
 @dataclass
 class EmbeddingsConfig():
@@ -53,7 +54,10 @@ class ConfigOptions:
 		field_names = {f.name for f in fields(RestaurantConfig)}
 		config = self._app_config['restaurant']
 		filtered_config = {k: v for k, v in config.items() if k in field_names}
-		return RestaurantConfig(**filtered_config)
+		load_dotenv()
+		restaurant_config = RestaurantConfig(**filtered_config)
+		restaurant_config.password = os.getenv("RESTAURANT_PASSWORD")
+		return restaurant_config
 
 def init():
 	root_dir: Union[str, Path]
