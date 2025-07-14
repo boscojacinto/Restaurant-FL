@@ -109,7 +109,7 @@ class StatusClient:
             "sentryDSN": "",
             "logDir": self.log_dir,
             "logEnabled": True,
-            "logLevel": "WARN",
+            "logLevel": "INFO",
             "apiLoggingEnabled": True,
             "metricsEnabled": True,
             "metricsAddress": "",
