@@ -22,24 +22,52 @@ of the user's time.
 
 Customers are usually reluctant to provide feedback or honest opinions because they lack incentive to do so, this is where a natural non-pushy conversation can spark a drive to gain knowledge and facts about food. Additionally a small percentage of the price can be waived by the restaurant adding economic incentive. Keeping the identities anonymous can also help with the indulgence in the chat. In general storing data locally and not on server farms helps increase confidence. Also providing feedback of a recent but different restaurant visit can encourage a much honest review.
 
-## Install
+## Install Dependencies
+
+1. Install Poetry
+```
+   curl -sSL https://install.python-poetry.org | python3 -
+```
+
+2. Install git lfs
+
+```
+   curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash && sudo apt install git-lfs
+```
+
+3. Install Go 1.23.0
+   
+   Visit https://go.dev/dl/
+   
+   Download the Linux tarball (e.g., go1.23.0.linux-amd64.tar.gz).
+
+```
+    rm -rf /usr/local/go && tar -C /usr/local -xzf go1.23.0.linux-amd64.tar.gz
+```
+
+## Install TasteBot
 
 1. Clone the repository
 ```
    git clone https://github.com/boscojacinto/Restaurant-FL.git && cd Restaurant-FL
 ```
 
-2. Install Poetry and git lfs
+2. Build and install TasteBot
 ```
-   curl -sSL https://install.python-poetry.org | python3 - && curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash && sudo apt install git-lfs
-```
-
-3. Install and build TasteBot
-```
-   poetry install && poetry build
+   poetry install
 ```
 
-4. Run TasteBot
+3. Run TasteBot Server (in a separate terminal)
+```
+   poetry run server
+```
+
+4. Run TasteBot Neighbor Restaurant (in a separate terminal)
+```
+   poetry run neighbor
+```
+
+5. Run TasteBot Client (in a separate terminal)
 ```
    poetry run client
 ```
