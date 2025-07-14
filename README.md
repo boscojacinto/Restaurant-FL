@@ -72,6 +72,16 @@ Customers are usually reluctant to provide feedback or honest opinions because t
    poetry run client
 ```
 
+## Customer Pairing with Restaurant (QR code and status-im app)
+
+1. Install the status-im app
+   [Status-IM messenger](https://play.google.com/store/apps/details?id=im.status.ethereum)
+
+2. Scan the QR code of the Restaurant
+   <video autoplay loop muted controls width="640">
+     <source src="./TasteBot.webm" type="video/webm">
+   </video>
+
 ## Requirements.
 
 ## For the Bot the following points served as a fundamental requirements for the design.
