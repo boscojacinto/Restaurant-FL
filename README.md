@@ -78,7 +78,8 @@ Customers are usually reluctant to provide feedback or honest opinions because t
    [Status-IM messenger](https://play.google.com/store/apps/details?id=im.status.ethereum)
 
 2. Scan the QR code of the Restaurant
-   ![](./TasteBot.webm)
+   
+   https://youtu.be/mU189Dj4QWo
 
 ## Requirements.
 
