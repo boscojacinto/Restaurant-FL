@@ -54,9 +54,16 @@ class ConfigOptions:
 		field_names = {f.name for f in fields(RestaurantConfig)}
 		config = self._app_config['restaurant']
 		filtered_config = {k: v for k, v in config.items() if k in field_names}
-		load_dotenv()
 		restaurant_config = RestaurantConfig(**filtered_config)
-		restaurant_config.password = os.getenv("RESTAURANT_PASSWORD")
+		try:
+			load_dotenv()
+			password = os.getenv("RESTAURANT_PASSWORD")
+			if password is None:
+				raise ValueError("Env vairable 'RESTAURANT_PASSWORD' not found")
+			restaurant_config.password = password 
+		except FileNotFoundError:
+			print("Error: .env file not found, Create .env")
+
 		return restaurant_config
 
 def init():
