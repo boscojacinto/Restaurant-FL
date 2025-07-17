@@ -1,6 +1,6 @@
 [project]
 name = "poetry-tastebot-plugin"
-version = "1.1.13"
+version = "1.1.36"
 requires-python = ">=3.12"
 dependencies = [
     "poetry>=2.0",

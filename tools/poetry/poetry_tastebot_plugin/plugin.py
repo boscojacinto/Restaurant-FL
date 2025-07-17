@@ -101,10 +101,11 @@ def build_statusgo(io: IO) -> int:
     io.write_line(f"<info>Building statusgo in: {statusgo_dir}</>")
 
     try:
-        result = subprocess.run(["make", "status-go-deps"],
+        io.write_line("<info>Checking out Status-go(tag v10.4.0)</>")
+        result = subprocess.run(["git", "checkout", "-f", "v10.4.0"],
         cwd=statusgo_dir, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
-        io.write_line(f"<error>Error downloading status-go deps:{e}</>")
+        io.write_line(f"<error>Error checking out tag:{e}</>")
         return 1
 
     try:
@@ -113,6 +114,13 @@ def build_statusgo(io: IO) -> int:
         cwd=statusgo_dir, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
         io.write_line(f"<error>Error applying patches to status-go:{e}</>")
+        return 1
+
+    try:
+        result = subprocess.run(["make", "status-go-deps"],
+        cwd=statusgo_dir, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error downloading status-go deps:{e}</>")
         return 1
 
     try:
@@ -143,6 +151,104 @@ def build_statusgo(io: IO) -> int:
         io.write_line(f"<error>Error copying im libs:{e}</>")
         return 1
 
+def build_falkorDB(io: IO) -> int:
+    ai_dir = Path("ai").resolve(strict=True)
+    falkorDB_dir = Path("ai/FalkorDB").resolve(strict=True)
+    io.write_line(f"<info>Building FalkorDB in: {falkorDB_dir}</>")
+
+    try:
+        result = subprocess.run(["wget", "-P", "libs", "https://github.com/FalkorDB/FalkorDB/releases/download/v4.10.3/falkordb-x64.so"],
+        cwd=ai_dir, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error downloading falkordb:{e}</>")
+        return 1
+
+    try:
+        result = subprocess.run(["chmod", "+x", "libs/falkordb-x64.so"],
+        cwd=ai_dir, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error setting permission for FalkorDB lib:{e}</>")
+        return 1
+
+    # try:
+    #     io.write_line("<info>Checking out FalkorDB(tag v4.10.3)</>")
+    #     result = subprocess.run(["git", "checkout", "v4.10.3"],
+    #     cwd=falkorDB_dir, check=True, capture_output=True, text=True)
+    # except subprocess.CalledProcessError as e:
+    #     io.write_line(f"<error>Error checking out tag:{e}</>")
+    #     return 1
+
+    # try:
+    #     io.write_line("<info>Updating submodules of FalkorDB</>")
+    #     result = subprocess.run(["git", "submodule", "update", "--init"],
+    #     cwd=falkorDB_dir, check=True, capture_output=True, text=True)
+    # except subprocess.CalledProcessError as e:
+    #     io.write_line(f"<error>Error checking out tag:{e}</>")
+    #     return 1
+
+    # try:
+    #     result = subprocess.run(["make"],
+    #     cwd=falkorDB_dir, check=True, capture_output=True, text=True)
+    #     io.write_line(f"<info>Build logs:{result.stdout}</>")
+    # except subprocess.CalledProcessError as e:
+    #     io.write_line(f"<error>Error compiling FalkorDB:{e}</>")
+    #     return 1
+
+    # try:
+    #     result = subprocess.run(["cp", "bin/linux-x64-release/src/falkordb.so", "../libs"],
+    #     cwd=falkorDB_dir, check=True, capture_output=True, text=True)
+    # except subprocess.CalledProcessError as e:
+    #     io.write_line(f"<error>Error copying FalkorDB libs:{e}</>")
+    #     return 1
+
+def build_redis(io: IO) -> int:
+    ai_dir = Path("ai").resolve(strict=True)
+    libs_dir = Path("ai/libs").resolve(strict=True)
+    redis_dir = Path("ai/redis").resolve(strict=True)
+    io.write_line(f"<info>Building Redis in: {redis_dir}</>")
+
+    try:
+        result = subprocess.run(["wget", "https://download.redis.io/releases/redis-7.4.0.tar.gz"],
+        cwd=redis_dir, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error downloading redis:{e}</>")
+        return 1
+
+    try:
+        result = subprocess.run(["tar", "-xzvf", "redis-7.4.0.tar.gz", "--strip-components=1"],
+        cwd=redis_dir, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error downloading redis:{e}</>")
+        return 1
+
+    try:
+        result = subprocess.run(["make", "all"],
+        cwd=redis_dir, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error compiling redis:{e}</>")
+        return 1
+
+    try:
+        result = subprocess.run(["cp", "src/redis-server", "../libs"],
+        cwd=redis_dir, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error copying redis server:{e}</>")
+        return 1
+
+    try:
+        result = subprocess.run(["cp", "redis.conf", "../libs"],
+        cwd=redis_dir, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error copying redis conf:{e}</>")
+        return 1
+
+    try:
+        result = subprocess.run("echo loadmodule ai/libs/falkordb-x64.so >> redis.conf",
+        shell=True, cwd=libs_dir, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error updating redis conf:{e}</>")
+        return 1
+
 def run_build(io: IO, venv_path: Path) -> int:
 
     venv_bin_dir = sysconfig.get_path("scripts")
@@ -162,6 +268,8 @@ def run_build(io: IO, venv_path: Path) -> int:
     build_consensus(io)
     build_waku(io)
     build_statusgo(io)
+    build_falkorDB(io)
+    build_redis(io)
 
     return 0
 
@@ -210,7 +318,7 @@ class TasteBotPlugin(ApplicationPlugin):
     ) -> None:
         if (
             not isinstance(event, ConsoleCommandEvent)
-            or not isinstance(event.command, InstallCommand)
+            or not isinstance(event.command, BuildCommand)
             or not self.application
         ):
             return

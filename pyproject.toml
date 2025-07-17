@@ -27,7 +27,7 @@ url = "https://data.pyg.org/whl/torch-2.4.0+cpu.html"
 priority = "supplemental"
 
 [tool.poetry.requires-plugins]
-poetry-tastebot-plugin = { url = "https://github.com/boscojacinto/Restaurant-FL/releases/download/v1.1.0/poetry_tastebot_plugin-1.1.13-py3-none-any.whl" }
+poetry-tastebot-plugin = { url = "https://github.com/boscojacinto/Restaurant-FL/releases/download/v1.1.0/poetry_tastebot_plugin-1.1.36-py3-none-any.whl" }
 
 # [tool.poetry.poetry-tastebot-plugin]
 
@@ -39,6 +39,11 @@ neighbor = "p2p.neighbor_restaurant:main"
 [tool.tastebot.app.restaurant]
 name = "TasteBot"
 device = "restaurant-pc"
+
+[tool.tastebot.app.kg]
+db_host = "localhost"
+db_port = "6379"
+db_username = "falkor"
 
 [tool.tastebot.app.embeddings]
 max_customers = 10000
@@ -53,7 +58,7 @@ qrcodegen = "1.8.0"
 ollama = "0.4.7"
 transformers = "4.49.0"
 tokenizers = "0.21.0"
-openai = "1.70.0"
+openai = "1.91.0"
 huggingface-hub = "0.29.2"
 langchain = "0.3.22"
 langchain-community = "0.3.20"
@@ -77,6 +82,7 @@ opentelemetry-exporter-otlp-proto-http = "1.31.1"
 opentelemetry-proto = "1.31.1"
 opentelemetry-sdk = "1.31.1"
 opentelemetry-semantic-conventions = "0.52b1"
+graphiti-core = { version = "0.17.2", extras = ["falkordb"] }
 
 [tool.poetry.group.fl.dependencies]
 flwr = { url = "https://github.com/boscojacinto/Restaurant-FL/releases/download/v1.1.0/flwr-1.19.0-py3-none-any.whl" }
@@ -198,9 +204,9 @@ psycopg = "3.2.6"
 pyarrow = "19.0.1"
 pycparser = "2.22"
 pycryptodome = "3.21.0"
-pydantic = "2.11.1"
+pydantic = "2.11.5"
 pydantic-settings = "2.8.1"
-pydantic_core = "2.33.0"
+pydantic_core = "2.33.2"
 Pygments = "2.19.1"
 pyparsing = "3.2.1"
 PyQt5 = "5.15.11"

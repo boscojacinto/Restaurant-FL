@@ -273,9 +273,11 @@ class StatusClient:
     	self.message_queue.put(message)
 
     def stop(self):
+        global status_backend
         # Stop client
         print(f"Logging out..")
         self.logout()
-        global status_backend
         if status_backend:
             status_backend.terminate()
+            status_backend.wait()
+

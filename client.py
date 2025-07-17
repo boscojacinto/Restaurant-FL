@@ -18,6 +18,7 @@ from config import ConfigOptions
 from im.client import StatusClient, ContactRequestState 
 from ai.client import AIClient 
 from fl.client import FLClient 
+from ai.restaurant_kg import KGClient
 
 import p2p.restaurant_pb2 as psi_proto
 import p2p.restaurant_pb2_grpc as r_psi
@@ -68,12 +69,20 @@ def register_exit_handler():
 		if client.ai_client is not None:
 			client.ai_client.stop()
 
+		if client.kg_client is not None:
+			client.kg_client.stop()
+
 		if client_threads is not None:
 			for client_thread in client_threads:
+				print(f"Exiting thread")
 				client_thread.join()
 
 		if client.run_thread is not None:
 			client.run_thread.join()
+
+		print(f"Exiting")
+
+		os.Exit()
 
 	for sig in SIGNAL_TO_EXIT_CODE:
 		default_handler = signal.signal(sig, exit_handler)
@@ -103,6 +112,7 @@ class TasteBot():
 		self.fl_client_2 = None
 		self.status_client = None
 		self.ai_client = None
+		self.kg_client = None
 		self.neighbor_service = None
 		self.psi_client = None
 
@@ -110,19 +120,18 @@ class TasteBot():
 		self.init_thread_lock = False
 		
 		self.init_done_event = threading.Event()
-		self.init_mediaserver_event = threading.Event()
+		self.init_nodelogin_event = threading.Event()
 		self.customer_add_event = threading.Event()
 		
 		self.run_thread = None
 		self.run_thread_lock = False
 
-		self.contact_request_queue = queue.Queue()
+		self.post_thread = None
+		self.post_thread_lock = False
+
+		self.add_customer_queue = queue.Queue()
 
 		self.config = ConfigOptions().get_restaurant_config()
-
-		self.init_clients()
-
-		register_exit_handler()
 
 	def on_status_cb(self, signal: str):
 		global customers
@@ -135,7 +144,8 @@ class TasteBot():
 				public_key = signal["event"]["settings"]["current-user-status"]["publicKey"]
 				print(f"Node Login: uid:{key_uid} publicKey:{public_key}")
 				self.public_key = public_key
-				self.uid = key_uid 
+				self.uid = key_uid
+				self.init_nodelogin_event.set() 
 			except KeyError:
 				pass
 		elif signal["type"] == "message.delivered":
@@ -153,30 +163,36 @@ class TasteBot():
 					print(f"New Message received!:{new_msg}, from:{customer_id}")
 					if self.ai_client is not None:
 						contact_info = self.status_client.getContactInfo(customer_id)
+						#print(f"contact_info:{contact_info['contactRequestLocalState']}")
 						if ("contactRequestLocalState" in contact_info and
-							contact_info['contactRequestLocalState'] == ContactRequestState.Accepted):
+							contact_info['contactRequestLocalState'] == ContactRequestState.Accepted.value):
 							was_customer_added = True
+
+						#print(f"was_customer_added:{was_customer_added}")
 
 						if was_customer_added == True:
 							customer_present = next((True for customer in customers if customer.PublicKey == customer_id), False)
+							#print(f"customer_present:{customer_present}")
 							if customer_present == False:
-								self.contact_request_queue.put(contact_info)
+								self.add_customer_queue.put(contact_info)
 								self.customer_add_event.set()
 							else:
 								self.ai_client.sendMessage(customer_id, new_msg)
-
-				for contact in contacts:
-					contact['msgId'] = next((msg['id'] for msg in messages if msg['chatId'] == contact['id']), None)
-					if 'msgId' in contact:
-						self.contact_request_queue.put(contact)
-						self.customer_add_event.set()
+						else:
+							for contact in contacts:
+								contact['msgId'] = next((msg['id'] for msg in messages if msg['chatId'] == contact['id']), None)
+								if 'msgId' in contact:
+									#print(f"In msgId")
+									self.add_customer_queue.put(contact)
+									self.customer_add_event.set()
+								else:
+									print(f"Message from unknown account, ignoring!")
 
 			except KeyError:
 				pass
 		elif signal["type"] == "mediaserver.started":
-			self.media_port.append(signal["event"]["port"])
-			self.init_mediaserver_event.set()
 			#print(f"media_port:{signal["event"]["port"]}")
+			self.media_port.append(signal["event"]["port"])
 		elif signal["type"] == "wakuv2.peerstats":
 			#print(f"stats!:{signal["event"]}")
 			pass
@@ -228,20 +244,20 @@ class TasteBot():
 				self.config.password
 			)
 
-	def init_execute(self, mediaserver_event, done_event):
+	def init_execute(self, nodelogin_event, done_event):
 		while True:
 			with self.init_thread_lock:
 				if (self.init_success is False and
-					mediaserver_event.is_set() is False and
+					nodelogin_event.is_set() is False and
 					done_event.is_set() is False
 				):
 					self.attempt_init()
 					time.sleep(10)
-				elif (mediaserver_event.is_set() is True and
+				elif (nodelogin_event.is_set() is True and
 					done_event.is_set() is False
 				):
-					time.sleep(5)
-					asyncio.run(self.set_chatkey())
+					time.sleep(0.5)
+					asyncio.run(self.enable_services())
 				else:
 					asyncio.run(self.init_services())
 					return
@@ -260,9 +276,9 @@ class TasteBot():
 		)		
 
 		self.ai_client = AIClient()
+		self.kg_client = KGClient()
 
 	async def init_services(self):
-		print("\ninit_services")
 		try:
 			async with grpc.aio.insecure_channel('[::]:50051') as channel:
 				self.neighbor_service = r_psi.RestaurantNeighborStub(channel)
@@ -286,15 +302,22 @@ class TasteBot():
 		ai_thread = self.ai_client.start(cb=self.on_ai_client_cb)
 		client_threads.append(ai_thread)
 
+		await self.kg_client.start()
+
 		await(EmbeddingOps().init_embeddings())
 
-	async def set_chatkey(self):
-		chat_key = self.status_client.getChatKey(self.public_key)
-		self.chat_key = chat_key.strip('"')
-		
-		qr_binary = self.status_client.getQRCode(self.chat_key, self.media_port[0])
-		display_qr_code(qr_binary)
-		self.init_done_event.set()
+	async def enable_services(self):
+		try:
+			chat_key = self.status_client.getChatKey(self.public_key)
+			self.chat_key = chat_key.strip('"')
+
+			qr_binary = self.status_client.getQRCode(self.chat_key,
+									self.media_port[2])
+			display_qr_code(qr_binary)
+			self.init_success = True
+			self.init_done_event.set()
+		except OSError as e:
+			raise e
 
 	async def add_customer(self, contact):
 		global customers
@@ -306,7 +329,7 @@ class TasteBot():
 		customer.EmojiHash = contact["emojiHash"]
 		
 		customers.append(customer)
-		print(f"New customer added:{customer.Name}")
+		print(f"New customer added:{customer.Name} id:{customer.PublicKey} emojiHash: {customer.EmojiHash}")
 
 		try:
 			async with grpc.aio.insecure_channel('[::]:50051') as channel:
@@ -343,36 +366,52 @@ class TasteBot():
 
 		while True:
 			with self.run_thread_lock:
-				if (customer_add_event.is_set() is True and
-					self.contact_request_queue.qsize() > 0):
-
-					contact = self.contact_request_queue.get_nowait()
-					if "msgId" in contact:
-						self.status_client.acceptContactRequest(contact["msgId"])
-					asyncio.run(self.add_customer(contact))
+				if customer_add_event.is_set() is True:
+					if self.add_customer_queue.qsize() > 0:
+						contact = self.add_customer_queue.get_nowait()
+						if "msgId" in contact:
+							self.status_client.acceptContactRequest(contact["msgId"])
+						asyncio.run(self.add_customer(contact))
 				else:
 					time.sleep(0.2)
 
+	def post_execute(self):
+		while True:
+			with self.post_thread_lock:
+				time.sleep(0.2)
+
 	def start(self):
 		self.init_thread = threading.Thread(target=self.init_execute,
-									args=(self.init_mediaserver_event, 
+									args=(self.init_nodelogin_event, 
 										self.init_done_event,))
 		self.init_thread_lock = threading.Lock()
+
 		self.run_thread = threading.Thread(target=self.run_execute,
 									args=(self.customer_add_event,))
 		self.run_thread_lock = threading.Lock()	
 
+		self.post_thread = threading.Thread(target=self.post_execute)
+		self.post_thread_lock = threading.Lock()
+
 		self.init_thread.start()
 
 def main():
+	global client
 
 	client = TasteBot()
+
+	client.init_clients()
+	
+	register_exit_handler()
+
 	client.start()
 
 	while client.init_thread.is_alive():
 		time.sleep(0.1)
 
 	client.run_thread.start()
+	
+	client.post_thread.start()
 
 	while True:
 		time.sleep(0.1)

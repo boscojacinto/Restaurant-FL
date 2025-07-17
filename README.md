@@ -45,11 +45,17 @@ Customers are usually reluctant to provide feedback or honest opinions because t
     rm -rf /usr/local/go && tar -C /usr/local -xzf go1.23.0.linux-amd64.tar.gz
 ```
 
+4. Install build tools
+
+```
+   sudo apt-get install build-essential cmake m4 automake peg libtool autoconf
+```
+
 ## Install TasteBot
 
 1. Clone the repository
 ```
-   git clone https://github.com/boscojacinto/Restaurant-FL.git && cd Restaurant-FL
+   git clone --recurse-submodules https://github.com/boscojacinto/Restaurant-FL.git && cd Restaurant-FL
 ```
 
 2. Build and install TasteBot

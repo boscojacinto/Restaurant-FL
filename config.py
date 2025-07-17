@@ -19,6 +19,13 @@ class RestaurantConfig():
 	password: Optional[str] = None
 
 @dataclass
+class KGConfig():
+	db_host: str
+	db_port: str
+	db_username: str
+	db_password: Optional[str] = None
+
+@dataclass
 class EmbeddingsConfig():
 	max_customers: int
 	max_restaurants: int
@@ -65,6 +72,24 @@ class ConfigOptions:
 			print("Error: .env file not found, Create .env")
 
 		return restaurant_config
+
+	def get_KG_config(self) -> KGConfig:
+		field_names = {f.name for f in fields(KGConfig)}
+		config = self._app_config['kg']
+		filtered_config = {k: v for k, v in config.items() if k in field_names}
+		kg_config = KGConfig(**filtered_config)
+		try:
+			load_dotenv()
+			password = os.getenv("FALKORDB_PASSWORD")
+			if password is None:
+				#raise ValueError("Env vairable 'FALKORDB_PASSWORD' not found")
+				pass
+			else:
+				kg_config.db_password = password 
+		except FileNotFoundError:
+			print("Error: .env file not found, Create .env")
+
+		return kg_config
 
 def init():
 	root_dir: Union[str, Path]

@@ -12,3 +12,7 @@
 	path = im/status-go
 	url = git@github.com:status-im/status-go.git
 	ignore = dirty
+[submodule "ai/FalkorDB"]
+	path = ai/FalkorDB
+	url = git@github.com:FalkorDB/FalkorDB.git
+	ignore = dirty

@@ -29,8 +29,12 @@ p2p/neighbor/*.db-shm
 p2p/neighbor/*.db-wal
 p2p/consensus/data/
 p2p/consensus/consensus
-im/status-go
-p2p/waku
 p2p/consensus/client_1/*
 p2p/consensus/client_2/*
+p2p/waku
 .env
+im/libs/*
+im/status-go
+ai/libs/*
+ai/redis
+ai/FalkorDB
