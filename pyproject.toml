@@ -27,7 +27,7 @@ url = "https://data.pyg.org/whl/torch-2.4.0+cpu.html"
 priority = "supplemental"
 
 [tool.poetry.requires-plugins]
-poetry-tastebot-plugin = { url = "https://github.com/boscojacinto/Restaurant-FL/releases/download/v1.1.0/poetry_tastebot_plugin-1.1.36-py3-none-any.whl" }
+poetry-tastebot-plugin = { url = "https://github.com/boscojacinto/Restaurant-FL/releases/download/v1.1.0/poetry_tastebot_plugin-1.2.0-py3-none-any.whl" }
 
 # [tool.poetry.poetry-tastebot-plugin]
 
@@ -44,6 +44,12 @@ device = "restaurant-pc"
 db_host = "localhost"
 db_port = "6379"
 db_username = "falkor"
+
+[tool.tastebot.app.p2p]
+m_host = "192.168.1.26"
+m_port = "60011"
+m_discv5_port = "9911"
+m_bootstrap_enr = "enr:-KG4QJ60C0bldIz1merR78DRaJWdhSyDGImFc7n42mHqgGadXRyzOG6LOuZPyEEshitBybFvqgFw039VmOmdTFPtgg-GAZb7zkrAgmlkgnY0gmlwhMCoARqCcnOFAFkBAACJc2VjcDI1NmsxoQNLmJB1Pj72eUSZQnMof-AJdmltBsVrqCSzGa_k_YI8UIN0Y3CC6nSDdWRwgibAhXdha3UyAw"
 
 [tool.tastebot.app.embeddings]
 max_customers = 10000

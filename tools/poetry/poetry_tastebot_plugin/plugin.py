@@ -70,6 +70,7 @@ def build_proto(io: IO, venv_path: Path) -> int:
     return protoc_result
 
 def build_consensus(io: IO) -> int:
+    p2p_dir = Path("p2p").resolve(strict=True)
     consensus_dir = Path("p2p/consensus").resolve(strict=True)
     io.write_line(f"<info>Building consensus in: {consensus_dir}</>")
 
@@ -82,9 +83,26 @@ def build_consensus(io: IO) -> int:
         io.write_line(f"<error>Error compiling libconsensus:{e}</>")
         return 1
 
+    try:
+        result = subprocess.run(["cp", "consensus/lib/libconsensus.so.0", "libs"],
+        cwd=p2p_dir, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error copying consensus libs:{e}</>")
+        return 1    
+
+
 def build_waku(io: IO) -> int:
+    p2p_dir = Path("p2p").resolve(strict=True)
     waku_dir = Path("p2p/waku").resolve(strict=True)
     io.write_line(f"<info>Building waku in: {waku_dir}</>")
+
+    try:
+        io.write_line("<info>Applying waku patches..</>")
+        result = subprocess.run(["git", "apply", "../patches/0001-waku-api-ext.patch"],
+        cwd=waku_dir, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error applying patches to waku:{e}</>")
+        return 1
 
     try:
         result = subprocess.run(["go", "build", "-o", "lib/libgowaku.so.0",
@@ -94,6 +112,13 @@ def build_waku(io: IO) -> int:
     except subprocess.CalledProcessError as e:
         io.write_line(f"<error>Error compiling libwaku:{e}</>")
         return 1
+
+    try:
+        result = subprocess.run(["cp", "waku/lib/libgowaku.so.0", "libs"],
+        cwd=p2p_dir, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error copying waku libs:{e}</>")
+        return 1    
 
 def build_statusgo(io: IO) -> int:
     im_dir = Path("im").resolve(strict=True)

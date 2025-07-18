@@ -19,6 +19,7 @@ from im.client import StatusClient, ContactRequestState
 from ai.client import AIClient 
 from fl.client import FLClient 
 from ai.restaurant_kg import KGClient
+from p2p.client import P2PClient
 
 import p2p.restaurant_pb2 as psi_proto
 import p2p.restaurant_pb2_grpc as r_psi
@@ -115,6 +116,7 @@ class TasteBot():
 		self.kg_client = None
 		self.neighbor_service = None
 		self.psi_client = None
+		self.p2p_client = None
 
 		self.init_thread = None
 		self.init_thread_lock = False
@@ -276,6 +278,7 @@ class TasteBot():
 		)		
 
 		self.ai_client = AIClient()
+		self.p2p_client = P2PClient()
 		self.kg_client = KGClient()
 
 	async def init_services(self):
@@ -301,6 +304,9 @@ class TasteBot():
 
 		ai_thread = self.ai_client.start(cb=self.on_ai_client_cb)
 		client_threads.append(ai_thread)
+
+		p2p_thread = self.p2p_client.start()
+		client_threads.append(p2p_thread)
 
 		await self.kg_client.start()
 

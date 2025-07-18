@@ -6,7 +6,7 @@ import ctypes
 import base64
 from ctypes import CDLL
 
-WAKU_GO_LIB = "../libgowaku.so.0"
+WAKU_GO_LIB = "p2p/libs/libgowaku.so.0"
 
 HOST = "192.168.1.26"
 NODE_KEY = '0cc3ac3071d6da231a1e43849afed349ed00c3b9e289147598b653eb7092c52c'

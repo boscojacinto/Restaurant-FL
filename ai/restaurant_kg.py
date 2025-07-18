@@ -15,7 +15,7 @@ class KGClient():
         return cls._instance
     
     def __init__(self):
-        self.config = ConfigOptions().get_KG_config()
+        self.config = ConfigOptions().get_kg_config()
         self.graphiti = None
         self.redis_backend = None 
         try:

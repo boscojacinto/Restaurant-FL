@@ -569,9 +569,9 @@ func validatorKeyFromECDSA(key []byte) (ValidatorKey, error) {
     privateKeyBytes, _ := privateKey.Raw()
     publicKeyBytes, _ := privateKey.GetPublic().Raw()
     //compPubKeyBytes := crypto.CompressPubkey(&privateKey.PublicKey)
-    fmt.Printf("Private Key: %s\n", hex.EncodeToString(privateKeyBytes))
+/*    fmt.Printf("Private Key: %s\n", hex.EncodeToString(privateKeyBytes))
     fmt.Printf("Public Key: %s\n", hex.EncodeToString(publicKeyBytes))
-
+*/
     privateKeyBase64 := base64.StdEncoding.EncodeToString(privateKeyBytes)
     publicKeyBase64 := base64.StdEncoding.EncodeToString(publicKeyBytes)
     address := getAddress(publicKeyBytes)

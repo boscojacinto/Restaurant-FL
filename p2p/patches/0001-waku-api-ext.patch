@@ -1,0 +1,40 @@
+diff --git a/library/c/api.go b/library/c/api.go
+index 3810a6ca..67ea4e51 100644
+--- a/library/c/api.go
++++ b/library/c/api.go
+@@ -213,6 +213,15 @@ func waku_listen_addresses(ctx unsafe.Pointer, cb C.WakuCallBack, userData unsaf
+ 	}, ctx, cb, userData)
+ }
+ 
++// Obtain the discoverable ENR of the wakunode
++//
++//export waku_get_enr
++func waku_get_enr(ctx unsafe.Pointer, cb C.WakuCallBack, userData unsafe.Pointer) C.int {
++	return singleFnExec(func(instance *library.WakuInstance) (string, error) {
++		return library.ENR(instance)
++	}, ctx, cb, userData)
++}
++
+ // Add node multiaddress and protocol to the wakunode peerstore
+ //
+ //export waku_add_peer
+diff --git a/library/node.go b/library/node.go
+index 47eea0f0..391dbf6f 100644
+--- a/library/node.go
++++ b/library/node.go
+@@ -327,6 +327,15 @@ func PeerID(instance *WakuInstance) (string, error) {
+ 	return instance.node.ID(), nil
+ }
+ 
++// ENR is used to obtain the discoverable ENR of the waku node
++func ENR(instance *WakuInstance) (string, error) {
++	if err := validateInstance(instance, MustBeStarted); err != nil {
++		return "", err
++	}
++
++	return instance.node.ENR().String(), nil
++}
++
+ // ListenAddresses returns the multiaddresses the wakunode is listening to
+ func ListenAddresses(instance *WakuInstance) (string, error) {
+ 	if err := validateInstance(instance, MustBeStarted); err != nil {

@@ -26,6 +26,14 @@ class KGConfig():
 	db_password: Optional[str] = None
 
 @dataclass
+class P2PConfig():
+	m_host: str
+	m_port: str
+	m_discv5_port: str
+	m_bootstrap_enr: Optional[str] = None
+	node_key: Optional[str] = None
+
+@dataclass
 class EmbeddingsConfig():
 	max_customers: int
 	max_restaurants: int
@@ -73,7 +81,7 @@ class ConfigOptions:
 
 		return restaurant_config
 
-	def get_KG_config(self) -> KGConfig:
+	def get_kg_config(self) -> KGConfig:
 		field_names = {f.name for f in fields(KGConfig)}
 		config = self._app_config['kg']
 		filtered_config = {k: v for k, v in config.items() if k in field_names}
@@ -90,6 +98,23 @@ class ConfigOptions:
 			print("Error: .env file not found, Create .env")
 
 		return kg_config
+
+	def get_p2p_config(self) -> P2PConfig:
+		field_names = {f.name for f in fields(P2PConfig)}
+		config = self._app_config['p2p']
+		filtered_config = {k: v for k, v in config.items() if k in field_names}
+		p2p_config = P2PConfig(**filtered_config)
+		try:
+			load_dotenv()
+			password = os.getenv("P2P_NODE_KEY")
+			if password is None:
+				raise ValueError("Env vairable 'P2P_NODE_KEY' not found")
+			else:
+				p2p_config.node_key = password 
+		except FileNotFoundError:
+			print("Error: .env file not found, Create .env")
+
+		return p2p_config
 
 def init():
 	root_dir: Union[str, Path]
