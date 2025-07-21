@@ -19,7 +19,7 @@ import "C"
 import (
  "os"
  "fmt"
- "flag"
+ //"flag"
  "time"
  "bytes"
  "sync"
@@ -69,7 +69,6 @@ type ConsensusInstance struct {
 	ctx context.Context
 	cancel context.CancelFunc
 
-	clientId string
 	ID uint
 
 	rootDir string
@@ -108,10 +107,6 @@ type SignalData struct {
 	Event interface{} `json:"event"`
 }
 
-type SignalNewBlock struct {
-	NewBlock NewBlock
-}
-
 type NewBlock struct {
 	Height  int64 `json:"height,omitempty"`
 	Time time.Time `json:"time"`
@@ -126,11 +121,6 @@ type OrderTx struct {
 	OrderInfo OrderInfo `json:"orderInfo"`
 	Status string `json:"status"`
 } 
-
-type SignalOrderTx struct {
-	Type string `json:"type"`
-	Order OrderTx
-}
 
 type Peer struct {
 	ID           peer.ID        `json:"peerID"`
@@ -151,8 +141,8 @@ var cInstanceMutex sync.RWMutex
 func main() {}
 
 //export Init
-func Init(clientId *C.char, rootDir *C.char, key *C.char) unsafe.Pointer {
-	
+func Init(rootDir *C.char, key *C.char) unsafe.Pointer {
+
 	cInstanceMutex.Lock()
 	defer cInstanceMutex.Unlock()
 
@@ -163,7 +153,6 @@ func Init(clientId *C.char, rootDir *C.char, key *C.char) unsafe.Pointer {
 	cInstance := &ConsensusInstance{
 		ID: uint(len(cInstances)),
 	}
-	cInstance.clientId = C.GoString(clientId)
 	cInstance.rootDir = C.GoString(rootDir)
 
 	kHex, _ := hex.DecodeString(C.GoString(key))
@@ -209,6 +198,12 @@ func Start(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointe
 	instance.ctx, instance.cancel = context.WithCancel(context.Background())
 	dir := filepath.Join(instance.rootDir, "/data")	
 
+	err = os.MkdirAll(dir + "/tmp/order", 0755)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create tmp/order: %v", err)
+		os.Exit(1)
+	}
+
 	orderDb, err := badger.Open(badger.DefaultOptions(dir + "/tmp/order"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to open order db: %v", err)
@@ -216,12 +211,24 @@ func Start(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointe
 	}
 	instance.orderDb = orderDb
 
+	err = os.MkdirAll(dir + "/tmp/register", 0755)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create tmp/register: %v", err)
+		os.Exit(1)
+	}
+
 	registerDb, err := badger.Open(badger.DefaultOptions(dir + "/tmp/register"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to open register db: %v", err)
 		os.Exit(1)
 	}
 	instance.registerDb = registerDb
+
+	err = os.MkdirAll(dir + "/tmp/peers", 0755)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create tmp/peers: %v", err)
+		os.Exit(1)
+	}
 
 	peersDb, err := badger.Open(badger.DefaultOptions(dir + "/tmp/peers"))
 	if err != nil {
@@ -236,7 +243,7 @@ func Start(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointe
 	appSubsEvents := []string{ CheckTxEventType }
 	app := NewInferSyncApp(ctx, orderDb, registerDb, peersDb, appSubsEvents)
 
-	flag.Parse()
+	//flag.Parse()
 
 	node, err := newTendermint(instance, app)
 	if err != nil {
@@ -563,10 +570,7 @@ func createAndSendSignal(instance *ConsensusInstance, eventType string, msg inte
 		
 		instance.height = newBlock.Height
 		
-		signal := SignalNewBlock{
-			NewBlock: *newBlock,
-		}
-		sendSignal(instance, "NewBlock", signal)
+		sendSignal(instance, "NewBlock", newBlock)
 
 	} else if eventType == CheckTxEventType {
 		events := msg.(CheckTxEvent).Events
@@ -576,11 +580,8 @@ func createAndSendSignal(instance *ConsensusInstance, eventType string, msg inte
 			return
 		}
 
-		signal := SignalOrderTx{
-			Type: eventType,
-			Order: *order,
-		}
-		sendSignal(instance, eventType, signal)
+		sendSignal(instance, eventType, order)
+
 	} else if eventType == DeliverTxEventType {
 		fmt.Println("\nmsg deliver:")
 		events := msg.(ctypes.ResultEvent).Events
@@ -590,11 +591,7 @@ func createAndSendSignal(instance *ConsensusInstance, eventType string, msg inte
 			return
 		}
 
-		signal := SignalOrderTx{
-			Type: eventType,
-			Order: *order,
-		}
-		sendSignal(instance, eventType, signal)
+		sendSignal(instance, eventType, order)
 	}
 }
 

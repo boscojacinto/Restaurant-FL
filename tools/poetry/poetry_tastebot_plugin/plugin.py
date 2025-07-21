@@ -1,10 +1,11 @@
-import importlib.resources
-import logging
 import os
 import sys
+import logging
 import sysconfig
 import subprocess
+import importlib.resources
 from pathlib import Path
+from dotenv import load_dotenv
 from typing import Any, Dict, List, Optional
 from grpc_tools import protoc
 
@@ -69,10 +70,73 @@ def build_proto(io: IO, venv_path: Path) -> int:
 
     return protoc_result
 
-def build_consensus(io: IO) -> int:
+def build_consensus(io: IO, args) -> int:
     p2p_dir = Path("p2p").resolve(strict=True)
     consensus_dir = Path("p2p/consensus").resolve(strict=True)
+    tendermint_dir = Path("p2p/tendermint").resolve(strict=True)
     io.write_line(f"<info>Building consensus in: {consensus_dir}</>")
+
+    try:
+        io.write_line("<info>Checking out tendermint (tag v0.34.24)</>")
+        result = subprocess.run(["git", "checkout", "-f", "v0.34.24"],
+        cwd=tendermint_dir, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error checking out tag:{e}</>")
+        return 1
+
+    try:
+        result = subprocess.run(["make", "build"],
+        cwd=tendermint_dir, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error building tendermint:{e}</>")
+        return 1
+
+    try:
+        env_path = Path.cwd() / '.env'
+        load_dotenv(dotenv_path=env_path)
+        env = os.environ.copy()
+    except FileNotFoundError:
+        print("Error: .env file not found, Create .env")
+
+    try:
+        result = subprocess.run(["build/tendermint", "init", "validator"],
+        cwd=tendermint_dir, env=env, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error configuring tendermint:{e}</>")
+        return 1
+
+    try:
+        result = subprocess.run(["sed", "-i", "-e", f's/moniker = "[^"]*"/moniker = "{args["c_moniker"]}"/',
+            "-e", f's/persistent_peers = "[^"]*"/persistent_peers = "{args["c_persistent_peers"]}"/',
+            "-e", rf's/addr_book_strict = \(true\|false\)/addr_book_strict = {args["c_addr_book_strict"]}/',
+            "-e", rf's/allow_duplicate_ip = \(true\|false\)/allow_duplicate_ip = {args["c_allow_duplicate_ip"]}/',
+            "-e", f's/wal_dir = "[^"]*"/wal_dir = "{args["c_wal_dir"].replace('/', r'\/')}"/',
+            "-e", f's/timeout_commit = "[^"]*"/timeout_commit = "{args["c_timeout_commit"]}"/',
+            "-e", rf's/create_empty_blocks = \(true\|false\)/create_empty_blocks = {args["c_create_empty_blocks"]}/',
+            f"{env['TMHOME']}/config/config.toml"],
+        cwd=p2p_dir, env=env, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Error configuring tendermint:{e}")
+        return 1
+
+    try:
+        result = subprocess.run(["sed", "-n", 
+            f'/index_tags = "[^"]*"/p',
+            f"{env['TMHOME']}/config/config.toml"],
+        cwd=p2p_dir, env=env, check=True, capture_output=True, text=True)
+
+        if not result.stdout:
+            try:
+                result = subprocess.run(["sed", "-i", 
+                    "-e", rf's/indexer = \("null"\|"kv"\|"psql"\)/indexer = "kv"\nindex_tags = "{args["c_index_tags"]}"/',
+                    f"{env['TMHOME']}/config/config.toml"],
+                cwd=p2p_dir, env=env, check=True, capture_output=True, text=True)
+            except subprocess.CalledProcessError as e:
+                print(f"Error configuring tendermint:{e}")
+                return 1
+    except subprocess.CalledProcessError as e:
+        print(f"Error configuring tendermint:{e}")
+        return 1
 
     try:
         result = subprocess.run(["go", "build", "-o", "lib/libconsensus.so.0",
@@ -274,7 +338,7 @@ def build_redis(io: IO) -> int:
         io.write_line(f"<error>Error updating redis conf:{e}</>")
         return 1
 
-def run_build(io: IO, venv_path: Path) -> int:
+def run_build(io: IO, venv_path: Path, config_args) -> int:
 
     venv_bin_dir = sysconfig.get_path("scripts")
     io.write_line(
@@ -290,7 +354,7 @@ def run_build(io: IO, venv_path: Path) -> int:
     )
 
     build_proto(io, venv_path)
-    build_consensus(io)
+    build_consensus(io, config_args)
     build_waku(io)
     build_statusgo(io)
     build_falkorDB(io)
@@ -302,11 +366,76 @@ class BuildLibs(EnvCommand):
     name = "build-libs"
     description = "Compiles libraries for consensus, waku"
 
+    options = [
+        option(
+            "c_moniker",
+            description="A custom human readable name for the consensus node.",
+            value_required=True,
+            flag=False,
+            default="Restaurant",
+        ),
+        option(
+            "c_persistent_peers",
+            description="List of nodes to keep persistent connections to.",
+            value_required=True,
+            flag=False,
+            default="04c6ff08d435e1b3f7fde44bdab924a166071bbb@192.168.1.26:26658",
+        ),        
+        option(
+            "c_addr_book_strict",
+            description="Strict address routability rules, Set false for private or local networks",
+            value_required=True,
+            flag=False,
+            default="false",
+        ),
+        option(
+            "c_allow_duplicate_ip",
+            description="Toggle to disable guard against peers connecting from the same ip.",
+            value_required=True,
+            flag=False,
+            default="true",
+        ),
+        option(
+            "c_wal_dir",
+            description="WAL directory.",
+            value_required=True,
+            flag=False,
+            default="p2p/consensus",
+        ),
+        option(
+            "c_timeout_commit",
+            description="How long we wait after committing a block, before starting on the new height.",
+            value_required=True,
+            flag=False,
+            default="10s",
+        ),
+        option(
+            "c_create_empty_blocks",
+            description="EmptyBlocks mode and possible interval between empty blocks.",
+            value_required=True,
+            flag=False,
+            default="false",
+        ),
+        option(
+            "c_index_tags",
+            description="What transactions to index.",
+            value_required=True,
+            flag=False,
+            default="order_tx_check,order_tx_deliver",
+        ),        
+    ]
+
     def __init__(self, config: Dict[str, str]) -> None:
         super().__init__()
+        self.config = config
+        for o in self.options:
+            if o.name in config:
+                o.set_default(config[o.name])
 
     def handle(self) -> int:
-        return run_build(self.io, self.env.path)
+        args = {o.name: self.option(o.name) for o in self.options}
+        args = {name: value for name, value in args.items() if value is not None}
+        return run_build(self.io, self.env.path, args)
 
 class TasteBotPlugin(ApplicationPlugin):
     _application: Application
@@ -332,11 +461,11 @@ class TasteBotPlugin(ApplicationPlugin):
     def load_config(self) -> Optional[Dict[str, str]]:
         poetry = self._application.poetry
         tool_data: Dict[str, Any] = poetry.pyproject.data.get("tool", {})
-
-        config = tool_data.get("poetry-tastebot-plugin")
-        if config is None:
-            return None
-        return config
+        tastebot_data: Dict[str, Any] = tool_data.get("tastebot", {})
+        app_data = tastebot_data.get("app", {})
+        p2p_config = app_data.get("p2p", {})
+        
+        return p2p_config
 
     def run_build(
         self, event: Event, event_name: str, dispatcher: EventDispatcher
@@ -347,15 +476,15 @@ class TasteBotPlugin(ApplicationPlugin):
             or not self.application
         ):
             return
-        # config = self.load_config()
+        config = self.load_config()
 
-        # if config is None:
-        #     event.io.write_line(
-        #         "<debug>Skipped update, [tool.poetry-grpc-plugin] or pyproject.toml missing.</>",
-        #         Verbosity.DEBUG,
-        #     )
-        #     return
+        if config is None:
+            event.io.write_line(
+                "<debug>Skipped update, [tool.poetry-tastebot-plugin] or pyproject.toml missing.</>",
+                Verbosity.DEBUG,
+            )
+            return
 
-        if run_build(event.io, event.command.env.path) != 0:
+        if run_build(event.io, event.command.env.path, config) != 0:
             raise Exception("Error: {} failed".format(event.command))
 

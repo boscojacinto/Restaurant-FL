@@ -156,7 +156,7 @@ func (app *InferSyncApp) CheckTx(req abcitypes.RequestCheckTx) abcitypes.Respons
 
 	sent := sendCheckTxEvent(app, events)
 	if sent == true {
-		fmt.Println("Sent Event to Application")
+		//fmt.Println("Sent Event to Application")
 	}    
 
 	return abcitypes.ResponseCheckTx{Code: code, Codespace: "order.tx.check", Events: events}
@@ -229,7 +229,6 @@ func (app *InferSyncApp) DeliverTx(req abcitypes.RequestDeliverTx) abcitypes.Res
 	}
 
 	var events []abcitypes.Event
-	fmt.Println("\nSending event\n")
 	events = []abcitypes.Event {
 	        {
 	            Type: DeliverTxEventType,
@@ -251,7 +250,6 @@ func (app *InferSyncApp) DeliverTx(req abcitypes.RequestDeliverTx) abcitypes.Res
 
 func (app *InferSyncApp) Commit() abcitypes.ResponseCommit {
 	
-	fmt.Println("COMMIT")
 	var appHash = make([]byte, 8)
 	binary.PutVarint(appHash, app.state.NumOrders)
 	saveState(app.state)
@@ -315,7 +313,6 @@ func (InferSyncApp) InitChain(req abcitypes.RequestInitChain) abcitypes.Response
 }
 
 func (app *InferSyncApp) BeginBlock(req abcitypes.RequestBeginBlock) abcitypes.ResponseBeginBlock {
-	fmt.Println("\nin BeginBlock:prev Height:\n", req.Header.Height)
 	app.currentOrders = app.orderDb.NewTransaction(true)
 	app.currentPeers = app.peersDb.NewTransaction(true)
 	app.currentRegisters = app.registerDb.NewTransaction(true)
@@ -323,13 +320,11 @@ func (app *InferSyncApp) BeginBlock(req abcitypes.RequestBeginBlock) abcitypes.R
 }
 
 func (app *InferSyncApp) EndBlock(req abcitypes.RequestEndBlock) abcitypes.ResponseEndBlock {
-	fmt.Println("in END of block:", req.Height)
 	nodeSubDomain, err := createNodeSubDomain(app.cCtx, req.Height+1)
 	if err != nil {
 		panic(err)
 	}
 	app.nodeSubDomain = nodeSubDomain
-	fmt.Println("nodeSubDomain:", nodeSubDomain)
 	return abcitypes.ResponseEndBlock{}
 }
 

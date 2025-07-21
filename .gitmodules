@@ -1,9 +1,11 @@
 [submodule "restaurant_waku/waku-proto"]
 	path = restaurant_waku/waku-proto
 	url = git@github.com:waku-org/waku-proto.git
+	ignore = dirty
 [submodule "restaurant_waku/enr-decoder"]
 	path = restaurant_waku/enr-decoder
 	url = https://github.com/waku-org/enr-decoder.git
+	ignore = dirty
 [submodule "p2p/waku"]
 	path = p2p/waku
 	url = git@github.com:waku-org/go-waku.git
@@ -15,4 +17,8 @@
 [submodule "ai/FalkorDB"]
 	path = ai/FalkorDB
 	url = git@github.com:FalkorDB/FalkorDB.git
+	ignore = dirty
+[submodule "p2p/tendermint"]
+	path = p2p/tendermint
+	url = git@github.com:tendermint/tendermint.git
 	ignore = dirty

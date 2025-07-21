@@ -1,3 +1,4 @@
+import time
 from subprocess import Popen 
 from config import ConfigOptions
 from graphiti_core import Graphiti
@@ -26,6 +27,9 @@ class KGClient():
             raise e
 
         print(f"Starting KGClient")
+
+        time.sleep(2)
+
         falkor_driver = FalkorDriver(host=self.config.db_host,
                 port=self.config.db_port,
                 username=None,
@@ -44,5 +48,5 @@ class KGClient():
     
     def stop(self):
         print(f"Stopping KGClient")
-        self.graphiti.close()
+        #self.graphiti.close()
 

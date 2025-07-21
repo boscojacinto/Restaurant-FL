@@ -32,17 +32,17 @@ class P2PClient(MessagingClient, ConsensusClient):
 
         ConsensusClient.__init__(self, self.c_root_dir, self.config.node_key)
 
-        self.thread = None
-
         MessagingClient.init(self)
 
-        #ConsensusClient.init(self)
+        ConsensusClient.init(self)
+
+        self.thread = None
 
     def start(self):
 
     	MessagingClient.start(self)
 
-    	#ConsensusClient.start(self)
+    	ConsensusClient.start(self)
     	    	
     	self.thread = threading.Thread(target=self.run)
     	self.thread.start()
@@ -52,7 +52,7 @@ class P2PClient(MessagingClient, ConsensusClient):
 
     	MessagingClient.stop(self)
 
-    	#ConsensusClient.stop(self)
+    	ConsensusClient.stop(self)
 
     	if self.thread:
     		self.thread.join()

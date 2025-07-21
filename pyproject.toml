@@ -27,7 +27,7 @@ url = "https://data.pyg.org/whl/torch-2.4.0+cpu.html"
 priority = "supplemental"
 
 [tool.poetry.requires-plugins]
-poetry-tastebot-plugin = { url = "https://github.com/boscojacinto/Restaurant-FL/releases/download/v1.1.0/poetry_tastebot_plugin-1.2.0-py3-none-any.whl" }
+poetry-tastebot-plugin = { url = "https://github.com/boscojacinto/Restaurant-FL/releases/download/v1.1.0/poetry_tastebot_plugin-1.2.36-py3-none-any.whl" }
 
 # [tool.poetry.poetry-tastebot-plugin]
 
@@ -50,6 +50,14 @@ m_host = "192.168.1.26"
 m_port = "60011"
 m_discv5_port = "9911"
 m_bootstrap_enr = "enr:-KG4QJ60C0bldIz1merR78DRaJWdhSyDGImFc7n42mHqgGadXRyzOG6LOuZPyEEshitBybFvqgFw039VmOmdTFPtgg-GAZb7zkrAgmlkgnY0gmlwhMCoARqCcnOFAFkBAACJc2VjcDI1NmsxoQNLmJB1Pj72eUSZQnMof-AJdmltBsVrqCSzGa_k_YI8UIN0Y3CC6nSDdWRwgibAhXdha3UyAw"
+c_moniker = "restaurant3"
+c_persistent_peers = "04c6ff08d435e1b3f7fde44bdab924a166071bbb@192.168.1.26:26658"
+c_addr_book_strict = "false"
+c_allow_duplicate_ip = "true"
+c_wal_dir = "p2p/consensus"
+c_timeout_commit = "10s"
+c_create_empty_blocks = "false"
+c_index_tags = "order_tx_check,order_tx_deliver"
 
 [tool.tastebot.app.embeddings]
 max_customers = 10000
