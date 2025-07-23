@@ -15,11 +15,6 @@ class ConsensusClient:
 
     	self.c_lib = None
     	self.c_root_path = root_path
-    	self.c_data_dir = Path(self.c_root_path) / "data"
-    	self.c_data_dir.mkdir(exist_ok=True)    	    	
-    	self.c_config_path = Path(self.c_root_path) / "config"
-    	self.c_config_path.mkdir(exist_ok=True)    	    	
-
     	self.c_node_key = node_key
 
     	self.c_init_lib()
@@ -40,15 +35,16 @@ class ConsensusClient:
     	self.c_lib.Query.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ConsensusCallBack, ctypes.c_void_p]
     	self.c_lib.Query.restype = ctypes.c_int
 
-    def init(self):
+    def init(self, cb):
 
     	root_path = ctypes.c_char_p(str(self.c_root_path).encode('utf-8'))
     	node_key = ctypes.c_char_p(self.c_node_key.encode('utf-8'))
 
     	self.c_ctx = self.c_lib.Init(root_path, node_key)
 
-    	self.c_lib.SetEventCallback(self.c_ctx,
-    		ConsensusCallBack(self.on_consensus_cb))
+    	self.c_cb = ConsensusCallBack(cb)
+
+    	self.c_lib.SetEventCallback(self.c_ctx, self.c_cb)
 
     def start(self):
     	
@@ -71,20 +67,17 @@ class ConsensusClient:
 
     	return value
 
-    def publish(self, msg):
-    	# self.c_lib.SendOrder(self.c_ctx, proof, peer_id, node_enr, 
-    	# 	peer_list.encode('ascii'), inf_mode, consensus_callback, None)
+    async def publish(self, msg):
+
+    	peers = json.dumps(msg['peers']).encode('ascii')
+    	proof = ctypes.c_char_p(msg['proof'].encode('utf-8'))
+    	peer_id = ctypes.c_char_p(msg['ID'])
+    	peer_enr = ctypes.c_char_p(msg['ENR'].encode('utf-8'))
+    	intf_mode = ctypes.c_char_p(msg['mode'].encode('utf-8'))
+
+    	self.c_lib.SendOrder(self.c_ctx, proof, peer_id, peer_enr, 
+    		peers, intf_mode, consensus_callback, None)
     	print(f"Send message")
-
-    def on_consensus_cb(self, ret_code, msg: str, user_data):
-    	print(f"EVENT ret: {ret_code}, msg: {msg}, user_data:{user_data}")
-    	if ret_code != 0:
-    		return
-
-    	signal_str = msg.decode('utf-8')
-    	signal = json.loads(signal_str)
-    	if signal['type'] == "NewBlock":
-    		print("New Block event")
 
 @ConsensusCallBack
 def consensus_callback(ret_code, msg: str, user_data):

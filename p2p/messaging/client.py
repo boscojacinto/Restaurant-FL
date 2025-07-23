@@ -127,6 +127,8 @@ class MessagingClient:
 
     	ret = self.m_lib.waku_start(self.m_ctx, waku_callback, None)
 
+    	time.sleep(2)
+
     	peer_id = ctypes.c_char_p(None)
     	ret = self.m_lib.waku_peerid(self.m_ctx, waku_callback, ctypes.byref(peer_id))
     	self.m_peer_id = peer_id.value.decode('utf-8')
@@ -237,7 +239,7 @@ class MessagingClient:
     	self.m_lib.waku_get_enr(self.m_ctx, waku_callback,
     		ctypes.byref(enr))
 
-    	return enr.value
+    	return enr.value.decode('utf-8')
 
     def filter_idle_peers(self):
 
@@ -309,7 +311,7 @@ def main():
 	discv5_port = 9921
 	bootstrap_enr = "enr:-KG4QJ60C0bldIz1merR78DRaJWdhSyDGImFc7n42mHqgGadXRyzOG6LOuZPyEEshitBybFvqgFw039VmOmdTFPtgg-GAZb7zkrAgmlkgnY0gmlwhMCoARqCcnOFAFkBAACJc2VjcDI1NmsxoQNLmJB1Pj72eUSZQnMof-AJdmltBsVrqCSzGa_k_YI8UIN0Y3CC6nSDdWRwgibAhXdha3UyAw"
 
-	client = P2PClient(node_key, host, port, discv5_port, bootstrap_enr)
+	client = MessagingClient(node_key, host, port, discv5_port, bootstrap_enr)
 	
 	client.start()
 	

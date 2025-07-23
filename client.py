@@ -10,7 +10,8 @@ import asyncio
 import threading
 from pathlib import Path
 from types import FrameType
-from typing import Callable, List
+from typing import Dict, List, Any, Optional, Callable
+
 from PIL import Image
 from io import BytesIO
 
@@ -132,6 +133,7 @@ class TasteBot():
 		self.post_thread_lock = False
 
 		self.add_customer_queue = queue.Queue()
+		self.add_order_queue = queue.Queue()
 
 		self.config = ConfigOptions().get_restaurant_config()
 
@@ -217,6 +219,15 @@ class TasteBot():
 			self.status_client.deactivateOneToOneChat(customer_id)
 		pass
 
+	def on_consensus_cb(self, ret_code, msg: str, user_data):
+		if ret_code != 0:
+			return
+
+		signal_str = msg.decode('utf-8')
+		signal = json.loads(signal_str)
+		if signal['type'] == "NewBlock":
+			print("New Block event")
+
 	def attempt_init(self):
 		accounts = self.status_client.getAccounts()
 		if accounts == None:
@@ -279,6 +290,9 @@ class TasteBot():
 
 		self.ai_client = AIClient()
 		self.p2p_client = P2PClient()
+		self.p2p_client.init(
+			on_consensus_cb=self.on_consensus_cb
+		)
 		self.kg_client = KGClient()
 
 	async def init_services(self):
@@ -349,6 +363,17 @@ class TasteBot():
 		print(f"Creating Greeting message..")
 		await self.ai_client.greet(customer, restaurant_key)
 
+	def add_order(self, order: Dict[str, Any]):
+
+		if 'proof' in order:
+			self.add_order_queue.put(order)
+			print("Added Order")
+
+	async def create_order(self, order):
+
+		await self.p2p_client.publish(order['proof'])
+		print("Created and sent Order")
+
 	async def psi_setup_and_fetch(self, customer_id):
 
 		setup_request = psi_proto.SetupRequest(num_customers=1)
@@ -378,8 +403,14 @@ class TasteBot():
 						if "msgId" in contact:
 							self.status_client.acceptContactRequest(contact["msgId"])
 						asyncio.run(self.add_customer(contact))
-				else:
-					time.sleep(0.2)
+				try:
+					order = self.add_order_queue.get_nowait()
+					asyncio.run(self.create_order(order))
+					self.add_order_queue.task_done()
+				except queue.Empty:
+					pass
+
+				time.sleep(0.2)
 
 	def post_execute(self):
 		while True:

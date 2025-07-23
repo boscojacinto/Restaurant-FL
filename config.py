@@ -1,5 +1,7 @@
 import os
+import json
 import tomli
+import base64
 from pathlib import Path
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -104,13 +106,22 @@ class ConfigOptions:
 		config = self._app_config['p2p']
 		filtered_config = {k: v for k, v in config.items() if k in field_names}
 		p2p_config = P2PConfig(**filtered_config)
+		
 		try:
 			load_dotenv()
-			password = os.getenv("P2P_NODE_KEY")
-			if password is None:
-				raise ValueError("Env vairable 'P2P_NODE_KEY' not found")
+			tm_home = os.getenv("TMHOME")
+			if tm_home is None:
+				raise ValueError("Env vairable 'TMHOME' not found")
 			else:
-				p2p_config.node_key = password 
+				path = Path(tm_home) / 'config' / 'node_key.json'
+				with open(path, 'r') as file:
+					data = json.load(file)
+					try:
+						node_key = data['priv_key']['value']
+						p2p_config.node_key = base64.b64decode(node_key).hex()
+					except KeyError:
+						raise ValueError("ValueError: node key invalid")
+
 		except FileNotFoundError:
 			print("Error: .env file not found, Create .env")
 

@@ -12,14 +12,12 @@ static const int RET_OK = 0;
 static const int RET_ERR = 1;
 static const int RET_MISSING_CALLBACK = 2;
 
-extern bool ConsensusSendSignal(void *cb, const char *jsonEvent);
 typedef void (*ConsensusCallBack) (int ret_code, const char* msg, void * user_data);
 */
 import "C"
 import (
  "os"
  "fmt"
- //"flag"
  "time"
  "bytes"
  "sync"
@@ -242,8 +240,6 @@ func Start(ctx unsafe.Pointer, onErr C.ConsensusCallBack, userData unsafe.Pointe
 
 	appSubsEvents := []string{ CheckTxEventType }
 	app := NewInferSyncApp(ctx, orderDb, registerDb, peersDb, appSubsEvents)
-
-	//flag.Parse()
 
 	node, err := newTendermint(instance, app)
 	if err != nil {
@@ -562,7 +558,6 @@ func extractOrderFromTxEvent(eventType string, events map[string][]string) (*Ord
 
 func createAndSendSignal(instance *ConsensusInstance, eventType string, msg interface{}) {
 	
-	fmt.Println("in createAndSendSignal:", eventType)
 	if eventType == "NewBlock" {
 		data := msg.(ctypes.ResultEvent).Data.(types.EventDataNewBlock) 
 		
@@ -570,7 +565,7 @@ func createAndSendSignal(instance *ConsensusInstance, eventType string, msg inte
 		
 		instance.height = newBlock.Height
 		
-		sendSignal(instance, "NewBlock", newBlock)
+		send(instance, "NewBlock", newBlock)
 
 	} else if eventType == CheckTxEventType {
 		events := msg.(CheckTxEvent).Events
@@ -580,7 +575,7 @@ func createAndSendSignal(instance *ConsensusInstance, eventType string, msg inte
 			return
 		}
 
-		sendSignal(instance, eventType, order)
+		send(instance, eventType, order)
 
 	} else if eventType == DeliverTxEventType {
 		fmt.Println("\nmsg deliver:")
@@ -591,7 +586,7 @@ func createAndSendSignal(instance *ConsensusInstance, eventType string, msg inte
 			return
 		}
 
-		sendSignal(instance, eventType, order)
+		send(instance, eventType, order)
 	}
 }
 
@@ -641,23 +636,6 @@ func getInstance(ctx unsafe.Pointer) (*ConsensusInstance, error) {
 	}
 
 	return instance, nil
-}
-
-func sendSignal(instance *ConsensusInstance, eventType string, event interface{}) {
-	signal := SignalData{
-		Type: eventType,
-		Event: event,
-	}
-	data, err := json.Marshal(&signal)
-	if err != nil {
-		fmt.Println("marshal signal error", err)
-		return
-	}
-
-	dataStr := string(data)
-	str := C.CString(dataStr)
-	C.ConsensusSendSignal(instance.cb, str)
-	C.free(unsafe.Pointer(str))
 }
 
 func makeTxOrder(instance *ConsensusInstance, proof []byte, id string,

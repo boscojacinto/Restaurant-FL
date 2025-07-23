@@ -1,0 +1,82 @@
+diff --git a/cmd/tendermint/commands/init.go b/cmd/tendermint/commands/init.go
+index 5d80a41ca..cd721f4ff 100644
+--- a/cmd/tendermint/commands/init.go
++++ b/cmd/tendermint/commands/init.go
+@@ -7,7 +7,6 @@ import (
+ 
+ 	cfg "github.com/tendermint/tendermint/config"
+ 	tmos "github.com/tendermint/tendermint/libs/os"
+-	tmrand "github.com/tendermint/tendermint/libs/rand"
+ 	"github.com/tendermint/tendermint/p2p"
+ 	"github.com/tendermint/tendermint/privval"
+ 	"github.com/tendermint/tendermint/types"
+@@ -57,7 +56,7 @@ func initFilesWithConfig(config *cfg.Config) error {
+ 		logger.Info("Found genesis file", "path", genFile)
+ 	} else {
+ 		genDoc := types.GenesisDoc{
+-			ChainID:         fmt.Sprintf("test-chain-%v", tmrand.Str(6)),
++			ChainID:         fmt.Sprintf("tastebot-chain-000001"),
+ 			GenesisTime:     tmtime.Now(),
+ 			ConsensusParams: types.DefaultConsensusParams(),
+ 		}
+diff --git a/p2p/key.go b/p2p/key.go
+index b99ad6263..c538265a3 100644
+--- a/p2p/key.go
++++ b/p2p/key.go
+@@ -7,7 +7,7 @@ import (
+ 	"os"
+ 
+ 	"github.com/tendermint/tendermint/crypto"
+-	"github.com/tendermint/tendermint/crypto/ed25519"
++	"github.com/tendermint/tendermint/crypto/secp256k1"
+ 	tmjson "github.com/tendermint/tendermint/libs/json"
+ 	tmos "github.com/tendermint/tendermint/libs/os"
+ )
+@@ -56,7 +56,7 @@ func LoadOrGenNodeKey(filePath string) (*NodeKey, error) {
+ 		return nodeKey, nil
+ 	}
+ 
+-	privKey := ed25519.GenPrivKey()
++	privKey := secp256k1.GenPrivKey()
+ 	nodeKey := &NodeKey{
+ 		PrivKey: privKey,
+ 	}
+diff --git a/privval/file.go b/privval/file.go
+index 9d0ddaf18..e11d4d632 100644
+--- a/privval/file.go
++++ b/privval/file.go
+@@ -10,7 +10,7 @@ import (
+ 	"github.com/gogo/protobuf/proto"
+ 
+ 	"github.com/tendermint/tendermint/crypto"
+-	"github.com/tendermint/tendermint/crypto/ed25519"
++	"github.com/tendermint/tendermint/crypto/secp256k1"
+ 	tmbytes "github.com/tendermint/tendermint/libs/bytes"
+ 	tmjson "github.com/tendermint/tendermint/libs/json"
+ 	tmos "github.com/tendermint/tendermint/libs/os"
+@@ -169,7 +169,7 @@ func NewFilePV(privKey crypto.PrivKey, keyFilePath, stateFilePath string) *FileP
+ // GenFilePV generates a new validator with randomly generated private key
+ // and sets the filePaths, but does not call Save().
+ func GenFilePV(keyFilePath, stateFilePath string) *FilePV {
+-	return NewFilePV(ed25519.GenPrivKey(), keyFilePath, stateFilePath)
++	return NewFilePV(secp256k1.GenPrivKey(), keyFilePath, stateFilePath)
+ }
+ 
+ // LoadFilePV loads a FilePV from the filePaths.  The FilePV handles double
+diff --git a/types/params.go b/types/params.go
+index 16c85aa55..5b62b3ed3 100644
+--- a/types/params.go
++++ b/types/params.go
+@@ -50,10 +50,10 @@ func DefaultEvidenceParams() tmproto.EvidenceParams {
+ }
+ 
+ // DefaultValidatorParams returns a default ValidatorParams, which allows
+-// only ed25519 pubkeys.
++// only secp256k1 pubkeys.
+ func DefaultValidatorParams() tmproto.ValidatorParams {
+ 	return tmproto.ValidatorParams{
+-		PubKeyTypes: []string{ABCIPubKeyTypeEd25519},
++		PubKeyTypes: []string{ABCIPubKeyTypeSecp256k1},
+ 	}
+ }
+ 

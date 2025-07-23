@@ -85,6 +85,22 @@ def build_consensus(io: IO, args) -> int:
         return 1
 
     try:
+        result = subprocess.run(["git", "apply", "--check", "../patches/0001-tendermint-init-cmd.patch"],
+        cwd=tendermint_dir, capture_output=True, text=True)
+
+        if result.returncode == 0:
+            try:
+                io.write_line("<info>Applying tendermint patches..</>")
+                result = subprocess.run(["git", "apply", "../patches/0001-tendermint-init-cmd.patch"],
+                cwd=tendermint_dir, check=True, capture_output=True, text=True)
+            except subprocess.CalledProcessError as e:
+                io.write_line(f"<error>Error applying patches to tendermint:{e}</>")
+                return 1
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error applying patches to tendermint:{e}</>")
+        return 1
+
+    try:
         result = subprocess.run(["make", "build"],
         cwd=tendermint_dir, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
@@ -97,6 +113,13 @@ def build_consensus(io: IO, args) -> int:
         env = os.environ.copy()
     except FileNotFoundError:
         print("Error: .env file not found, Create .env")
+
+    try:
+        result = subprocess.run(["rm", "-rf", f"{env['TMHOME']}/config", f"{env['TMHOME']}/data"],
+        cwd=p2p_dir, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error deleting tenderming config:{e}</>")
+        return 1    
 
     try:
         result = subprocess.run(["build/tendermint", "init", "validator"],
@@ -138,22 +161,37 @@ def build_consensus(io: IO, args) -> int:
         print(f"Error configuring tendermint:{e}")
         return 1
 
+    env["CGO_LDFLAGS"] = "-Wl,-soname,libgowaku.so.0"
+
     try:
-        result = subprocess.run(["go", "build", "-o", "lib/libconsensus.so.0",
-        "-buildmode=c-shared", "-ldflags", 
-        f"-extldflags '-Wl,-soname,libconsensus.so.0'", consensus_dir],
+        result = subprocess.run(["go", "build", "-o", "build/lib/libconsensus.so",
+        "-buildmode=c-shared", consensus_dir],
+        cwd=consensus_dir, env=env, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error compiling libconsensus:{e}</>")
+        return 1
+
+    try:
+        result = subprocess.run(["sed", "-i", "s/#include <cgo_utils.h>//gi",
+                                f"{consensus_dir}/build/lib/libconsensus.h"],
         cwd=consensus_dir, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
         io.write_line(f"<error>Error compiling libconsensus:{e}</>")
         return 1
 
     try:
-        result = subprocess.run(["cp", "consensus/lib/libconsensus.so.0", "libs"],
+        result = subprocess.run(["mv", "consensus/build/lib/libconsensus.so", "libs/libconsensus.so.0"],
         cwd=p2p_dir, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
         io.write_line(f"<error>Error copying consensus libs:{e}</>")
         return 1    
 
+    try:
+        result = subprocess.run(["cp", "consensus/build/lib/libconsensus.h", "libs"],
+        cwd=p2p_dir, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error copying consensus libs:{e}</>")
+        return 1
 
 def build_waku(io: IO) -> int:
     p2p_dir = Path("p2p").resolve(strict=True)
@@ -161,9 +199,17 @@ def build_waku(io: IO) -> int:
     io.write_line(f"<info>Building waku in: {waku_dir}</>")
 
     try:
-        io.write_line("<info>Applying waku patches..</>")
-        result = subprocess.run(["git", "apply", "../patches/0001-waku-api-ext.patch"],
-        cwd=waku_dir, check=True, capture_output=True, text=True)
+        result = subprocess.run(["git", "apply", "--check", "../patches/0001-waku-api-ext.patch"],
+        cwd=waku_dir, capture_output=True, text=True)
+
+        if result.returncode == 0:
+            try:
+                io.write_line("<info>Applying waku patches..</>")
+                result = subprocess.run(["git", "apply", "../patches/0001-waku-api-ext.patch"],
+                cwd=waku_dir, check=True, capture_output=True, text=True)
+            except subprocess.CalledProcessError as e:
+                io.write_line(f"<error>Error applying patches to waku:{e}</>")
+                return 1
     except subprocess.CalledProcessError as e:
         io.write_line(f"<error>Error applying patches to waku:{e}</>")
         return 1
@@ -198,9 +244,17 @@ def build_statusgo(io: IO) -> int:
         return 1
 
     try:
-        io.write_line("<info>Applying status-go patches..</>")
-        result = subprocess.run(["git", "apply", "../patches/0001-status-go-api-ext.patch"],
-        cwd=statusgo_dir, check=True, capture_output=True, text=True)
+        result = subprocess.run(["git", "apply", "--check", "../patches/0001-status-go-api-ext.patch"],
+        cwd=statusgo_dir, capture_output=True, text=True)
+
+        if result.returncode == 0:
+            try:
+                io.write_line("<info>Applying status-go patches..</>")
+                result = subprocess.run(["git", "apply", "../patches/0001-status-go-api-ext.patch"],
+                cwd=statusgo_dir, check=True, capture_output=True, text=True)
+            except subprocess.CalledProcessError as e:
+                io.write_line(f"<error>Error applying patches to status-go:{e}</>")
+                return 1
     except subprocess.CalledProcessError as e:
         io.write_line(f"<error>Error applying patches to status-go:{e}</>")
         return 1

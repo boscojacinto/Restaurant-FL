@@ -25,28 +25,31 @@ class P2PClient(MessagingClient, ConsensusClient):
 
         self.config = ConfigOptions().get_p2p_config()
 
+        self.thread = None
+
+    def init(self, on_consensus_cb):
         MessagingClient.__init__(self, self.m_root_dir,
-    					self.config.node_key, self.config.m_host,
-    					self.config.m_port, self.config.m_discv5_port,
-    					self.config.m_bootstrap_enr)
+                        self.config.node_key, self.config.m_host,
+                        self.config.m_port, self.config.m_discv5_port,
+                        self.config.m_bootstrap_enr)
 
         ConsensusClient.__init__(self, self.c_root_dir, self.config.node_key)
 
         MessagingClient.init(self)
 
-        ConsensusClient.init(self)
+        ConsensusClient.init(self, cb=on_consensus_cb)
 
-        self.thread = None
 
     def start(self):
+        print("STARTING")
 
-    	MessagingClient.start(self)
+        MessagingClient.start(self)
 
-    	ConsensusClient.start(self)
-    	    	
-    	self.thread = threading.Thread(target=self.run)
-    	self.thread.start()
-    	return self.thread
+        ConsensusClient.start(self)
+
+        self.thread = threading.Thread(target=self.run)
+        self.thread.start()
+        return self.thread
 
     def stop(self):
 
@@ -57,7 +60,17 @@ class P2PClient(MessagingClient, ConsensusClient):
     	if self.thread:
     		self.thread.join()
 
-    async def find_peers(height, url):
+    async def publish(self, proof):
+
+        msg['ID'] = self.m_peer_id
+        msg['ENR'] = self.get_enr()
+        msg['peers'] = await self.find_peers(1, None)
+        msg['mode'] = 'solo'
+        msg['proof'] = proof
+
+        await ConsensusClient.publish(self, msg)
+
+    async def find_peers(self, height, url):
     	# if height != 0:
     	# 	from_peers = self.query("peers", f"{url}-peers")
     	# else:
