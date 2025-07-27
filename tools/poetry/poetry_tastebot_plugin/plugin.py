@@ -70,7 +70,7 @@ def build_proto(io: IO, venv_path: Path) -> int:
 
     return protoc_result
 
-def build_consensus(io: IO, args) -> int:
+def build_consensus(io: IO, env, args) -> int:
     p2p_dir = Path("p2p").resolve(strict=True)
     consensus_dir = Path("p2p/consensus").resolve(strict=True)
     tendermint_dir = Path("p2p/tendermint").resolve(strict=True)
@@ -106,13 +106,6 @@ def build_consensus(io: IO, args) -> int:
     except subprocess.CalledProcessError as e:
         io.write_line(f"<error>Error building tendermint:{e}</>")
         return 1
-
-    try:
-        env_path = Path.cwd() / '.env'
-        load_dotenv(dotenv_path=env_path)
-        env = os.environ.copy()
-    except FileNotFoundError:
-        print("Error: .env file not found, Create .env")
 
     try:
         result = subprocess.run(["rm", "-rf", f"{env['TMHOME']}/config", f"{env['TMHOME']}/data"],
@@ -344,7 +337,7 @@ def build_falkorDB(io: IO) -> int:
     #     io.write_line(f"<error>Error copying FalkorDB libs:{e}</>")
     #     return 1
 
-def build_redis(io: IO) -> int:
+def build_redis(io: IO, env, args) -> int:
     ai_dir = Path("ai").resolve(strict=True)
     libs_dir = Path("ai/libs").resolve(strict=True)
     redis_dir = Path("ai/redis").resolve(strict=True)
@@ -376,7 +369,7 @@ def build_redis(io: IO) -> int:
         cwd=redis_dir, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
         io.write_line(f"<error>Error copying redis server:{e}</>")
-        return 1
+        return 0
 
     try:
         result = subprocess.run(["cp", "redis.conf", "../libs"],
@@ -407,12 +400,20 @@ def run_build(io: IO, venv_path: Path, config_args) -> int:
         Verbosity.DEBUG,
     )
 
+    env = []
+    try:
+        env_path = Path.cwd() / '.env'
+        load_dotenv(dotenv_path=env_path)
+        env = os.environ.copy()
+    except FileNotFoundError:
+        print("Error: .env file not found, Create .env")
+
     build_proto(io, venv_path)
-    build_consensus(io, config_args)
+    build_consensus(io, env, config_args['p2p'])
     build_waku(io)
     build_statusgo(io)
     build_falkorDB(io)
-    build_redis(io)
+    build_redis(io, env, config_args['kg'])
 
     return 0
 
@@ -517,9 +518,8 @@ class TasteBotPlugin(ApplicationPlugin):
         tool_data: Dict[str, Any] = poetry.pyproject.data.get("tool", {})
         tastebot_data: Dict[str, Any] = tool_data.get("tastebot", {})
         app_data = tastebot_data.get("app", {})
-        p2p_config = app_data.get("p2p", {})
-        
-        return p2p_config
+
+        return app_data
 
     def run_build(
         self, event: Event, event_name: str, dispatcher: EventDispatcher

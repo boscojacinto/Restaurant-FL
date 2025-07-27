@@ -90,9 +90,13 @@ def register_exit_handler():
 		default_handler = signal.signal(sig, exit_handler)
 		default_handlers[sig] = default_handler
 
-def display_qr_code(data):
+def display_and_save_qrcode(data):
 	img = Image.open(BytesIO(data))
 	img.show()
+	print("Saving QR")
+	root_dir = ConfigOptions()._root_dir
+	file = root_dir / 'restaurant_contact.jpg'
+	img.save(file)
 
 class TasteBot():
 	_instance = None
@@ -107,7 +111,6 @@ class TasteBot():
 
 		self.public_key = None
 		self.uid = None
-		self.init_success = False
 		self.media_port = []
 
 		self.fl_client_1 = None
@@ -122,7 +125,6 @@ class TasteBot():
 		self.init_thread = None
 		self.init_thread_lock = False
 		
-		self.init_done_event = threading.Event()
 		self.init_nodelogin_event = threading.Event()
 		self.customer_add_event = threading.Event()
 		
@@ -143,7 +145,7 @@ class TasteBot():
 		signal = json.loads(signal)
 		#print(f"signal received!:{signal}")
 		if signal["type"] == "node.login":
-			try :
+			try:
 				key_uid = signal["event"]["settings"]["key-uid"]
 				public_key = signal["event"]["settings"]["current-user-status"]["publicKey"]
 				print(f"Node Login: uid:{key_uid} publicKey:{public_key}")
@@ -257,21 +259,16 @@ class TasteBot():
 				self.config.password
 			)
 
-	def init_execute(self, nodelogin_event, done_event):
+	def init_execute(self, nodelogin_event):
 		while True:
 			with self.init_thread_lock:
-				if (self.init_success is False and
-					nodelogin_event.is_set() is False and
-					done_event.is_set() is False
-				):
+				if nodelogin_event.is_set() is False:
 					self.attempt_init()
 					time.sleep(10)
-				elif (nodelogin_event.is_set() is True and
-					done_event.is_set() is False
-				):
+				else:
 					time.sleep(0.5)
 					asyncio.run(self.enable_services())
-				else:
+					time.sleep(0.5)
 					asyncio.run(self.init_services())
 					return
 
@@ -332,10 +329,9 @@ class TasteBot():
 			self.chat_key = chat_key.strip('"')
 
 			qr_binary = self.status_client.getQRCode(self.chat_key,
-									self.media_port[2])
-			display_qr_code(qr_binary)
-			self.init_success = True
-			self.init_done_event.set()
+									self.media_port[1])
+			if qr_binary is not None:
+				display_and_save_qrcode(qr_binary)
 		except OSError as e:
 			raise e
 
@@ -419,8 +415,7 @@ class TasteBot():
 
 	def start(self):
 		self.init_thread = threading.Thread(target=self.init_execute,
-									args=(self.init_nodelogin_event, 
-										self.init_done_event,))
+									args=(self.init_nodelogin_event,))
 		self.init_thread_lock = threading.Lock()
 
 		self.run_thread = threading.Thread(target=self.run_execute,

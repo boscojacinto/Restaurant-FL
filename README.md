@@ -22,7 +22,17 @@ of the user's time.
 
 Customers are usually reluctant to provide feedback or honest opinions because they lack incentive to do so, this is where a natural non-pushy conversation can spark a drive to gain knowledge and facts about food. Additionally a small percentage of the price can be waived by the restaurant adding economic incentive. Keeping the identities anonymous can also help with the indulgence in the chat. In general storing data locally and not on server farms helps increase confidence. Also providing feedback of a recent but different restaurant visit can encourage a much honest review.
 
-## Install Dependencies
+## Using Docker
+
+```
+   sudo docker run --env-file .env --network host --rm -v $HOME/.cache/tastebot:/root/.cache/tastebot tastebot:1.1.0
+```
+
+##    OR
+
+## Manually
+
+### Install Dependencies
 
 1. Install Poetry
 ```
@@ -51,7 +61,7 @@ Customers are usually reluctant to provide feedback or honest opinions because t
    sudo apt-get install build-essential cmake m4 automake peg libtool autoconf
 ```
 
-## Install TasteBot
+### Install TasteBot
 
 1. Clone the repository
 ```

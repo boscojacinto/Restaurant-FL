@@ -23,9 +23,14 @@ class RestaurantConfig():
 @dataclass
 class KGConfig():
 	db_host: str
-	db_port: str
 	db_username: str
+	db_port: str
 	db_password: Optional[str] = None
+
+@dataclass
+class IMConfig():
+	status_host: str
+	status_port: str
 
 @dataclass
 class P2PConfig():
@@ -90,16 +95,24 @@ class ConfigOptions:
 		kg_config = KGConfig(**filtered_config)
 		try:
 			load_dotenv()
-			password = os.getenv("FALKORDB_PASSWORD")
+			password = os.getenv("KG_DB_PASSWORD")
 			if password is None:
-				#raise ValueError("Env vairable 'FALKORDB_PASSWORD' not found")
-				pass
+				raise ValueError("Env vairable 'KG_DB_PASSWORD' not found")
 			else:
 				kg_config.db_password = password 
+
 		except FileNotFoundError:
 			print("Error: .env file not found, Create .env")
 
 		return kg_config
+
+	def get_im_config(self) -> IMConfig:
+		field_names = {f.name for f in fields(IMConfig)}
+		config = self._app_config['im']
+		filtered_config = {k: v for k, v in config.items() if k in field_names}
+		im_config = IMConfig(**filtered_config)
+
+		return im_config
 
 	def get_p2p_config(self) -> P2PConfig:
 		field_names = {f.name for f in fields(P2PConfig)}

@@ -39,6 +39,7 @@ class ContactRequestState(Enum):
 
 class StatusClient:
     def __init__(self, root_dir):
+        self.config = ConfigOptions().get_im_config()
         self.lib = None
         self.cb = None
         self.uid = ''
@@ -50,8 +51,7 @@ class StatusClient:
         self.thread = None
         self.message_queue = queue.Queue()
 
-        config_options = ConfigOptions()
-        self.root_dir = str(Path(config_options._root_dir) / "im")
+        self.root_dir = str(Path(ConfigOptions()._root_dir) / "im")
         self.data_dir = str(Path(self.root_dir) / "data")
         self.log_dir = str(Path(self.root_dir) / "log")
         self.root_data_dir = str(Path(self.root_dir) / "root_data")
@@ -86,7 +86,8 @@ class StatusClient:
         global status_backend
         # Spawn status backend dameon
         try:
-            status_backend = Popen([STATUS_BACKEND_BIN, "--address", "127.0.0.1:0"])
+            status_backend = Popen([STATUS_BACKEND_BIN, "--address",
+                f"{self.config.status_host}:{self.config.status_port}"])
         except OSError as e:
             print(f"Error: status_backend failed to start:{e}.")
             raise e

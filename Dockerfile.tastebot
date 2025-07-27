@@ -1,0 +1,21 @@
+FROM python:3.12.3
+
+RUN apt-get update && apt-get install -y && apt-get install -y curl
+
+RUN curl -sSL https://install.python-poetry.org | python3 - --version=2.1.3
+
+ENV PATH="/root/.local/bin:$PATH"
+
+WORKDIR /app
+
+COPY . .
+
+RUN poetry --version
+
+RUN poetry config virtualenvs.in-project true \
+	&& poetry lock \
+	&& poetry install --no-root --no-plugins
+
+RUN cp p2p/psi_pb2.py .venv/lib/python3.12/site-packages/private_set_intersection/proto/psi_python_proto_pb/private_set_intersection/proto
+
+CMD ["poetry", "run", "client"]

@@ -1,0 +1,32 @@
+FROM ubuntu:24.04
+
+# Set environment variables
+ENV PYTHON_VERSION=3.12.3
+ENV PATH=/usr/local/bin:$PATH
+
+# Install build dependencies and Python
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    curl \
+    libbz2-dev \
+    libffi-dev \
+    libncursesw5-dev \
+    libreadline-dev \
+    libsqlite3-dev \
+    libssl-dev \
+    libgomp1 \
+    zlib1g-dev \
+    && curl -O https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tar.xz \
+    && tar -xf Python-${PYTHON_VERSION}.tar.xz \
+    && cd Python-${PYTHON_VERSION} \
+    && ./configure --enable-optimizations \
+    && make -j$(nproc) \
+    && make install \
+    && cd .. \
+    && rm -rf Python-${PYTHON_VERSION} Python-${PYTHON_VERSION}.tar.xz \
+    && apt-get purge -y --auto-remove build-essential curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Verify versions
+RUN ldd --version && python3 --version

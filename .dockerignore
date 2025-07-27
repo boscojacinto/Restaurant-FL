@@ -1,0 +1,42 @@
+# Python and Poetry-specific
+**/__pycache__/
+.poetry/
+
+# Version control
+.git/
+.gitignore
+.gitattributes
+.gitmodules
+**/.gitkeep
+
+# Documentation
+README.md
+FL_01.png
+Bot_Chat_01.png
+Bot_Model_01.png
+HGTConv_01.png
+LocalGraph_01.png
+LocalGraph_02.png
+PSI_01.png
+
+# Local development
+tools/
+p2p/build
+
+# Submodules
+ai/FalkorDB
+ai/redis
+im/status-go
+p2p/tendermint
+p2p/waku
+
+# ML Datasets
+ml/raw
+ml/processed
+
+# Environment variables
+.env
+
+# Docker-specific
+Dockerfile
+.dockerignore

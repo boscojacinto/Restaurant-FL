@@ -41,7 +41,6 @@ class P2PClient(MessagingClient, ConsensusClient):
 
 
     def start(self):
-        print("STARTING")
 
         MessagingClient.start(self)
 

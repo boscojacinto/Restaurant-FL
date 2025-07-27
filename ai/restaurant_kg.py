@@ -41,7 +41,7 @@ class KGClient():
         try:
             # Initialize the graph database with graphiti's indices. This only needs to be done once.
             await self.graphiti.build_indices_and_constraints()
-        except Error as e:
+        except OSError as e:
             print(f"Error: Failed to initialize graphiti")
 
         print("Done Starting Graphiti..")
