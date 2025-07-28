@@ -2,7 +2,7 @@ import os
 import asyncio
 import torch
 import ollama
-import spacy
+#import spacy
 import numpy as np
 from transformers import XLNetTokenizer, XLNetModel
 import csv
@@ -243,17 +243,17 @@ class AIModel:
         rep = (all_hidden_states[-2][0] * all_attentions[-2][0].mean(dim=0).mean(dim=0).view(-1, 1)).sum(dim=0)
         return rep
 
-    def ner(self, text):
-        nlp = spacy.load("en_core_web_sm")
-        doc = nlp(text)
-        keywords = [(ent.text, ent.label_) for ent in doc.ents]
-        print(f"entities:{keywords}")
+    # def ner(self, text):
+    #     nlp = spacy.load("en_core_web_sm")
+    #     doc = nlp(text)
+    #     keywords = [(ent.text, ent.label_) for ent in doc.ents]
+    #     print(f"entities:{keywords}")
 
-        keywords = [token.text for token in doc if token.pos_ in ["ADJ"]]
-        print(f"adj:{keywords}")
+    #     keywords = [token.text for token in doc if token.pos_ in ["ADJ"]]
+    #     print(f"adj:{keywords}")
 
-        keywords = [token.text for token in doc if token.dep_ in ["nsubj", "dobj"]]
-        print(f"sub, obj:{keywords}")
+    #     keywords = [token.text for token in doc if token.dep_ in ["nsubj", "dobj"]]
+    #     print(f"sub, obj:{keywords}")
 
 
 def restaurant_customer_chat(bot, customer_bot, csv_file_path='restaurant_interactions.csv', rounds=50):
