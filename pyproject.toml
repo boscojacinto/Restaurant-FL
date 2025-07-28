@@ -27,7 +27,7 @@ url = "https://data.pyg.org/whl/torch-2.4.0+cpu.html"
 priority = "supplemental"
 
 [tool.poetry.requires-plugins]
-poetry-tastebot-plugin = { url = "https://github.com/boscojacinto/Restaurant-FL/releases/download/v1.1.0/poetry_tastebot_plugin-1.2.48-py3-none-any.whl" }
+poetry-tastebot-plugin = { url = "https://github.com/boscojacinto/Restaurant-FL/releases/download/v1.1.0/poetry_tastebot_plugin-1.2.49-py3-none-any.whl" }
 
 # [tool.poetry.poetry-tastebot-plugin]
 

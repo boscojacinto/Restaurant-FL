@@ -229,8 +229,8 @@ def build_statusgo(io: IO) -> int:
     io.write_line(f"<info>Building statusgo in: {statusgo_dir}</>")
 
     try:
-        io.write_line("<info>Checking out Status-go(tag v10.4.0)</>")
-        result = subprocess.run(["git", "checkout", "-f", "v10.4.0"],
+        io.write_line("<info>Checking out Status-go(tag v10.29.6)</>")
+        result = subprocess.run(["git", "checkout", "-f", "v10.29.6"],
         cwd=statusgo_dir, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
         io.write_line(f"<error>Error checking out tag:{e}</>")

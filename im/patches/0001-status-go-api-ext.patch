@@ -1,21 +1,8 @@
-diff --git a/Makefile b/Makefile
-index d4be1f241..63a86b470 100644
---- a/Makefile
-+++ b/Makefile
-@@ -93,7 +93,7 @@ endef
- # TODO: Define more specific shells.
- TARGET := default
- ifneq ($(detected_OS),Windows)
-- SHELL := ./nix/scripts/shell.sh
-+ #SHELL := ./nix/scripts/shell.sh
- endif
- shell: export TARGET ?= default
- shell: ##@prepare Enter into a pre-configured shell
 diff --git a/api/geth_backend.go b/api/geth_backend.go
-index c76584d39..654bfe634 100644
+index 544d482e0..50d2f969a 100644
 --- a/api/geth_backend.go
 +++ b/api/geth_backend.go
-@@ -241,6 +241,54 @@ func (b *GethStatusBackend) AddCentralizedMetric(metric centralizedmetricscommon
+@@ -267,6 +267,54 @@ func (b *GethStatusBackend) AddCentralizedMetric(metric centralizedmetricscommon
  
  }
  
@@ -71,7 +58,7 @@ index c76584d39..654bfe634 100644
  	b.mu.Lock()
  	defer b.mu.Unlock()
 diff --git a/cmd/status-backend/main.go b/cmd/status-backend/main.go
-index cb3a499dd..566099115 100644
+index acb46ce0f..d5fd81801 100644
 --- a/cmd/status-backend/main.go
 +++ b/cmd/status-backend/main.go
 @@ -4,8 +4,8 @@ import (
@@ -85,25 +72,25 @@ index cb3a499dd..566099115 100644
  
  	"golang.org/x/crypto/ssh/terminal"
  
-@@ -15,7 +15,7 @@ import (
- 	"github.com/status-im/status-go/internal/sentry"
- 	"github.com/status-im/status-go/internal/version"
+@@ -13,7 +13,7 @@ import (
+ 
+ 	"github.com/status-im/status-go/cmd/status-backend/server"
  	"github.com/status-im/status-go/logutils"
 -	statusgo "github.com/status-im/status-go/mobile"
 +	//statusgo "github.com/status-im/status-go/mobile"
+ 	"github.com/status-im/status-go/pkg/sentry"
+ 	"github.com/status-im/status-go/pkg/version"
  )
- 
- var (
-@@ -42,7 +42,7 @@ func main() {
+@@ -43,7 +43,7 @@ func main() {
  	defer sentry.Recover()
  
  	flag.Parse()
 -	go handleInterrupts()
 +	//go handleInterrupts()
  
- 	srv := server.NewServer()
- 	srv.Setup()
-@@ -64,7 +64,7 @@ func main() {
+ 	srv := server.NewServer(
+ 		server.WithProfiling(*pprofEnabled),
+@@ -67,7 +67,7 @@ func main() {
  
  // handleInterrupts catches interrupt signal (SIGTERM/SIGINT) and
  // gracefully logouts and stops the node.
@@ -112,17 +99,17 @@ index cb3a499dd..566099115 100644
  	ch := make(chan os.Signal, 1)
  	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
  	defer signal.Stop(ch)
-@@ -73,4 +73,4 @@ func handleInterrupts() {
+@@ -76,4 +76,4 @@ func handleInterrupts() {
  	logger.Info("interrupt signal received", "signal", receivedSignal)
  	_ = statusgo.Logout()
  	os.Exit(0)
 -}
 +}*/
 diff --git a/mobile/status.go b/mobile/status.go
-index e7e73824d..9b4a95989 100644
+index de9506237..dc8f836a1 100644
 --- a/mobile/status.go
 +++ b/mobile/status.go
-@@ -255,6 +255,129 @@ func signGroupMembership(content string) string {
+@@ -286,6 +286,129 @@ func signGroupMembership(content string) string {
  	return string(data)
  }
  
