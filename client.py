@@ -94,9 +94,9 @@ def display_and_save_qrcode(data):
 	img = Image.open(BytesIO(data))
 	img.show()
 	print("Saving QR")
-	root_dir = ConfigOptions()._root_dir
+	root_dir = Path(ConfigOptions()._root_dir)
 	file = root_dir / 'restaurant_contact.jpg'
-	img.save(file)
+	img.save(str(file))
 
 class TasteBot():
 	_instance = None

@@ -4,7 +4,7 @@ import torch
 import ollama
 #import spacy
 import numpy as np
-from transformers import XLNetTokenizer, XLNetModel
+#from transformers import XLNetTokenizer, XLNetModel
 import csv
 import random
 from ollama import AsyncClient, ListResponse, ProgressResponse
