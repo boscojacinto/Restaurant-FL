@@ -289,7 +289,9 @@ def build_statusgo(io: IO) -> int:
 
 def build_falkorDB(io: IO) -> int:
     ai_dir = Path("ai").resolve(strict=True)
-    falkorDB_dir = Path("ai/FalkorDB").resolve(strict=True)
+    falkorDB_dir = Path("ai/FalkorDB")
+    falkorDB_dir.mkdir(exist_ok=True)
+    falkorDB_dir = falkorDB_dir.resolve(strict=True)
     io.write_line(f"<info>Building FalkorDB in: {falkorDB_dir}</>")
 
     try:
@@ -340,7 +342,9 @@ def build_falkorDB(io: IO) -> int:
 def build_redis(io: IO, env, args) -> int:
     ai_dir = Path("ai").resolve(strict=True)
     libs_dir = Path("ai/libs").resolve(strict=True)
-    redis_dir = Path("ai/redis").resolve(strict=True)
+    redis_dir = Path("ai/redis")
+    redis_dir.mkdir(exist_ok=True)
+    redis_dir = redis_dir.resolve(strict=True)
     io.write_line(f"<info>Building Redis in: {redis_dir}</>")
 
     try:
