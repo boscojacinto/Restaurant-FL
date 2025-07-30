@@ -1,7 +1,10 @@
 import os
+import sys
 import json
 import tomli
 import base64
+import hashlib
+import subprocess
 from pathlib import Path
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -59,12 +62,17 @@ class ConfigOptions:
 	_instance = None
 	_app_config = None
 	_root_dir = None
+	_env_file = None 
 
-	def __new__(cls):
+	def __new__(cls, env_file='.env', check=True):
 		if cls._instance is None:
 			cls._instance = super().__new__(cls)
-			cls._root_dir, cls._app_config = init()
+			cls._env_file = env_file
+			cls._instance.__init__(env_file, check)
 		return cls._instance
+
+	def __init__(self, env_file='.env', check=True):
+		self._root_dir, self._app_config = init(env_file=self._env_file, check=check)		
 
 	def get_embeddings_config(self) -> EmbeddingsConfig:
 		field_names = {f.name for f in fields(EmbeddingsConfig)}
@@ -78,7 +86,7 @@ class ConfigOptions:
 		filtered_config = {k: v for k, v in config.items() if k in field_names}
 		restaurant_config = RestaurantConfig(**filtered_config)
 		try:
-			load_dotenv()
+			load_dotenv(dotenv_path=self._env_file)
 			password = os.getenv("RESTAURANT_PASSWORD")
 			if password is None:
 				raise ValueError("Env vairable 'RESTAURANT_PASSWORD' not found")
@@ -94,7 +102,7 @@ class ConfigOptions:
 		filtered_config = {k: v for k, v in config.items() if k in field_names}
 		kg_config = KGConfig(**filtered_config)
 		try:
-			load_dotenv()
+			load_dotenv(dotenv_path=self._env_file)
 			password = os.getenv("KG_DB_PASSWORD")
 			if password is None:
 				raise ValueError("Env vairable 'KG_DB_PASSWORD' not found")
@@ -119,14 +127,14 @@ class ConfigOptions:
 		config = self._app_config['p2p']
 		filtered_config = {k: v for k, v in config.items() if k in field_names}
 		p2p_config = P2PConfig(**filtered_config)
-		
 		try:
-			load_dotenv()
+			load_dotenv(dotenv_path=self._env_file)
 			tm_home = os.getenv("TMHOME")
 			if tm_home is None:
 				raise ValueError("Env vairable 'TMHOME' not found")
 			else:
 				path = Path(tm_home) / 'config' / 'node_key.json'
+
 				with open(path, 'r') as file:
 					data = json.load(file)
 					try:
@@ -136,24 +144,29 @@ class ConfigOptions:
 						raise ValueError("ValueError: node key invalid")
 
 		except FileNotFoundError:
-			print("Error: .env file not found, Create .env")
+			print("Error: .env file not found 1, Create .env")
 
 		return p2p_config
 
-def init():
-	root_dir: Union[str, Path]
+def init(env_file, check):
+	root_dir: Union[str, Path] = ""
 
-	if os.getenv("TASTEBOT_ROOTDIR") is not None:
-		root_dir = os.environ.get('TASTEBOT_ROOTDIR')
-	else:
-		home_dir = Path.home()
-		root_dir = home_dir / ".cache" / "tastebot"
-		root_dir.mkdir(exist_ok=True)
+	env_path = Path.cwd() / env_file
 
-	if os.path.isdir(root_dir) is None:
-		raise FileNotFoundError(
-			f"Root directory '{root_dir}' not present."
-		)
+	load_dotenv(dotenv_path=env_path)
+
+	if check == True:
+		if os.getenv("TASTEBOT_ROOTDIR") is not None:
+			root_dir = os.environ.get('TASTEBOT_ROOTDIR')
+		else:
+			raise OSError(
+				f"Taste bot working directory not configured."
+			)
+
+		if os.path.isdir(root_dir) is None:
+			raise FileNotFoundError(
+				f"Root directory '{root_dir}' not present."
+			)
 
 	project_dir = os.path.dirname(os.path.realpath(__file__))
 	toml_path = Path(project_dir) / PROJECT_CONFIG_FILE
@@ -189,3 +202,112 @@ def init():
 
 	app_config = config['tool']['tastebot']['app']
 	return root_dir, app_config
+
+def configure(root_dir, config):
+
+	env = {}
+	p2p_dir = Path("p2p").resolve(strict=True)
+	tendermint_dir = Path("p2p/tendermint").resolve(strict=True)
+	
+	env['TMHOME'] =  str(root_dir / 'p2p' / 'consensus')
+
+	try:
+		result = subprocess.run(["build/tendermint", "init", "validator", "--log_level", "error"],
+		cwd=tendermint_dir, env=env)
+	except subprocess.CalledProcessError as e:
+		print(f"Error configuring tendermint1:{e}")
+		return False
+
+	args = config['p2p']
+
+	try:
+		result = subprocess.run(["sed", "-i", "-e", f's/moniker = "[^"]*"/moniker = "{args["c_moniker"]}"/',
+			"-e", f's/persistent_peers = "[^"]*"/persistent_peers = "{args["c_persistent_peers"]}"/',
+			"-e", rf's/addr_book_strict = \(true\|false\)/addr_book_strict = {args["c_addr_book_strict"]}/',
+			"-e", rf's/allow_duplicate_ip = \(true\|false\)/allow_duplicate_ip = {args["c_allow_duplicate_ip"]}/',
+			"-e", f's/wal_dir = "[^"]*"/wal_dir = "{args["c_wal_dir"].replace('/', r'\/')}"/',
+			"-e", f's/timeout_commit = "[^"]*"/timeout_commit = "{args["c_timeout_commit"]}"/',
+			"-e", rf's/create_empty_blocks = \(true\|false\)/create_empty_blocks = {args["c_create_empty_blocks"]}/',
+			f"{env['TMHOME']}/config/config.toml"],
+		cwd=p2p_dir, env=env, check=True, capture_output=True, text=True)
+	except subprocess.CalledProcessError as e:
+		print(f"Error configuring tendermint2:{e}")
+		return False
+
+	try:
+		result = subprocess.run(["sed", "-n", 
+			f'/index_tags = "[^"]*"/p',
+			f"{env['TMHOME']}/config/config.toml"],
+		cwd=p2p_dir, env=env, check=True, capture_output=True, text=True)
+
+		if not result.stdout:
+			try:
+				result = subprocess.run(["sed", "-i", 
+					"-e", rf's/indexer = \("null"\|"kv"\|"psql"\)/indexer = "kv"\nindex_tags = "{args["c_index_tags"]}"/',
+					f"{env['TMHOME']}/config/config.toml"],
+					cwd=p2p_dir, env=env, check=True, capture_output=True, text=True)
+			except subprocess.CalledProcessError as e:
+				print(f"Error configuring tendermint3:{e}")
+				return False
+	except subprocess.CalledProcessError as e:
+		print(f"Error configuring tendermint4:{e}")
+		return False
+
+	return True
+
+def main():
+	if len(sys.argv) != 2:
+		print(f"Error: Enter a single .env file:{len(sys.argv)}")
+		return
+
+	env_file = sys.argv[1]
+	sha256_hash = hashlib.sha256()
+
+	env_file_path = Path(env_file).resolve(strict=True)
+
+	with open(env_file_path, "r") as file:
+		lines = file.readlines()
+
+	lines = [line for line in lines if "TASTEBOT_ROOTDIR=" not in line and "TMHOME=" not in line]
+
+	with open(env_file_path, 'w') as file:
+		file.writelines(lines)
+
+	with open(env_file_path, "rb") as file:
+		for chunk in iter(lambda: file.read(4096), b""):
+			sha256_hash.update(chunk)
+
+	hash_id = sha256_hash.hexdigest()
+	home_dir = Path.home()
+	root_dir = home_dir / ".cache" / f"tastebot-{hash_id}" 
+	root_dir.mkdir(mode=0o755, exist_ok=True)
+
+	config = ConfigOptions(env_file=env_file, check=False)
+
+	env = os.environ.copy()
+
+	ret = configure(root_dir, config._app_config)
+
+	if ret == True:
+		print(f"Root directory(host):{root_dir}")
+		host_volume = root_dir
+
+		home_dir = Path("/root")
+		root_dir = home_dir / ".cache" / f"tastebot"
+		tmhome_dir = root_dir / "p2p" / "consensus"
+
+		with open(env_file_path, 'w') as file:
+			file.writelines(lines)
+			file.writelines(
+				[f"TASTEBOT_ROOTDIR={root_dir}\n",
+				 f"TMHOME={tmhome_dir}\n"]
+			)
+
+		print(f"Root directory(docker):{root_dir}")
+		image_volume = root_dir
+
+		print(f"\nShared volume for docker container:\n{host_volume}:{image_volume}")
+
+	return ret
+
+

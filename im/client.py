@@ -121,7 +121,7 @@ class StatusClient:
             "wakuV2EnableStoreConfirmationForMessagesSent": True
         }
         config = json.dumps(config).encode('utf-8')
-        self.lib.InitializeApplication(config)
+        ret = self.lib.InitializeApplication(config)
 
     def getAccounts(self):
         accounts = self.lib.GetAccounts()
@@ -154,7 +154,8 @@ class StatusClient:
             "params": []
         }
         payload = json.dumps(data).encode('utf-8')
-        self.lib.CallRPC(payload)
+        ret = self.lib.CallRPC(payload)
+        print(f"RET1:{ret}")
 
     def logout(self):
         self.lib.Logout()

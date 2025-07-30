@@ -31,19 +31,20 @@ name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 priority = "explicit"
 
-[tool.poetry.requires-plugins]
-poetry-tastebot-plugin = { url = "https://github.com/boscojacinto/Restaurant-FL/releases/download/v1.1.0/poetry_tastebot_plugin-1.3.0-py3-none-any.whl" }
+#[tool.poetry.requires-plugins]
+#poetry-tastebot-plugin = { url = "https://github.com/boscojacinto/Restaurant-FL/releases/download/v1.1.0/poetry_tastebot_plugin-1.3.0-py3-none-any.whl" }
 
 # [tool.poetry.poetry-tastebot-plugin]
 
 [tool.poetry.scripts]
+configure = "config:main"
 client = "client:main"
 server = "server:main"
 neighbor = "p2p.neighbor_restaurant:main"
 
 [tool.tastebot.app.restaurant]
 name = "TasteBot"
-device = "restaurant-pc"
+device = "docker-pc"
 
 [tool.tastebot.app.kg]
 db_host = "localhost"

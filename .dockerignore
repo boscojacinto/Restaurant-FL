@@ -38,5 +38,6 @@ ml/processed
 .env
 
 # Docker-specific
-Dockerfile
+Dockerfile.python
+Dockerfile.tastebot
 .dockerignore
