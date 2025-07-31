@@ -2,17 +2,20 @@ import os
 import time
 import asyncio
 import threading
+from pathlib import Path
 import flwr
+from config import ConfigOptions
 
 class FLServer:
 	def __init__(self):
 		self.started = False
 		self.thread = None
-		self.thread_neighbor = None
+		self.flwr_dir = Path(ConfigOptions()._root_dir) / "fl_server"
+		self.flwr_dir.mkdir(exist_ok=True)		
 
 	def run(self):
-		flwr.server.app.run_superlink()
-
+		flwr.server.app.run_superlink(flwr_dir=str(self.flwr_dir),
+			insecure=True)
 	def start(self):
 		self.thread = threading.Thread(target=self.run)
 		self.started = True

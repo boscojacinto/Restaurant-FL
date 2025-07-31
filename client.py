@@ -59,11 +59,8 @@ def register_exit_handler():
 
 		signal.signal(signum, default_handlers[signum])
 
-		if client.fl_client_1 is not None:
-			client.fl_client_1.stop()
-
-		if client.fl_client_2 is not None:
-			client.fl_client_2.stop()
+		if client.fl_client is not None:
+			client.fl_client.stop()
 			
 		if client.status_client is not None:
 			client.status_client.stop()
@@ -113,8 +110,7 @@ class TasteBot():
 		self.uid = None
 		self.media_port = []
 
-		self.fl_client_1 = None
-		self.fl_client_2 = None
+		self.fl_client = None
 		self.status_client = None
 		self.ai_client = None
 		self.kg_client = None
@@ -274,8 +270,7 @@ class TasteBot():
 
 	def init_clients(self):
 
-		self.fl_client_1 = FLClient(1)
-		self.fl_client_2 = FLClient(2)
+		self.fl_client = FLClient()
 
 		self.status_client = StatusClient(
 			root_dir=ConfigOptions()._root_dir
@@ -304,11 +299,8 @@ class TasteBot():
 
 	async def start_clients(self):
 
-		fl_1_thread = self.fl_client_1.start()
+		fl_1_thread = self.fl_client.start()
 		client_threads.append(fl_1_thread)
-
-		fl_2_thread = self.fl_client_2.start()
-		client_threads.append(fl_2_thread)
 		
 		status_thread = self.status_client.start()
 		client_threads.append(status_thread)

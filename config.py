@@ -36,6 +36,12 @@ class IMConfig():
 	status_port: str
 
 @dataclass
+class FLConfig():
+	flwr_insecure: bool
+	flwr_partition_id: str
+	flwr_clientappio_api_address: str
+
+@dataclass
 class P2PConfig():
 	m_host: str
 	m_port: str
@@ -121,6 +127,14 @@ class ConfigOptions:
 		im_config = IMConfig(**filtered_config)
 
 		return im_config
+
+	def get_fl_config(self) -> FLConfig:
+		field_names = {f.name for f in fields(FLConfig)}
+		config = self._app_config['fl']
+		filtered_config = {k: v for k, v in config.items() if k in field_names}
+		fl_config = FLConfig(**filtered_config)
+
+		return fl_config
 
 	def get_p2p_config(self) -> P2PConfig:
 		field_names = {f.name for f in fields(P2PConfig)}

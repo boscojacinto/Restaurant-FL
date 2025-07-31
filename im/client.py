@@ -155,7 +155,6 @@ class StatusClient:
         }
         payload = json.dumps(data).encode('utf-8')
         ret = self.lib.CallRPC(payload)
-        print(f"RET1:{ret}")
 
     def logout(self):
         self.lib.Logout()
