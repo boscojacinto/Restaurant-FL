@@ -146,7 +146,7 @@ class StatusClient:
         payload = json.dumps(data).encode('utf-8')
         self.lib.LoginAccount(payload)
 
-        time.sleep(2)
+        time.sleep(5)
 
         # Start status-im messenger
         data = {

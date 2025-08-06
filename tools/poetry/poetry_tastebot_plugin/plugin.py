@@ -391,6 +391,7 @@ def build_redis(io: IO, env, args) -> int:
 
 def run_build(io: IO, venv_path: Path, config_args) -> int:
 
+    print(f"\nRUN BUILD config_args:{config_args}")
     venv_bin_dir = sysconfig.get_path("scripts")
     io.write_line(
         f"<debug>Adding virtual environment bin dir '{venv_bin_dir}' to PATH</>",
@@ -427,7 +428,40 @@ class BuildLibs(EnvCommand):
 
     options = [
         option(
+            "m_host",
+            "p2p_1",
+            description="The host address for p2p messaging.",
+            value_required=True,
+            flag=False,
+            default="192.168.1.2",
+        ),
+        option(
+            "m_port",
+            "p2p_2",
+            description="The port for p2p messaging.",
+            value_required=True,
+            flag=False,
+            default="60011",
+        ),
+        option(
+            "m_discv5_port",
+            "p2p_3",
+            description="The v5 discovery port for p2p messaging.",
+            value_required=True,
+            flag=False,
+            default="60011",
+        ),
+        option(
+            "m_bootstrap_enr",
+            "p2p_4",
+            description="The bootstrap node for p2p messaging.",
+            value_required=True,
+            flag=False,
+            default="",
+        ),
+        option(
             "c_moniker",
+            "p2p_5",
             description="A custom human readable name for the consensus node.",
             value_required=True,
             flag=False,
@@ -435,6 +469,7 @@ class BuildLibs(EnvCommand):
         ),
         option(
             "c_persistent_peers",
+            "p2p_6",
             description="List of nodes to keep persistent connections to.",
             value_required=True,
             flag=False,
@@ -442,6 +477,7 @@ class BuildLibs(EnvCommand):
         ),        
         option(
             "c_addr_book_strict",
+            "p2p_7",
             description="Strict address routability rules, Set false for private or local networks",
             value_required=True,
             flag=False,
@@ -449,6 +485,7 @@ class BuildLibs(EnvCommand):
         ),
         option(
             "c_allow_duplicate_ip",
+            "p2p_8",
             description="Toggle to disable guard against peers connecting from the same ip.",
             value_required=True,
             flag=False,
@@ -456,6 +493,7 @@ class BuildLibs(EnvCommand):
         ),
         option(
             "c_wal_dir",
+            "p2p_9",
             description="WAL directory.",
             value_required=True,
             flag=False,
@@ -463,6 +501,7 @@ class BuildLibs(EnvCommand):
         ),
         option(
             "c_timeout_commit",
+            "p2p_10",
             description="How long we wait after committing a block, before starting on the new height.",
             value_required=True,
             flag=False,
@@ -470,6 +509,7 @@ class BuildLibs(EnvCommand):
         ),
         option(
             "c_create_empty_blocks",
+            "p2p_11",
             description="EmptyBlocks mode and possible interval between empty blocks.",
             value_required=True,
             flag=False,
@@ -477,24 +517,56 @@ class BuildLibs(EnvCommand):
         ),
         option(
             "c_index_tags",
+            "p2p_12",
             description="What transactions to index.",
             value_required=True,
             flag=False,
             default="order_tx_check,order_tx_deliver",
+        ),
+        option(
+            "db_host",
+            "kg_1",
+            description="The database host for kg.",
+            value_required=True,
+            flag=False,
+            default="localhost",
+        ),
+        option(
+            "db_port",
+            "kg_2",
+            description="The database port for kg.",
+            value_required=True,
+            flag=False,
+            default="6379",
+        ),
+        option(
+            "db_username",
+            "kg_3",
+            description="The database username for kg.",
+            value_required=True,
+            flag=False,
+            default="falkor",
         ),        
     ]
 
     def __init__(self, config: Dict[str, str]) -> None:
         super().__init__()
         self.config = config
+        print(f"CONFIG:{config}")
         for o in self.options:
             if o.name in config:
                 o.set_default(config[o.name])
 
     def handle(self) -> int:
-        args = {o.name: self.option(o.name) for o in self.options}
-        args = {name: value for name, value in args.items() if value is not None}
-        return run_build(self.io, self.env.path, args)
+        p2p_args = {o.name: self.option(o.name) for o in self.options if o.shortcut.startswith("p2p_")}
+        p2p_args = {name: value for name, value in p2p_args.items() if value is not None}
+        kg_args = {o.name: self.option(o.name) for o in self.options if o.shortcut.startswith("kg_")}
+        kg_args = {name: value for name, value in kg_args.items() if value is not None}
+
+        config = {}
+        config['p2p'] = p2p_args
+        config['kg'] = kg_args
+        return run_build(self.io, self.env.path, config)
 
 class TasteBotPlugin(ApplicationPlugin):
     _application: Application
@@ -522,6 +594,7 @@ class TasteBotPlugin(ApplicationPlugin):
         tool_data: Dict[str, Any] = poetry.pyproject.data.get("tool", {})
         tastebot_data: Dict[str, Any] = tool_data.get("tastebot", {})
         app_data = tastebot_data.get("app", {})
+        print(f"IN LOAD:{tool_data}")
 
         return app_data
 

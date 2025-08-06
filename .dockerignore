@@ -37,7 +37,12 @@ ml/processed
 # Environment variables
 .env
 
+tmp/
+dist/
+tests/
+docs/
+
 # Docker-specific
-Dockerfile.python
-Dockerfile.tastebot
+Dockerfile.*
+Dockerfile.*
 .dockerignore

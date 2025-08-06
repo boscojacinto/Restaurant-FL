@@ -18,7 +18,7 @@ You are enthusiastic, warm, and intelligent but is also considerate
 of the user's time.
 ```
 
-![Using the Status-IM app](./Bot_Chat_01.png)
+![Using the Status-IM app](docs/Bot_Chat_01.png)
 
 Customers are usually reluctant to provide feedback or honest opinions because they lack incentive to do so, this is where a natural non-pushy conversation can spark a drive to gain knowledge and facts about food. Additionally a small percentage of the price can be waived by the restaurant adding economic incentive. Keeping the identities anonymous can also help with the indulgence in the chat. In general storing data locally and not on server farms helps increase confidence. Also providing feedback of a recent but different restaurant visit can encourage a much honest review.
 
@@ -110,7 +110,7 @@ Customers are usually reluctant to provide feedback or honest opinions because t
 4. The system should store customer ids and features in a local db.
 	#### We store the customer and restaurant features as embeddings genrated form a short description (bot is prompted for the description at the end of the conversation) using an embedding model (nomic-embed-text) server locally on ollama
 
-![Using the Status-IM app](./Bot_Model_01.png)
+![Using the Status-IM app](docs/Bot_Model_01.png)
 
 ## For the training of the Restaurant prediction model the following were our requirements
 ---
@@ -144,10 +144,10 @@ Customers are usually reluctant to provide feedback or honest opinions because t
    conversation of the customer with the Bot. The customer features and the neighbour restaurant feature should also be added to the respective nodes in the graph.
    #### We currently store the normalized customer and restaurant embeddings extracted from the conversation and create a subgraph dataset of type SWGDatasetLocal which is then used by the FL train, eval workflow 
 
-| ![Local Graph - Restauarnt 0](./LocalGraph_01.png) | ![Local Graph - Restauarnt 0](./LocalGraph_02.png) |
+| ![Local Graph - Restauarnt 0](docs/LocalGraph_01.png) | ![Local Graph - Restauarnt 0](docs/LocalGraph_02.png) |
 |----------------------------------------------------|----------------------------------------------------|
 
-![FL flow](./FL_01.png)
+![FL flow](docs/FL_01.png)
 
 
 ## For the Restaurant success prediction model, the following were the considerations
@@ -160,7 +160,7 @@ Customers are usually reluctant to provide feedback or honest opinions because t
    framework.
    #### The flower ai federation framework was selected for it simplicity, but it lacked any working examples or support for graph datasets. The main concern was if the flower client (which would run on the restaurant PoS) would be able to partition the global graph using the inbuilt FederatedDataset and partition dataloader classes [is-it-possible-to-partition-graph-datasets](https://discuss.flower.ai/t/is-it-possible-to-partition-graph-datasets/836). We landed up bypassing the FederatedDataset and using our own method to create a partition(local subgraph) from the global graph and it worked just fine, even the inbuilt FedAvg strategy by flowerai worked well on the locally trained weights of the HGTConv model. Although flowerai should support graphs in the future.
 
-![The Heterogeneous Graph Transomer](./HGTConv_01.png)
+![The Heterogeneous Graph Transomer](docs/HGTConv_01.png)
 [https://arxiv.org/abs/2003.01332]
 
 
@@ -174,5 +174,5 @@ Customers are usually reluctant to provide feedback or honest opinions because t
    privately to all restaurants in the area.
    #### We used [OpenMined/PSI](https://github.com/OpenMined/PSI) to enable this feature and hosted the exchange of messages over a gRPC server with protobuf. This particular PSI library allows data compression in the form of bloom fliters.
 
-![The PSI flow](./PSI_01.png)
+![The PSI flow](docs/PSI_01.png)
 
