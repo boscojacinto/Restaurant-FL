@@ -20,7 +20,8 @@ class KGClient():
         self.graphiti = None
         self.redis_backend = None 
         try:
-            self.redis_backend = Popen([REDIS_BACKEND_BIN, REDIS_CONFIG])
+            self.redis_backend = Popen([REDIS_BACKEND_BIN,
+                self.config.db_redis_config_path or REDIS_CONFIG])
             print(f"Started redis backend:{self.redis_backend}")
         except OSError as e:
             print(f"Error: redis backend failed to start:{e}.")
@@ -49,4 +50,3 @@ class KGClient():
     def stop(self):
         print(f"Stopping KGClient")
         #self.graphiti.close()
-

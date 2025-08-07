@@ -29,6 +29,7 @@ class KGConfig():
 	db_username: str
 	db_port: str
 	db_password: Optional[str] = None
+	db_redis_config_path: Optional[str] = None
 
 @dataclass
 class IMConfig():
@@ -68,17 +69,25 @@ class ConfigOptions:
 	_instance = None
 	_app_config = None
 	_root_dir = None
-	_env_file = None 
+	_env_file = None
+	_proj_file = None 
 
-	def __new__(cls, env_file='.env', check=True):
+	def __new__(cls, env_file='.env',
+				proj_file=PROJECT_CONFIG_FILE,
+				check=True):
 		if cls._instance is None:
 			cls._instance = super().__new__(cls)
 			cls._env_file = env_file
-			cls._instance.__init__(env_file, check)
+			cls._proj_file = proj_file
+			cls._instance.__init__(env_file, proj_file, check)
 		return cls._instance
 
-	def __init__(self, env_file='.env', check=True):
-		self._root_dir, self._app_config = init(env_file=self._env_file, check=check)		
+	def __init__(self, env_file='.env',
+				 proj_file=PROJECT_CONFIG_FILE,
+				 check=True):
+		self._root_dir, self._app_config = init(env_file=self._env_file,
+											proj_file=self._proj_file,
+											check=check)		
 
 	def get_embeddings_config(self) -> EmbeddingsConfig:
 		field_names = {f.name for f in fields(EmbeddingsConfig)}
@@ -113,7 +122,14 @@ class ConfigOptions:
 			if password is None:
 				raise ValueError("Env vairable 'KG_DB_PASSWORD' not found")
 			else:
-				kg_config.db_password = password 
+				kg_config.db_password = password
+
+			redis_dir = os.getenv("REDIS_CONFIGDIR")
+			if redis_dir is None:
+				raise ValueError("Env vairable 'REDIS_CONFIGDIR' not found")
+			else:
+				kg_config.db_redis_config_path = str(Path(redis_dir) / "redis.conf") 
+
 
 		except FileNotFoundError:
 			print("Error: .env file not found, Create .env")
@@ -162,7 +178,7 @@ class ConfigOptions:
 
 		return p2p_config
 
-def init(env_file, check):
+def init(env_file, proj_file, check):
 	root_dir: Union[str, Path] = ""
 
 	env_path = Path.cwd() / env_file
@@ -183,11 +199,11 @@ def init(env_file, check):
 			)
 
 	project_dir = os.path.dirname(os.path.realpath(__file__))
-	toml_path = Path(project_dir) / PROJECT_CONFIG_FILE
+	toml_path = Path(project_dir) / proj_file
 
 	if not toml_path.is_file():
 		raise FileNotFoundError(
-			f"Cannot find {PROJECT_CONFIG_FILE} in {project_dir}"
+			f"Cannot find {proj_file} in {project_dir}"
 		)
 
 	with toml_path.open(encoding="utf-8") as toml_file:
@@ -205,10 +221,16 @@ def init(env_file, check):
 	else:
 		if "restaurant" in config["tool"]["tastebot"]["app"]:
 			validate_config(config["tool"]["tastebot"]["app"]["restaurant"])		
-		elif "config" in config["tool"]["tastebot"]["app"]:
-			validate_config(config["tool"]["tastebot"]["app"]["config"])
+		elif "kg" in config["tool"]["tastebot"]["app"]:
+			validate_config(config["tool"]["tastebot"]["app"]["kg"])
+		elif "im" in config["tool"]["tastebot"]["app"]:
+			validate_config(config["tool"]["tastebot"]["app"]["im"])
+		elif "fl" in config["tool"]["tastebot"]["app"]:
+			validate_config(config["tool"]["tastebot"]["app"]["fl"])
+		elif "p2p" in config["tool"]["tastebot"]["app"]:
+			validate_config(config["tool"]["tastebot"]["app"]["p2p"])		
 		else:
-			errors.append("Missing [tool.tastebot.app.config] section")
+			errors.append("Missing [tool.tastebot.app.xxx] section")
 
 	if not len(errors) == 0:
 		error_msg = "\n".join([f"  - {error}" for error in errors])
@@ -222,8 +244,10 @@ def configure(root_dir, config):
 	env = {}
 	p2p_dir = Path("p2p").resolve(strict=True)
 	tendermint_dir = Path("p2p/tendermint").resolve(strict=True)
+	redis_dir = Path("ai/redis").resolve(strict=True)
 	
 	env['TMHOME'] =  str(root_dir / 'p2p' / 'consensus')
+	env['REDIS_CONFIGDIR'] =  str(root_dir / 'ai' / 'redis')
 
 	try:
 		result = subprocess.run(["build/tendermint", "init", "validator", "--log_level", "error"],
@@ -267,36 +291,95 @@ def configure(root_dir, config):
 		print(f"Error configuring tendermint4:{e}")
 		return False
 
+	args = config['kg']
+
+	project_dir = os.path.dirname(os.path.realpath(__file__))
+	redisconf_file = Path(project_dir) / "ai" / "libs" / "redis.conf"
+	print(f"project_dir:{project_dir}")
+	print(f"redisconf_file:{redisconf_file}")
+	print(f"env['REDIS_CONFIGDIR']:{env['REDIS_CONFIGDIR']}")
+
+	if not redisconf_file.is_file():
+		raise FileNotFoundError(
+			f"Cannot find {redisconf_file} in {project_dir}"
+		)
+
+	try:
+		result = subprocess.run(["cp", "ai/libs/redis.conf", env['REDIS_CONFIGDIR']],
+		cwd=project_dir, check=True, capture_output=True, text=True)
+	except subprocess.CalledProcessError as e:
+		io.write_line(f"Error copying redis config")
+		return False
+
+	ff = f"{env['REDIS_CONFIGDIR']}/redis.conf"
+
+	print(f"ff:{ff}")
+	print(f"db_port:{args["db_port"]}")
+
+	try:
+		result = subprocess.run(["sed", "-i", "-e",
+			f'139s/port 6379/port {args["db_port"]}/',
+			f"{env['REDIS_CONFIGDIR']}/redis.conf"],
+		cwd=redis_dir, env=env, check=True, capture_output=True, text=True)
+	except subprocess.CalledProcessError as e:
+		print(f"Error configuring redis:{e}")
+		return False
+
+	print("HERE")
+
 	return True
 
-def main():
-	if len(sys.argv) != 2:
-		print(f"Error: Enter a single .env file:{len(sys.argv)}")
-		return
-
-	env_file = sys.argv[1]
+def recreate_envfile(file_path):
+	
 	sha256_hash = hashlib.sha256()
 
-	env_file_path = Path(env_file).resolve(strict=True)
-
-	with open(env_file_path, "r") as file:
+	with open(file_path, "r") as file:
 		lines = file.readlines()
 
-	lines = [line for line in lines if "TASTEBOT_ROOTDIR=" not in line and "TMHOME=" not in line]
+	lines = [line for line in lines if "TASTEBOT_ROOTDIR=" not in line and "TMHOME=" not in line and "REDIS_CONFIGDIR=" not in line]
 
-	with open(env_file_path, 'w') as file:
+	with open(file_path, 'w') as file:
 		file.writelines(lines)
 
-	with open(env_file_path, "rb") as file:
+	with open(file_path, "rb") as file:
 		for chunk in iter(lambda: file.read(4096), b""):
 			sha256_hash.update(chunk)
 
-	hash_id = sha256_hash.hexdigest()
+	return sha256_hash.hexdigest()
+
+def update_envfile(file_path, root_dir, tmhome_dir, redis_dir):
+
+	with open(file_path, "r") as file:
+		lines = file.readlines()	
+
+	with open(file_path, 'w') as file:
+		file.writelines(lines)
+		file.writelines(
+			[f"TASTEBOT_ROOTDIR={root_dir}\n",
+			 f"TMHOME={tmhome_dir}\n",
+			 f"REDIS_CONFIGDIR={redis_dir}\n"]
+		)
+
+def main():
+	if len(sys.argv) != 3:
+		print(f"Error: Provide the .env and pyproject file..")
+		return
+
+	env_file = sys.argv[1]
+	proj_file = sys.argv[2]
+
+	env_file_path = Path(env_file).resolve(strict=True)
+	proj_file_path = Path(proj_file).resolve(strict=True)
+
+	hash_id = recreate_envfile(env_file_path)
 	home_dir = Path.home()
 	root_dir = home_dir / ".cache" / f"tastebot-{hash_id}" 
 	root_dir.mkdir(mode=0o755, exist_ok=True)
+	redis_dir = root_dir / "ai" / "redis"
+	redis_dir.mkdir(parents=True, mode=0o755, exist_ok=True)
 
-	config = ConfigOptions(env_file=env_file, check=False)
+	config = ConfigOptions(env_file=env_file,
+					proj_file=proj_file, check=False)
 
 	env = os.environ.copy()
 
@@ -309,13 +392,9 @@ def main():
 		home_dir = Path("/root")
 		root_dir = home_dir / ".cache" / f"tastebot"
 		tmhome_dir = root_dir / "p2p" / "consensus"
+		redis_dir = root_dir / "p2p" / "redis"
 
-		with open(env_file_path, 'w') as file:
-			file.writelines(lines)
-			file.writelines(
-				[f"TASTEBOT_ROOTDIR={root_dir}\n",
-				 f"TMHOME={tmhome_dir}\n"]
-			)
+		update_envfile(env_file_path, root_dir, tmhome_dir, redis_dir)
 
 		print(f"Root directory(docker):{root_dir}")
 		image_volume = root_dir
@@ -323,5 +402,3 @@ def main():
 		print(f"\nShared volume for docker container:\n{host_volume}:{image_volume}")
 
 	return ret
-
-
