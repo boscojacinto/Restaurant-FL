@@ -294,10 +294,7 @@ def configure(root_dir, config):
 	args = config['kg']
 
 	project_dir = os.path.dirname(os.path.realpath(__file__))
-	redisconf_file = Path(project_dir) / "ai" / "libs" / "redis.conf"
-	print(f"project_dir:{project_dir}")
-	print(f"redisconf_file:{redisconf_file}")
-	print(f"env['REDIS_CONFIGDIR']:{env['REDIS_CONFIGDIR']}")
+	redisconf_file = Path(project_dir) / "ai" / "redis" / "redis.conf"
 
 	if not redisconf_file.is_file():
 		raise FileNotFoundError(
@@ -305,16 +302,13 @@ def configure(root_dir, config):
 		)
 
 	try:
-		result = subprocess.run(["cp", "ai/libs/redis.conf", env['REDIS_CONFIGDIR']],
+		result = subprocess.run(["cp", "ai/redis/redis.conf", env['REDIS_CONFIGDIR']],
 		cwd=project_dir, check=True, capture_output=True, text=True)
 	except subprocess.CalledProcessError as e:
 		io.write_line(f"Error copying redis config")
 		return False
 
 	ff = f"{env['REDIS_CONFIGDIR']}/redis.conf"
-
-	print(f"ff:{ff}")
-	print(f"db_port:{args["db_port"]}")
 
 	try:
 		result = subprocess.run(["sed", "-i", "-e",
@@ -392,7 +386,7 @@ def main():
 		home_dir = Path("/root")
 		root_dir = home_dir / ".cache" / f"tastebot"
 		tmhome_dir = root_dir / "p2p" / "consensus"
-		redis_dir = root_dir / "p2p" / "redis"
+		redis_dir = root_dir / "ai" / "redis"
 
 		update_envfile(env_file_path, root_dir, tmhome_dir, redis_dir)
 

@@ -25,10 +25,8 @@ Customers are usually reluctant to provide feedback or honest opinions because t
 ## Using Docker
 
 ```
-   sudo docker run --env-file .env --network host --rm -v $HOME/.cache/tastebot:/root/.cache/tastebot tastebot:1.1.0
+   sudo docker run --network host --env-file .env-<client_id> --rm -v $HOME/.cache/tastebot-<instance_id>:/root/.cache/tastebot tastebot:1.2.0
 ```
-
-##    OR
 
 ## Manually
 
@@ -68,9 +66,9 @@ Customers are usually reluctant to provide feedback or honest opinions because t
    git clone --recurse-submodules https://github.com/boscojacinto/Restaurant-FL.git && cd Restaurant-FL
 ```
 
-2. Build and install TasteBot
+2. Build, configure and install TasteBot
 ```
-   poetry install
+   poetry config --local installer.no-binary ":none:" && poetry install && poetry build-libs && poetry run configure .env pyproject.toml
 ```
 
 3. Run TasteBot Server (in a separate terminal)

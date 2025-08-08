@@ -22,3 +22,6 @@
 	path = p2p/tendermint
 	url = git@github.com:tendermint/tendermint.git
 	ignore = dirty
+[submodule "ai/redis"]
+	path = ai/redis
+	url = git@github.com:redis/redis.git

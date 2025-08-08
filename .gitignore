@@ -39,5 +39,5 @@ p2p/build
 im/libs/*
 im/status-go/*
 ai/libs/*
-ai/redis
-ai/FalkorDB
+ai/redis/*
+ai/FalkorDB/*

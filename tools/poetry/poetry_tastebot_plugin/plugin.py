@@ -107,53 +107,6 @@ def build_consensus(io: IO, env, args) -> int:
         io.write_line(f"<error>Error building tendermint:{e}</>")
         return 1
 
-    try:
-        result = subprocess.run(["rm", "-rf", f"{env['TMHOME']}/config", f"{env['TMHOME']}/data"],
-        cwd=p2p_dir, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as e:
-        io.write_line(f"<error>Error deleting tenderming config:{e}</>")
-        return 1    
-
-    try:
-        result = subprocess.run(["build/tendermint", "init", "validator"],
-        cwd=tendermint_dir, env=env, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as e:
-        io.write_line(f"<error>Error configuring tendermint:{e}</>")
-        return 1
-
-    try:
-        result = subprocess.run(["sed", "-i", "-e", f's/moniker = "[^"]*"/moniker = "{args["c_moniker"]}"/',
-            "-e", f's/persistent_peers = "[^"]*"/persistent_peers = "{args["c_persistent_peers"]}"/',
-            "-e", rf's/addr_book_strict = \(true\|false\)/addr_book_strict = {args["c_addr_book_strict"]}/',
-            "-e", rf's/allow_duplicate_ip = \(true\|false\)/allow_duplicate_ip = {args["c_allow_duplicate_ip"]}/',
-            "-e", f's/wal_dir = "[^"]*"/wal_dir = "{args["c_wal_dir"].replace('/', r'\/')}"/',
-            "-e", f's/timeout_commit = "[^"]*"/timeout_commit = "{args["c_timeout_commit"]}"/',
-            "-e", rf's/create_empty_blocks = \(true\|false\)/create_empty_blocks = {args["c_create_empty_blocks"]}/',
-            f"{env['TMHOME']}/config/config.toml"],
-        cwd=p2p_dir, env=env, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as e:
-        print(f"Error configuring tendermint:{e}")
-        return 1
-
-    try:
-        result = subprocess.run(["sed", "-n", 
-            f'/index_tags = "[^"]*"/p',
-            f"{env['TMHOME']}/config/config.toml"],
-        cwd=p2p_dir, env=env, check=True, capture_output=True, text=True)
-
-        if not result.stdout:
-            try:
-                result = subprocess.run(["sed", "-i", 
-                    "-e", rf's/indexer = \("null"\|"kv"\|"psql"\)/indexer = "kv"\nindex_tags = "{args["c_index_tags"]}"/',
-                    f"{env['TMHOME']}/config/config.toml"],
-                cwd=p2p_dir, env=env, check=True, capture_output=True, text=True)
-            except subprocess.CalledProcessError as e:
-                print(f"Error configuring tendermint:{e}")
-                return 1
-    except subprocess.CalledProcessError as e:
-        print(f"Error configuring tendermint:{e}")
-        return 1
-
     env["CGO_LDFLAGS"] = "-Wl,-soname,libgowaku.so.0"
 
     try:
@@ -230,7 +183,7 @@ def build_statusgo(io: IO) -> int:
 
     try:
         io.write_line("<info>Checking out Status-go(tag v10.29.6)</>")
-        result = subprocess.run(["git", "checkout", "-b", "v10.29.6"],
+        result = subprocess.run(["git", "checkout", "-f", "v10.29.6"],
         cwd=statusgo_dir, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
         io.write_line(f"<error>Error checking out tag:{e}</>")
@@ -289,10 +242,16 @@ def build_statusgo(io: IO) -> int:
 
 def build_falkorDB(io: IO) -> int:
     ai_dir = Path("ai").resolve(strict=True)
-    falkorDB_dir = Path("ai/FalkorDB")
-    falkorDB_dir.mkdir(exist_ok=True)
-    falkorDB_dir = falkorDB_dir.resolve(strict=True)
+    falkorDB_dir = Path("ai/FalkorDB").resolve(strict=True)
     io.write_line(f"<info>Building FalkorDB in: {falkorDB_dir}</>")
+
+    try:
+        io.write_line("<info>Checking out FalkorDB (tag v4.10.3)</>")
+        result = subprocess.run(["git", "checkout", "-f", "v4.10.3"],
+        cwd=falkorDB_dir, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        io.write_line(f"<error>Error checking out tag:{e}</>")
+        return 1
 
     try:
         result = subprocess.run(["wget", "-P", "libs", "https://github.com/FalkorDB/FalkorDB/releases/download/v4.10.3/falkordb-x64.so"],
@@ -307,14 +266,6 @@ def build_falkorDB(io: IO) -> int:
     except subprocess.CalledProcessError as e:
         io.write_line(f"<error>Error setting permission for FalkorDB lib:{e}</>")
         return 1
-
-    # try:
-    #     io.write_line("<info>Checking out FalkorDB(tag v4.10.3)</>")
-    #     result = subprocess.run(["git", "checkout", "v4.10.3"],
-    #     cwd=falkorDB_dir, check=True, capture_output=True, text=True)
-    # except subprocess.CalledProcessError as e:
-    #     io.write_line(f"<error>Error checking out tag:{e}</>")
-    #     return 1
 
     # try:
     #     io.write_line("<info>Updating submodules of FalkorDB</>")
@@ -342,23 +293,15 @@ def build_falkorDB(io: IO) -> int:
 def build_redis(io: IO, env, args) -> int:
     ai_dir = Path("ai").resolve(strict=True)
     libs_dir = Path("ai/libs").resolve(strict=True)
-    redis_dir = Path("ai/redis")
-    redis_dir.mkdir(exist_ok=True)
-    redis_dir = redis_dir.resolve(strict=True)
+    redis_dir = Path("ai/redis").resolve(strict=True)
     io.write_line(f"<info>Building Redis in: {redis_dir}</>")
 
     try:
-        result = subprocess.run(["wget", "https://download.redis.io/releases/redis-7.4.0.tar.gz"],
+        io.write_line("<info>Checking out redis(tag 7.4.4#)</>")
+        result = subprocess.run(["git", "checkout", "-f", "7.4.4#"],
         cwd=redis_dir, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
-        io.write_line(f"<error>Error downloading redis:{e}</>")
-        return 1
-
-    try:
-        result = subprocess.run(["tar", "-xzvf", "redis-7.4.0.tar.gz", "--strip-components=1"],
-        cwd=redis_dir, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as e:
-        io.write_line(f"<error>Error downloading redis:{e}</>")
+        io.write_line(f"<error>Error checking out tag:{e}</>")
         return 1
 
     try:
@@ -376,22 +319,14 @@ def build_redis(io: IO, env, args) -> int:
         return 0
 
     try:
-        result = subprocess.run(["cp", "redis.conf", "../libs"],
-        cwd=redis_dir, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as e:
-        io.write_line(f"<error>Error copying redis conf:{e}</>")
-        return 1
-
-    try:
         result = subprocess.run("echo loadmodule ai/libs/falkordb-x64.so >> redis.conf",
-        shell=True, cwd=libs_dir, check=True, capture_output=True, text=True)
+        shell=True, cwd=redis_dir, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
         io.write_line(f"<error>Error updating redis conf:{e}</>")
         return 1
 
 def run_build(io: IO, venv_path: Path, config_args) -> int:
 
-    print(f"\nRUN BUILD config_args:{config_args}")
     venv_bin_dir = sysconfig.get_path("scripts")
     io.write_line(
         f"<debug>Adding virtual environment bin dir '{venv_bin_dir}' to PATH</>",
@@ -552,7 +487,6 @@ class BuildLibs(EnvCommand):
     def __init__(self, config: Dict[str, str]) -> None:
         super().__init__()
         self.config = config
-        print(f"CONFIG:{config}")
         for o in self.options:
             if o.name in config:
                 o.set_default(config[o.name])
@@ -587,14 +521,11 @@ class TasteBotPlugin(ApplicationPlugin):
 
         application.event_dispatcher.add_listener(COMMAND, self.run_build)
 
-        #run_build(application._io, application._env.path)
-
     def load_config(self) -> Optional[Dict[str, str]]:
         poetry = self._application.poetry
         tool_data: Dict[str, Any] = poetry.pyproject.data.get("tool", {})
         tastebot_data: Dict[str, Any] = tool_data.get("tastebot", {})
         app_data = tastebot_data.get("app", {})
-        print(f"IN LOAD:{tool_data}")
 
         return app_data
 
