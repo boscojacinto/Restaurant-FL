@@ -1750,14 +1750,14 @@ xmp = ["defusedxml"]
 
 [[package]]
 name = "posthog"
-version = "6.4.1"
+version = "6.5.0"
 description = "Integrate PostHog into any python application."
 optional = false
 python-versions = ">=3.9"
 groups = ["ai"]
 files = [
-    {file = "posthog-6.4.1-py3-none-any.whl", hash = "sha256:d3b077f8747ce68a0176b4033a8f5a9333d43f7f18079c70deac977f78b23b9d"},
-    {file = "posthog-6.4.1.tar.gz", hash = "sha256:751afaca4007855b3d848b69020c8c8f83a8d5f03a98b464e6a3b74c5a21bd22"},
+    {file = "posthog-6.5.0-py3-none-any.whl", hash = "sha256:1376f85c5382eae0985dd1ad48f2e6d7db18c6bf52cef3b4d8ff448a955bdb9f"},
+    {file = "posthog-6.5.0.tar.gz", hash = "sha256:aa5fe322c30384b302c79c49aee59c8dce6fee84a5fa78734103cab177e4e640"},
 ]
 
 [package.dependencies]

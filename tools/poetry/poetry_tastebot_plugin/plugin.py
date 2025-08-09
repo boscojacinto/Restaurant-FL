@@ -24,6 +24,8 @@ from poetry.console.commands.install import InstallCommand
 from poetry.core.utils.helpers import module_name
 from poetry.plugins.application_plugin import ApplicationPlugin
 
+from .config import ClientConfigure
+
 def well_known_protos_path() -> str:
     if sys.version_info >= (3, 9):
         with importlib.resources.as_file(
@@ -357,8 +359,23 @@ def run_build(io: IO, venv_path: Path, config_args) -> int:
 
     return 0
 
+def run_config(io: IO, config_args) -> int:
+
+    env_file = config_args['env_file']
+    env_file_path = Path(env_file).resolve(strict=True)
+    
+    with open(env_file_path, "r") as file:
+        lines = file.readlines()
+
+    proj_file = next(line.strip().split('=')[1] for line in lines if line.strip().startswith('PROJECT_FILE='))
+    proj_file_path = Path(proj_file).resolve(strict=True)
+
+    ret = ClientConfigure(env_file=env_file, proj_file=proj_file)
+
+    return 0
+
 class BuildLibs(EnvCommand):
-    name = "build-libs"
+    name = "tastebot-build"
     description = "Compiles libraries for consensus, waku"
 
     options = [
@@ -502,6 +519,34 @@ class BuildLibs(EnvCommand):
         config['kg'] = kg_args
         return run_build(self.io, self.env.path, config)
 
+class ConfigureLibs(EnvCommand):
+    name = "tastebot-configure"
+    description = "Configures libraries(tendermint, redis)"
+
+    options = [
+        option(
+            "env_file",
+            description="The environment file.",
+            value_required=True,
+            flag=False,
+            default=".env",
+        ),
+    ]
+
+    def __init__(self, config: Dict[str, str]) -> None:
+        super().__init__()
+        self.config = config
+        for o in self.options:
+            if o.name in config:
+                o.set_default(config[o.name])
+
+    def handle(self) -> int:
+        args = {o.name: self.option(o.name) for o in self.options}
+        config = {name: value for name, value in args.items() if value is not None}
+
+        return run_config(self.io, config)
+
+
 class TasteBotPlugin(ApplicationPlugin):
     _application: Application
 
@@ -516,10 +561,12 @@ class TasteBotPlugin(ApplicationPlugin):
     def activate(self, application: Application) -> None:
         self.application = application
         application.command_loader.register_factory(
-            "build-libs", lambda: BuildLibs(self.load_config() or {})
+            BuildLibs.name, lambda: BuildLibs(self.load_config() or {})
         )
 
-        application.event_dispatcher.add_listener(COMMAND, self.run_build)
+        application.command_loader.register_factory(
+            ConfigureLibs.name, lambda: ConfigureLibs(self.load_config() or {})
+        )
 
     def load_config(self) -> Optional[Dict[str, str]]:
         poetry = self._application.poetry

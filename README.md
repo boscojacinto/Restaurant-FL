@@ -68,7 +68,7 @@ Customers are usually reluctant to provide feedback or honest opinions because t
 
 2. Build, configure and install TasteBot
 ```
-   poetry config --local installer.no-binary ":none:" && poetry install && poetry build-libs && poetry run configure .env pyproject.toml
+   poetry install && poetry tastebot-build && poetry tastebot-configure
 ```
 
 3. Run TasteBot Server (in a separate terminal)

@@ -7,9 +7,8 @@ import hashlib
 import subprocess
 from pathlib import Path
 from dotenv import load_dotenv
-from pydantic import BaseModel
 from dataclasses import dataclass, fields
-from typing import IO, Any, Optional, TypeVar, Union, cast, get_args
+from typing import IO, Any, Dict, Optional, TypeVar, Union, cast, get_args
 
 PROJECT_CONFIG_FILE = "pyproject.toml"
 
@@ -198,12 +197,12 @@ def init(env_file, proj_file, check):
 				f"Root directory '{root_dir}' not present."
 			)
 
-	project_dir = os.path.dirname(os.path.realpath(__file__))
-	toml_path = Path(project_dir) / proj_file
+	toml_path = Path(proj_file).resolve(strict=True)
+	print(f"toml_path:{toml_path}")
 
 	if not toml_path.is_file():
 		raise FileNotFoundError(
-			f"Cannot find {proj_file} in {project_dir}"
+			f"Cannot find {proj_file}"
 		)
 
 	with toml_path.open(encoding="utf-8") as toml_file:
@@ -239,7 +238,7 @@ def init(env_file, proj_file, check):
 	app_config = config['tool']['tastebot']['app']
 	return root_dir, app_config
 
-def configure(root_dir, config):
+def _configure(root_dir, proj_dir, config):
 
 	env = {}
 	p2p_dir = Path("p2p").resolve(strict=True)
@@ -293,17 +292,17 @@ def configure(root_dir, config):
 
 	args = config['kg']
 
-	project_dir = os.path.dirname(os.path.realpath(__file__))
-	redisconf_file = Path(project_dir) / "ai" / "redis" / "redis.conf"
+	redisconf_file = Path(proj_dir) / "ai" / "redis" / "redis.conf"
 
 	if not redisconf_file.is_file():
 		raise FileNotFoundError(
-			f"Cannot find {redisconf_file} in {project_dir}"
+			f"Cannot find {redisconf_file} in {proj_dir}"
 		)
+	redisconf_file = str(redisconf_file)
 
 	try:
-		result = subprocess.run(["cp", "ai/redis/redis.conf", env['REDIS_CONFIGDIR']],
-		cwd=project_dir, check=True, capture_output=True, text=True)
+		result = subprocess.run(["cp", f"{redisconf_file}", env['REDIS_CONFIGDIR']],
+		cwd=proj_dir, check=True, capture_output=True, text=True)
 	except subprocess.CalledProcessError as e:
 		io.write_line(f"Error copying redis config")
 		return False
@@ -318,8 +317,6 @@ def configure(root_dir, config):
 	except subprocess.CalledProcessError as e:
 		print(f"Error configuring redis:{e}")
 		return False
-
-	print("HERE")
 
 	return True
 
@@ -354,13 +351,13 @@ def update_envfile(file_path, root_dir, tmhome_dir, redis_dir):
 			 f"REDIS_CONFIGDIR={redis_dir}\n"]
 		)
 
-def main():
-	if len(sys.argv) != 3:
+def ClientConfigure(**args: Dict[str, Any]):
+	if len(args) != 2:
 		print(f"Error: Provide the .env and pyproject file..")
-		return
+		return False
 
-	env_file = sys.argv[1]
-	proj_file = sys.argv[2]
+	env_file = args['env_file']
+	proj_file = args['proj_file']
 
 	env_file_path = Path(env_file).resolve(strict=True)
 	proj_file_path = Path(proj_file).resolve(strict=True)
@@ -371,13 +368,14 @@ def main():
 	root_dir.mkdir(mode=0o755, exist_ok=True)
 	redis_dir = root_dir / "ai" / "redis"
 	redis_dir.mkdir(parents=True, mode=0o755, exist_ok=True)
+	proj_dir = os.path.dirname(proj_file_path)
 
 	config = ConfigOptions(env_file=env_file,
 					proj_file=proj_file, check=False)
 
 	env = os.environ.copy()
 
-	ret = configure(root_dir, config._app_config)
+	ret = _configure(root_dir, proj_dir, config._app_config)
 
 	if ret == True:
 		print(f"Root directory(host):{root_dir}")
