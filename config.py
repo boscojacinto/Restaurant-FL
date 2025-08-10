@@ -358,6 +358,7 @@ def ClientConfigure(**args: Dict[str, Any]):
 
 	env_file = args['env_file']
 	proj_file = args['proj_file']
+	use_docker = args['use_docker']
 
 	env_file_path = Path(env_file).resolve(strict=True)
 	proj_file_path = Path(proj_file).resolve(strict=True)
@@ -378,19 +379,22 @@ def ClientConfigure(**args: Dict[str, Any]):
 	ret = _configure(root_dir, proj_dir, config._app_config)
 
 	if ret == True:
-		print(f"Root directory(host):{root_dir}")
 		host_volume = root_dir
 
 		home_dir = Path("/root")
-		root_dir = home_dir / ".cache" / f"tastebot"
+		if use_docker == True:
+			root_dir = home_dir / ".cache" / f"tastebot"
+		else
+			root_dir = home_dir / ".cache" / f"tastebot-{hash_id}"
 		tmhome_dir = root_dir / "p2p" / "consensus"
 		redis_dir = root_dir / "ai" / "redis"
 
 		update_envfile(env_file_path, root_dir, tmhome_dir, redis_dir)
 
-		print(f"Root directory(docker):{root_dir}")
-		image_volume = root_dir
-
-		print(f"\nShared volume for docker container:\n{host_volume}:{image_volume}")
+		if use_docker == True:
+			image_volume = root_dir
+			print(f"\nShared volume for docker container:\n{host_volume}:{image_volume}")
+		else:
+			print(f"Root directory:{root_dir}")
 
 	return ret
