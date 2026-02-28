@@ -1,0 +1,138 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Overview
+
+TasteBot is a federated learning system for restaurant success prediction. It runs a locally-hosted LLM (gemma3:4b via ollama) that chats with customers over Status-IM (a decentralized p2p messenger using Waku protocol), extracts customer and restaurant embeddings from the conversation, and uses them to train a Heterogeneous Graph Transformer (HGTConv) model via Flower federated learning.
+
+## Development Commands
+
+### Install & Build
+```bash
+# Install Poetry dependencies and plugin
+poetry install
+
+# Build all native libraries (Go shared libs, proto files, FalkorDB, Redis)
+# This compiles: waku, status-go, tendermint, and generates gRPC stubs
+poetry tastebot-build
+
+# Configure tendermint and redis using .env and pyproject.toml
+poetry tastebot-configure
+```
+
+### Running the System
+```bash
+# Terminal 1: FL server (Flower SuperLink)
+poetry run server
+
+# Terminal 2: Neighbor restaurant PSI gRPC server (port 50051)
+poetry run neighbor
+
+# Terminal 3: Main client (Status-IM + AI + FL + P2P)
+poetry run client
+```
+
+### Docker
+```bash
+sudo docker run --network host --env-file .env-<client_id> --rm \
+  -v $HOME/.cache/tastebot-<instance_id>:/root/.cache/tastebot tastebot:1.2.0
+```
+
+### Plugin Development
+The Poetry plugin lives in `tools/poetry/`. To rebuild it:
+```bash
+cd tools/poetry
+pip install build && python -m build
+```
+
+## Architecture
+
+### Component Map
+
+```
+client.py (TasteBot singleton)
+├── im/          → StatusClient  — Status-IM node (libstatus.so.0) via ctypes
+├── ai/          → AIClient      — Ollama LLM chat (gemma3:4b, swigg1.0-gemma3:4b)
+│   └── restaurant_kg.py        — FalkorDB knowledge graph (graphiti-core)
+├── fl/          → FLClient      — Flower federated learning (SuperNode)
+│   ├── client_app.py           — RestaurantClient (NumPyClient)
+│   ├── server_app.py           — FedAvg strategy on SWGDataset global graph
+│   └── task.py                 — load_data → SWGDatasetLocal, SWG model wrapper
+├── p2p/         → P2PClient     — Waku (libgowaku.so.0) for decentralized messaging
+│   ├── neighbor_restaurant.py  — gRPC server for PSI (Private Set Intersection)
+│   └── consensus/              — Tendermint consensus Go shared library
+├── embeddings.py               — EmbeddingOps: saves customer/restaurant embeddings
+└── config.py                   — ConfigOptions singleton (reads pyproject.toml + .env)
+```
+
+### Data Flow
+
+1. **Customer pairing**: Customer scans QR code in Status-IM app → contact request → `TasteBot.add_customer()`
+2. **PSI check**: Before greeting, checks if customer visited a neighbor restaurant using Private Set Intersection (OpenMined PSI over gRPC)
+3. **AI conversation**: `AIClient` routes messages through `AIModel` (ollama generate API with a custom Modelfile template). Stop-words (customer's emojiHash / neighbor's emojiHash) trigger summary/feedback extraction
+4. **Embedding storage**: `EmbeddingOps` saves 1024-dim embeddings (mxbai-embed-large) to `~/.cache/tastebot-<hash>/embeddings/` as `.pt` and `.npz` files
+5. **FL training**: `SWGDatasetLocal` builds a local heterogeneous subgraph (restaurant + area + customer nodes) from the global SWGDataset; `RestaurantClient` trains HGTConv model and returns weights to Flower server for FedAvg aggregation
+
+### Key Models
+
+- **SWG** (`ml/swg_ml_local.py`): HGTConv-based link prediction model. Predicts restaurant↔customer edges. Uses `LinkNeighborLoader` with `neg_sampling_ratio=5`
+- **SWGDataset** (`ml/swg_db.py`): Global heterogeneous graph from Swiggy dataset (restaurant, area, customer nodes)
+- **SWGDatasetLocal** (`ml/swg_db_local.py`): Local subgraph per partition_id; reads customer/restaurant embeddings from the cache directory
+
+### Configuration System
+
+Config lives in two places:
+- `pyproject.toml` under `[tool.tastebot.app.*]` sections (restaurant, kg, im, fl, p2p, embeddings)
+- `.env` file for secrets: `RESTAURANT_PASSWORD`, `KG_DB_PASSWORD`, `REDIS_CONFIGDIR`, `TMHOME`, `TASTEBOT_ROOTDIR`
+
+`ConfigOptions` is a singleton. The `_configure()` function in `config.py` patches tendermint's `config.toml` and sets up Redis config during `poetry tastebot-configure`.
+
+### Native Libraries (built by `poetry tastebot-build`)
+
+| Library | Location | Purpose |
+|---|---|---|
+| `libstatus.so.0` | `im/libs/` | Status-IM node (status-go v10.29.6) |
+| `status-backend` | `im/libs/` | Status-IM backend binary |
+| `libgowaku.so.0` | `p2p/libs/` | Waku v2 p2p messaging |
+| `libconsensus.so.0` | `p2p/libs/` | Tendermint v0.34.24 consensus |
+| `falkordb-x64.so` | `ai/libs/` | FalkorDB graph database module for Redis |
+| `redis-server` | `ai/libs/` | Redis server (tag 7.4.4) |
+
+### Proto/gRPC
+
+Generated files (`p2p/psi_pb2.py`, `p2p/restaurant_pb2.py`, `p2p/restaurant_pb2_grpc.py`) are auto-generated by `poetry tastebot-build` from `p2p/psi.proto` and `p2p/restaurant.proto`. Import paths are patched post-generation (e.g., `import psi_pb2` → `import p2p.psi_pb2`).
+
+### FL Deployment
+
+`fl/pyproject.toml` configures Flower federation:
+- SuperLink address: `0.0.0.0:9093`
+- ClientAppIO address: `0.0.0.0:9094`
+- Strategy: FedAvg with 1 round, model `swigg/hgt-small-v1.0-restaurants-pred`
+
+The custom Flower build (`flwr-1.19.6`) from the project releases is required because upstream flwr was modified to expose APIs for integrating long-running business logic into the SuperNode process.
+
+### Patches
+
+`p2p/patches/` contains git patches applied during build:
+- `0001-tendermint-init-cmd.patch` — modifies tendermint init command
+- `0001-waku-api-ext.patch` — extends Waku C API
+- `0001-status-go-api-ext.patch` — extends status-go API
+
+## Environment Setup
+
+Minimum `.env` contents:
+```
+RESTAURANT_PASSWORD=<password>
+KG_DB_PASSWORD=<falkordb_password>
+PROJECT_FILE=pyproject.toml
+```
+
+After `poetry tastebot-configure`, `TASTEBOT_ROOTDIR`, `TMHOME`, and `REDIS_CONFIGDIR` are appended automatically.
+
+## External Service Dependencies
+
+- **Ollama** must be running locally with models: `gemma3:4b` (base), `swigg1.0-gemma3:4b` (custom), `mxbai-embed-large` (embeddings)
+- **FalkorDB/Redis**: started from `ai/libs/redis-server` with the FalkorDB module loaded
+- **Flower SuperLink**: started via `poetry run server`
+- **Status-IM node**: managed internally by `StatusClient` using `libstatus.so.0`
