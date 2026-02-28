@@ -3,11 +3,14 @@ import time
 import json
 import pytz
 import ctypes
+import logging
 from pathlib import Path
 from typing import List, Optional
 from datetime import datetime
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+
+logger = logging.getLogger(__name__)
 
 WAKU_GO_LIB = "p2p/libs/libgowaku.so.0"
 
@@ -24,6 +27,7 @@ STORE_DB = "sqlite3://%s/store.db"
 PUBLISH_TIMEOUT = (30)
 
 TASTEBOT_PUBSUB_TOPIC_1 = '/waku/2/rs/88/0'
+TASTEBOT_PUBSUB_TOPIC_2 = '/waku/2/rs/88/1'
 PUBSUB_IDLE_TOPIC = '/waku/2/rs/89/0'
 PUBSUB_BUSY_TOPIC = '/waku/2/rs/90/0'
 
@@ -138,7 +142,7 @@ class MessagingClient:
     	self.m_address = address.value.decode('utf-8')
 
     	self.m_connected = True
-    	print(f"Started p2p messaging node: {self.m_peer_id}, {self.m_address}")
+    	logger.info(f"Started p2p messaging node: {self.m_peer_id}, {self.m_address}")
 
     def stop(self):
     	pass
@@ -193,7 +197,7 @@ class MessagingClient:
     							ctypes.byref(topics_list))
     	topics = topics_list.value.decode('utf-8')
 
-    	if is_topic_subscribed(topics, topic) == True:
+    	if self.is_topic_subscribed(topics, topic) == True:
     		sub = "{ \"pubsubTopic\": \"%s\"}" % topic.decode('utf-8')
     		sub = sub.encode('ascii')
     		ret = self.m_lib.waku_relay_unsubscribe(self.m_ctx, sub, waku_callback, None)
@@ -247,7 +251,7 @@ class MessagingClient:
     	peers_string = plist.decode('utf-8')
     	peers = Peer.schema().loads(peers_string, many=True)
 
-    	idle_filter = lambda p: p.peerID != self.peer_id and \
+    	idle_filter = lambda p: p.peerID != self.m_peer_id and \
     					PUBSUB_IDLE_TOPIC in p.pubsubTopics
     	pl = iter(peers)
     	plist = list(filter(idle_filter, pl))
@@ -260,7 +264,7 @@ class MessagingClient:
 @WakuCallBack
 def waku_callback(ret_code, msg: str, user_data):
 	if ret_code != 0:
-		print(f"Error: {ret_code}, msg:{msg}")
+		logger.error(f"waku error: {ret_code}, msg:{msg}")
 
 	if not user_data:
 		return
@@ -284,7 +288,7 @@ def waku_callback(ret_code, msg: str, user_data):
 def event_callback(ret_code, msg: str, user_data):
 	global cur_topic_id
 	
-	print(f"EVENT ret: {ret_code}, msg: {msg}, user_data:{user_data}")
+	logger.debug(f"EVENT ret: {ret_code}, msg: {msg}, user_data:{user_data}")
 	if ret_code != 0:
 		return
 
@@ -294,14 +298,14 @@ def event_callback(ret_code, msg: str, user_data):
 		msg_id = event['event']['messageId']
 		pubsub_topic = event['event']['pubsubTopic']
 		waku_message = event['event']['wakuMessage']
-		print(f"messageId:{msg_id}")
+		logger.debug(f"messageId:{msg_id}")
 		if pubsub_topic == TASTEBOT_PUBSUB_TOPIC_2:
 			content_topic = waku_message['contentTopic']
 			payload_b64 = waku_message['payload']
 			if content_topic == f"/tastebot/1/msg-{cur_topic_id}/proto":
-				print(f"Setup (server) -- instore")
+				logger.debug("Setup (server) -- instore")
 			else:
-				print(f"Other")
+				logger.debug("Unknown content topic")
 
 def main():
 	

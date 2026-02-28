@@ -1,9 +1,12 @@
 import time
 import json
 import ctypes
+import logging
 from pathlib import Path
 from datetime import datetime
 from typing import List, Optional
+
+logger = logging.getLogger(__name__)
 
 CONSENSUS_LIB = "p2p/libs/libconsensus.so.0"
 
@@ -49,13 +52,13 @@ class ConsensusClient:
     def start(self):
     	
     	self.c_lib.Start(self.c_ctx, consensus_callback, None)
-    	print("Started p2p consensus node")
+    	logger.info("Started p2p consensus node")
     	
     def stop(self):
 
     	self.c_lib.Stop(self.c_ctx, consensus_callback, None)
 
-    def query(key, path):
+    def query(self, key, path):
 
     	path = ctypes.c_char_p(path.encode('utf-8'))
     	key = ctypes.c_char_p(key.encode('utf-8'))
@@ -75,14 +78,14 @@ class ConsensusClient:
     	peer_enr = ctypes.c_char_p(msg['ENR'].encode('utf-8'))
     	intf_mode = ctypes.c_char_p(msg['mode'].encode('utf-8'))
 
-    	self.c_lib.SendOrder(self.c_ctx, proof, peer_id, peer_enr, 
+    	self.c_lib.SendOrder(self.c_ctx, proof, peer_id, peer_enr,
     		peers, intf_mode, consensus_callback, None)
-    	print(f"Send message")
+    	logger.info("Send message")
 
 @ConsensusCallBack
 def consensus_callback(ret_code, msg: str, user_data):
 	if ret_code != 0:
-		print(f"Error: {ret_code}, msg:{msg}")
+		logger.error(f"consensus error: {ret_code}, msg:{msg}")
 
 	if not user_data:
 		return

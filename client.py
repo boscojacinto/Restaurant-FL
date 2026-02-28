@@ -84,7 +84,7 @@ def register_exit_handler():
 
 		logger.info("Exiting")
 
-		os.Exit()
+		sys.exit(0)
 
 	for sig in SIGNAL_TO_EXIT_CODE:
 		default_handler = signal.signal(sig, exit_handler)

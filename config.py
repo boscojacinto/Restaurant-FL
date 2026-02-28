@@ -355,7 +355,7 @@ def update_envfile(file_path, root_dir, tmhome_dir, redis_dir):
 		)
 
 def ClientConfigure(**args: Dict[str, Any]):
-	if len(args) != 2:
+	if len(args) != 3:
 		logger.error("Error: Provide the .env and pyproject file..")
 		return False
 
@@ -387,7 +387,7 @@ def ClientConfigure(**args: Dict[str, Any]):
 		home_dir = Path("/root")
 		if use_docker == True:
 			root_dir = home_dir / ".cache" / f"tastebot"
-		else
+		else:
 			root_dir = home_dir / ".cache" / f"tastebot-{hash_id}"
 		tmhome_dir = root_dir / "p2p" / "consensus"
 		redis_dir = root_dir / "ai" / "redis"

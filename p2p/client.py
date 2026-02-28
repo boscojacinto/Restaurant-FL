@@ -61,6 +61,7 @@ class P2PClient(MessagingClient, ConsensusClient):
 
     async def publish(self, proof):
 
+        msg = {}
         msg['ID'] = self.m_peer_id
         msg['ENR'] = self.get_enr()
         msg['peers'] = await self.find_peers(1, None)

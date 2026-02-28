@@ -62,11 +62,8 @@ class EmbeddingOps():
 	
 	async def save_customer_embeddings(self, customer_id, embeds):
 		customer_embeds = torch.load(str(self.cache_dir / CUSTOMER_EMBEDDINGS_FILE))
-		torch.manual_seed(42)
-		
+
 		c_id = random.randint(0, self.config.max_customers - 1)
-		if customer_ids[0]['publicKey'] == customer_id:
-			c_id = customer_ids[0]['id']
 
 		customer_embeds[c_id] = torch.tensor(embeds, dtype=torch.float)
 		torch.save(customer_embeds, str(self.cache_dir / CUSTOMER_EMBEDDINGS_FILE))
@@ -77,13 +74,8 @@ class EmbeddingOps():
 	async def save_restaurant_embeddings(self, customer_id, embeds):
 
 		restaurant_embeds = torch.load(str(self.cache_dir / RESTAURANT_EMBEDDINGS_FILE))
-		torch.manual_seed(42)
 		r_id = 1
-		torch.manual_seed(24)
 		c_id = random.randint(0, self.config.max_customers - 1)
-		
-		if customer_ids[0]['publicKey'] == customer_id:
-			c_id = customer_ids[0]['id']
 
 		restaurant_embeds[r_id] = torch.tensor(embeds, dtype=torch.float)
 		torch.save(restaurant_embeds, str(self.cache_dir / RESTAURANT_EMBEDDINGS_FILE))
