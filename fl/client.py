@@ -1,7 +1,10 @@
+import logging
 import threading
 from pathlib import Path
 from config import ConfigOptions
 from flwr.client.supernode.app import run_supernode
+
+logger = logging.getLogger(__name__)
 
 class FLClient:
 	def __init__(self):
@@ -9,7 +12,7 @@ class FLClient:
 		self.started = False
 		self.thread = None
 		self.config = ConfigOptions().get_fl_config()
-		print(f"========= Initializing Flower Client ========")
+		logger.info("========= Initializing Flower Client ========")
 
 	def run(self):
 		self.flwr_dir = Path(ConfigOptions()._root_dir) / "fl"

@@ -1,6 +1,7 @@
 import os
 import random
 import asyncio
+import logging
 import torch
 import scipy as sp
 import numpy as np
@@ -8,6 +9,8 @@ import pandas as pd
 from pathlib import Path
 from ai.restaurant_model import AIModel as bot
 from config import ConfigOptions
+
+logger = logging.getLogger(__name__)
 
 CUSTOMER_FEATURES_FILE = 'features_customers.npz'
 RESTAURANT_FEATURES_FILE = 'features_restaurants.npz'

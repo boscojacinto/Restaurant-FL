@@ -1,9 +1,12 @@
+import logging
 import warnings
 
 import torch
 from flwr.client import Client, ClientApp, NumPyClient
 from flwr.common import Context
-from transformers import logging
+from transformers import logging as transformers_logging
+
+logger = logging.getLogger(__name__)
 from fl.task import (
 	train,
 	test,
@@ -15,7 +18,7 @@ from fl.task import (
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-logging.set_verbosity_error()
+transformers_logging.set_verbosity_error()
 
 class RestaurantClient(NumPyClient):
 	def __init__(self, partition_id, model_name, data, train_loader, val_loader, test_loader) -> None:
@@ -45,7 +48,7 @@ def client_fn(context: Context) -> Client:
 	num_partitions = context.node_config["num-partitions"]
 
 	model_name = context.run_config["model-name"]
-	print(f"CLIENT:{partition_id}")
+	logger.info(f"CLIENT:{partition_id}")
 	data, train_loader, val_loader, test_loader = load_data(
 				partition_id, num_partitions, model_name)
 	return RestaurantClient(

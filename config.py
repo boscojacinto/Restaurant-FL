@@ -4,11 +4,14 @@ import json
 import tomli
 import base64
 import hashlib
+import logging
 import subprocess
 from pathlib import Path
 from dotenv import load_dotenv
 from dataclasses import dataclass, fields
 from typing import IO, Any, Dict, Optional, TypeVar, Union, cast, get_args
+
+logger = logging.getLogger(__name__)
 
 PROJECT_CONFIG_FILE = "pyproject.toml"
 
@@ -106,7 +109,7 @@ class ConfigOptions:
 				raise ValueError("Env vairable 'RESTAURANT_PASSWORD' not found")
 			restaurant_config.password = password 
 		except FileNotFoundError:
-			print("Error: .env file not found, Create .env")
+			logger.error("Error: .env file not found, Create .env")
 
 		return restaurant_config
 
@@ -131,7 +134,7 @@ class ConfigOptions:
 
 
 		except FileNotFoundError:
-			print("Error: .env file not found, Create .env")
+			logger.error("Error: .env file not found, Create .env")
 
 		return kg_config
 
@@ -173,7 +176,7 @@ class ConfigOptions:
 						raise ValueError("ValueError: node key invalid")
 
 		except FileNotFoundError:
-			print("Error: .env file not found 1, Create .env")
+			logger.error("Error: .env file not found 1, Create .env")
 
 		return p2p_config
 
@@ -198,7 +201,7 @@ def init(env_file, proj_file, check):
 			)
 
 	toml_path = Path(proj_file).resolve(strict=True)
-	print(f"toml_path:{toml_path}")
+	logger.debug(f"toml_path:{toml_path}")
 
 	if not toml_path.is_file():
 		raise FileNotFoundError(
@@ -252,7 +255,7 @@ def _configure(root_dir, proj_dir, config):
 		result = subprocess.run(["build/tendermint", "init", "validator", "--log_level", "error"],
 		cwd=tendermint_dir, env=env)
 	except subprocess.CalledProcessError as e:
-		print(f"Error configuring tendermint1:{e}")
+		logger.error(f"Error configuring tendermint1:{e}")
 		return False
 
 	args = config['p2p']
@@ -268,7 +271,7 @@ def _configure(root_dir, proj_dir, config):
 			f"{env['TMHOME']}/config/config.toml"],
 		cwd=p2p_dir, env=env, check=True, capture_output=True, text=True)
 	except subprocess.CalledProcessError as e:
-		print(f"Error configuring tendermint2:{e}")
+		logger.error(f"Error configuring tendermint2:{e}")
 		return False
 
 	try:
@@ -284,10 +287,10 @@ def _configure(root_dir, proj_dir, config):
 					f"{env['TMHOME']}/config/config.toml"],
 					cwd=p2p_dir, env=env, check=True, capture_output=True, text=True)
 			except subprocess.CalledProcessError as e:
-				print(f"Error configuring tendermint3:{e}")
+				logger.error(f"Error configuring tendermint3:{e}")
 				return False
 	except subprocess.CalledProcessError as e:
-		print(f"Error configuring tendermint4:{e}")
+		logger.error(f"Error configuring tendermint4:{e}")
 		return False
 
 	args = config['kg']
@@ -315,7 +318,7 @@ def _configure(root_dir, proj_dir, config):
 			f"{env['REDIS_CONFIGDIR']}/redis.conf"],
 		cwd=redis_dir, env=env, check=True, capture_output=True, text=True)
 	except subprocess.CalledProcessError as e:
-		print(f"Error configuring redis:{e}")
+		logger.error(f"Error configuring redis:{e}")
 		return False
 
 	return True
@@ -353,7 +356,7 @@ def update_envfile(file_path, root_dir, tmhome_dir, redis_dir):
 
 def ClientConfigure(**args: Dict[str, Any]):
 	if len(args) != 2:
-		print(f"Error: Provide the .env and pyproject file..")
+		logger.error("Error: Provide the .env and pyproject file..")
 		return False
 
 	env_file = args['env_file']
@@ -393,8 +396,8 @@ def ClientConfigure(**args: Dict[str, Any]):
 
 		if use_docker == True:
 			image_volume = root_dir
-			print(f"\nShared volume for docker container:\n{host_volume}:{image_volume}")
+			logger.info(f"\nShared volume for docker container:\n{host_volume}:{image_volume}")
 		else:
-			print(f"Root directory:{root_dir}")
+			logger.info(f"Root directory:{root_dir}")
 
 	return ret

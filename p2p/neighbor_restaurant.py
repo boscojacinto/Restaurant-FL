@@ -2,8 +2,11 @@ import re
 import os
 import sys
 import grpc
+import logging
 import asyncio
 import private_set_intersection.python as psi
+
+logger = logging.getLogger(__name__)
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../'))
 import p2p.restaurant_pb2 as r_pb2
 import p2p.restaurant_pb2_grpc as r_pb2_gprc
@@ -53,7 +56,7 @@ async def serve():
     server.add_insecure_port('[::]:50051')
     
     await server.start()
-    print("Server started on port 50051")
+    logger.info("Server started on port 50051")
     await server.wait_for_termination()
 
 def main():

@@ -1,5 +1,8 @@
+import logging
 from typing import Any
 from collections import OrderedDict
+
+logger = logging.getLogger(__name__)
 
 import torch
 from torch.optim import AdamW
@@ -27,9 +30,6 @@ disable_progress_bar()
 #fds = None
 
 def load_data(partition_id: int, num_partitions: int, model_name: str) -> tuple[DataLoader[Any], DataLoader[Any]]:
-	
-	#global fds
-	#if fds is None:
 
 	path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../')
 	dataset = SWGDatasetLocal(path, partition_id, force_reload=True)

@@ -7,10 +7,13 @@ import queue
 import ctypes
 import signal
 import asyncio
+import logging
 import threading
 from pathlib import Path
 from types import FrameType
 from typing import Dict, List, Any, Optional, Callable
+
+logger = logging.getLogger(__name__)
 
 from PIL import Image
 from io import BytesIO
@@ -73,13 +76,13 @@ def register_exit_handler():
 
 		if client_threads is not None:
 			for client_thread in client_threads:
-				print(f"Exiting thread")
+				logger.info("Exiting thread")
 				client_thread.join()
 
 		if client.run_thread is not None:
 			client.run_thread.join()
 
-		print(f"Exiting")
+		logger.info("Exiting")
 
 		os.Exit()
 
@@ -90,7 +93,7 @@ def register_exit_handler():
 def display_and_save_qrcode(data):
 	img = Image.open(BytesIO(data))
 	img.show()
-	print("Saving QR")
+	logger.info("Saving QR")
 	root_dir = Path(ConfigOptions()._root_dir)
 	file = root_dir / 'restaurant_contact.jpg'
 	img.save(str(file))
@@ -127,8 +130,6 @@ class TasteBot():
 		self.run_thread = None
 		self.run_thread_lock = False
 
-		self.post_thread = None
-		self.post_thread_lock = False
 
 		self.add_customer_queue = queue.Queue()
 		self.add_order_queue = queue.Queue()
@@ -144,14 +145,14 @@ class TasteBot():
 			try:
 				key_uid = signal["event"]["settings"]["key-uid"]
 				public_key = signal["event"]["settings"]["current-user-status"]["publicKey"]
-				print(f"Node Login: uid:{key_uid} publicKey:{public_key}")
+				logger.info(f"Node Login: uid:{key_uid} publicKey:{public_key}")
 				self.public_key = public_key
 				self.uid = key_uid
 				self.init_nodelogin_event.set() 
 			except KeyError:
 				pass
 		elif signal["type"] == "message.delivered":
-			print("Message delivered!")
+			logger.debug("Message delivered!")
 		elif signal["type"] == "messages.new":
 			#print(f"event!:{signal["event"]}")
 			try:
@@ -162,7 +163,7 @@ class TasteBot():
 					was_customer_added = False
 					new_msg = chat["lastMessage"]["text"]
 					customer_id = chat["lastMessage"]["from"]
-					print(f"New Message received!:{new_msg}, from:{customer_id}")
+					logger.info(f"New Message received!:{new_msg}, from:{customer_id}")
 					if self.ai_client is not None:
 						contact_info = self.status_client.getContactInfo(customer_id)
 						#print(f"contact_info:{contact_info['contactRequestLocalState']}")
@@ -188,7 +189,7 @@ class TasteBot():
 									self.add_customer_queue.put(contact)
 									self.customer_add_event.set()
 								else:
-									print(f"Message from unknown account, ignoring!")
+									logger.warning("Message from unknown account, ignoring!")
 
 			except KeyError:
 				pass
@@ -224,7 +225,7 @@ class TasteBot():
 		signal_str = msg.decode('utf-8')
 		signal = json.loads(signal_str)
 		if signal['type'] == "NewBlock":
-			print("New Block event")
+			logger.info("New Block event")
 
 	def attempt_init(self):
 		accounts = self.status_client.getAccounts()
@@ -243,13 +244,13 @@ class TasteBot():
 	def attempt_login(self, uid=None, create=False):
 
 		if create == False:
-			print(f"Attempt to login..uid:{uid}")
+			logger.info(f"Attempt to login..uid:{uid}")
 			self.status_client.login(
 				uid,
 				self.config.password
 			)
 		else:
-			print("Attempt to create and login..")
+			logger.info("Attempt to create and login..")
 			self.status_client.createAccountAndLogin(
 				self.config.name,
 				self.config.password
@@ -292,7 +293,7 @@ class TasteBot():
 			async with grpc.aio.insecure_channel('[::]:50051') as channel:
 				self.neighbor_service = r_psi.RestaurantNeighborStub(channel)
 		except grpc.RpcError as e:
-			print(f"RPC error: {e}")
+			logger.error(f"RPC error: {e}")
 
 		client_key = bytes(range(32))
 		self.psi_client = psi.client.CreateFromKey(client_key, False)			
@@ -337,7 +338,7 @@ class TasteBot():
 		customer.EmojiHash = contact["emojiHash"]
 		
 		customers.append(customer)
-		print(f"New customer added:{customer.Name} id:{customer.PublicKey} emojiHash: {customer.EmojiHash}")
+		logger.info(f"New customer added:{customer.Name} id:{customer.PublicKey} emojiHash: {customer.EmojiHash}")
 
 		try:
 			async with grpc.aio.insecure_channel('[::]:50051') as channel:
@@ -345,28 +346,27 @@ class TasteBot():
 				intersection, restaurant_key = await self.psi_setup_and_fetch(
 														customer.PublicKey)
 		except grpc.RpcError as e:
-			print(f"RPC error: {e}")
-		#restaurant_key = """🚕🔈🧩👩🏽‍🤝‍👩🏾🏌️‍♂️👆🏾👩‍👧‍👧🐀😴🧑🏼‍💻🤒💇🏼‍♂️🥞🕵️‍♀️"""
+			logger.error(f"RPC error: {e}")
 
-		print(f"Creating Greeting message..")
+		logger.info("Creating Greeting message..")
 		await self.ai_client.greet(customer, restaurant_key)
 
 	def add_order(self, order: Dict[str, Any]):
 
 		if 'proof' in order:
 			self.add_order_queue.put(order)
-			print("Added Order")
+			logger.info("Added Order")
 
 	async def create_order(self, order):
 
 		await self.p2p_client.publish(order['proof'])
-		print("Created and sent Order")
+		logger.info("Created and sent Order")
 
 	async def psi_setup_and_fetch(self, customer_id):
 
 		setup_request = psi_proto.SetupRequest(num_customers=1)
 		setup_reply = await self.neighbor_service.Setup(setup_request)
-		print(f"Neighbor Restaurant emojiHash:{setup_reply.restaurantKey}")
+		logger.info(f"Neighbor Restaurant emojiHash:{setup_reply.restaurantKey}")
 
 		items = [customer_id]
 		request = psi.Request()
@@ -400,11 +400,6 @@ class TasteBot():
 
 				time.sleep(0.2)
 
-	def post_execute(self):
-		while True:
-			with self.post_thread_lock:
-				time.sleep(0.2)
-
 	def start(self):
 		self.init_thread = threading.Thread(target=self.init_execute,
 									args=(self.init_nodelogin_event,))
@@ -414,13 +409,15 @@ class TasteBot():
 									args=(self.customer_add_event,))
 		self.run_thread_lock = threading.Lock()	
 
-		self.post_thread = threading.Thread(target=self.post_execute)
-		self.post_thread_lock = threading.Lock()
-
 		self.init_thread.start()
 
 def main():
 	global client
+
+	logging.basicConfig(
+		level=logging.INFO,
+		format='%(asctime)s %(name)s %(levelname)s %(message)s'
+	)
 
 	client = TasteBot()
 
@@ -434,8 +431,6 @@ def main():
 		time.sleep(0.1)
 
 	client.run_thread.start()
-	
-	client.post_thread.start()
 
 	while True:
 		time.sleep(0.1)

@@ -5,14 +5,17 @@ import time
 import queue
 import ctypes
 import base64
+import logging
 import requests
 import threading
 from enum import Enum
 from pathlib import Path
-from subprocess import Popen 
+from subprocess import Popen
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json, config
 from marshmallow import EXCLUDE
+
+logger = logging.getLogger(__name__)
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../'))
 from config import ConfigOptions
@@ -56,7 +59,7 @@ class StatusClient:
         self.log_dir = str(Path(self.root_dir) / "log")
         self.root_data_dir = str(Path(self.root_dir) / "root_data")
 
-        print(f"========= Initializing Status Messenger ========")
+        logger.info("========= Initializing Status Messenger ========")
 
     def _init_lib(self):
         self.lib.InitializeApplication.argtypes = [ctypes.c_char_p]
@@ -89,7 +92,7 @@ class StatusClient:
             status_backend = Popen([STATUS_BACKEND_BIN, "--address",
                 f"{self.config.status_host}:{self.config.status_port}"])
         except OSError as e:
-            print(f"Error: status_backend failed to start:{e}.")
+            logger.error(f"Error: status_backend failed to start:{e}.")
             raise e
 
         # Initialize status go library
@@ -185,24 +188,24 @@ class StatusClient:
 
     def createAccountAndLogin(self, display_name, password):
         # Create new account and login
-    	self.display_name = display_name
-    	self.password = password
-    	data = {
+        self.display_name = display_name
+        self.password = password
+        data = {
             'rootDataDir': self.data_dir,
             'kdfIterations': 256,
             'deviceName': self.device_name,
             'displayName': self.display_name,
             'password': self.password,
-            "customizationColor":"blue",
-            'wakuV2Nameserver':self.wakuv2_nameserver,
-            'wakuV2Fleet':self.wakuv2_fleet
+            "customizationColor": "blue",
+            'wakuV2Nameserver': self.wakuv2_nameserver,
+            'wakuV2Fleet': self.wakuv2_fleet
         }
-    	payload = json.dumps(data).encode('utf-8')
-    	self.lib.CreateAccountAndLogin(payload)
+        payload = json.dumps(data).encode('utf-8')
+        self.lib.CreateAccountAndLogin(payload)
 
     def sendContactRequest(self, publicKey, message):
-        # Send contact request to recepient
-    	data = {
+        # Send contact request to recipient
+        data = {
             "method": "wakuext_sendContactRequest",
             "params": [
                 {
@@ -211,21 +214,21 @@ class StatusClient:
                 }
             ]
         }
-    	payload = json.dumps(data).encode('utf-8')
-    	self.lib.CallPrivateRPC(payload)
+        payload = json.dumps(data).encode('utf-8')
+        self.lib.CallPrivateRPC(payload)
 
     def createOneToOneChat(self, chatId):
         # Create one to one chat
-    	data = {
+        data = {
             "method": "chat_createOneToOneChat",
             "params": ["", chatId, ""]
         }
-    	payload = json.dumps(data).encode('utf-8')
-    	self.lib.CallPrivateRPC(payload)
+        payload = json.dumps(data).encode('utf-8')
+        self.lib.CallPrivateRPC(payload)
 
     def deactivateOneToOneChat(self, Id):
         # Deactivate one to one chat
-    	data = {
+        data = {
             "method": "wakuext_deactivateChat",
             "params": [
                 {
@@ -234,12 +237,12 @@ class StatusClient:
                 }
             ]
         }
-    	payload = json.dumps(data).encode('utf-8')
-    	self.lib.CallPrivateRPC(payload)
+        payload = json.dumps(data).encode('utf-8')
+        self.lib.CallPrivateRPC(payload)
 
     def sendChatMessage(self, chatId, message):
-        # Send chat message to recepient
-    	data = {
+        # Send chat message to recipient
+        data = {
             "method": "wakuext_sendChatMessage",
             "params": [
                 {
@@ -249,19 +252,18 @@ class StatusClient:
                 }
             ]
         }
-    	payload = json.dumps(data).encode('utf-8')
-    	self.lib.CallPrivateRPC(payload)
+        payload = json.dumps(data).encode('utf-8')
+        self.lib.CallPrivateRPC(payload)
 
     def run(self):
         # Thread for message queue
-    	while True:
-    		try:
-    			msg = self.message_queue.get(timeout=1)
-    			print(f"Queued Message:{msg}")
-    			#self.ai.sendMessage(msg)
-    			self.message_queue.task_done()
-    		except queue.Empty:
-    			time.sleep(0.2)
+        while True:
+            try:
+                msg = self.message_queue.get(timeout=1)
+                logger.debug(f"Queued Message:{msg}")
+                self.message_queue.task_done()
+            except queue.Empty:
+                time.sleep(0.2)
 
     def start(self):
         # Starts message queue
@@ -271,12 +273,12 @@ class StatusClient:
 
     def queueMessage(self, message):
         # Queue message
-    	self.message_queue.put(message)
+        self.message_queue.put(message)
 
     def stop(self):
         global status_backend
         # Stop client
-        print(f"Logging out..")
+        logger.info("Logging out..")
         self.logout()
         if status_backend:
             status_backend.terminate()

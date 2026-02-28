@@ -1,7 +1,10 @@
 import asyncio
+import logging
 import threading
 from .restaurant_model import AIModel as bot
 from .restaurant_model import CUSTOM_MODEL, INITIAL_PROMPT
+
+logger = logging.getLogger(__name__)
 
 AI_MODEL = "swigg1.0-gemma3:4b"
 
@@ -25,10 +28,10 @@ class AIClient:
 				and self.customer_id is not None \
 				and self.bots[self.customer_id] is not None:
 					bot = self.bots[self.customer_id]
-					print(f"New prompt: {self.prompt}, from customer: {self.customer_id}")
+					logger.info(f"New prompt: {self.prompt}, from customer: {self.customer_id}")
 
 					response = asyncio.run(bot.generate(self.prompt))
-					print(f"Sending Bot's response:{response}")
+					logger.info(f"Sending Bot's response:{response}")
 					asyncio.run(self.cb("chat", self.customer_id, response, None))
 
 					if bot.summary is not None:
@@ -59,7 +62,7 @@ class AIClient:
 				self.prompt = message
 				self.customer_id = customer_id
 			except KeyError:
-				print("Cannot send message to Bot, User Session closed.")
+				logger.warning("Cannot send message to Bot, User Session closed.")
 
 	async def greet(self, customer, restaurant_key):
 		customer_id = customer.PublicKey
@@ -72,7 +75,7 @@ class AIClient:
 		self.customer_id = customer_id
 
 		response = await _generate(self.initial_prompt)
-		print(f"Greeting:{response}")
+		logger.info(f"Greeting:{response}")
 		await self.cb("start", self.customer_id, response, None)
 
 	def stop(self):

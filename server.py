@@ -1,10 +1,13 @@
 import os
 import time
 import asyncio
+import logging
 import threading
 from pathlib import Path
 import flwr
 from config import ConfigOptions
+
+logger = logging.getLogger(__name__)
 
 class FLServer:
 	def __init__(self):
@@ -22,10 +25,15 @@ class FLServer:
 		self.thread.start()
 
 	def federate(self):
-		print("Started Federated Learning")
+		logger.info("Started Federated Learning")
 		flwr.cli.run(federation="local-deployment")
 
 def main():
+
+	logging.basicConfig(
+		level=logging.INFO,
+		format='%(asctime)s %(name)s %(levelname)s %(message)s'
+	)
 
 	fl_server = FLServer()
 	time.sleep(1)
