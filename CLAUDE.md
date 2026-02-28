@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> Extended memory and session notes: `.claude/memory/MEMORY.md`
+
 ## Overview
 
 TasteBot is a federated learning system for restaurant success prediction. It runs a locally-hosted LLM (gemma3:4b via ollama) that chats with customers over Status-IM (a decentralized p2p messenger using Waku protocol), extracts customer and restaurant embeddings from the conversation, and uses them to train a Heterogeneous Graph Transformer (HGTConv) model via Flower federated learning.
