@@ -1,5 +1,7 @@
 # TasteBot Project Memory
 
+> Canonical copy in repo: `.claude/memory/MEMORY.md`
+
 ## Project Summary
 Federated learning system for restaurant success prediction. Customers chat with a local LLM (gemma3:4b via ollama) over Status-IM (decentralized p2p), embeddings are extracted, and a HGTConv GNN is trained per-restaurant with Flower FL + FedAvg.
 
