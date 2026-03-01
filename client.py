@@ -52,6 +52,7 @@ SIGNAL_TO_EXIT_CODE: dict[int, int] = {
 }
 
 customers: List[Customer] = []
+customers_lock = threading.Lock()
 
 def register_exit_handler():
 	default_handlers: dict[int, Callable[[int, FrameType], None]] = {}
@@ -122,13 +123,9 @@ class TasteBot():
 		self.p2p_client = None
 
 		self.init_thread = None
-		self.init_thread_lock = False
-		
 		self.init_nodelogin_event = threading.Event()
 		self.customer_add_event = threading.Event()
-		
 		self.run_thread = None
-		self.run_thread_lock = False
 
 
 		self.add_customer_queue = queue.Queue()
@@ -174,8 +171,8 @@ class TasteBot():
 						#print(f"was_customer_added:{was_customer_added}")
 
 						if was_customer_added == True:
-							customer_present = next((True for customer in customers if customer.PublicKey == customer_id), False)
-							#print(f"customer_present:{customer_present}")
+							with customers_lock:
+								customer_present = next((True for customer in customers if customer.PublicKey == customer_id), False)
 							if customer_present == False:
 								self.add_customer_queue.put(contact_info)
 								self.customer_add_event.set()
@@ -258,16 +255,15 @@ class TasteBot():
 
 	def init_execute(self, nodelogin_event):
 		while True:
-			with self.init_thread_lock:
-				if nodelogin_event.is_set() is False:
-					self.attempt_init()
-					time.sleep(10)
-				else:
-					time.sleep(0.5)
-					asyncio.run(self.enable_services())
-					time.sleep(0.5)
-					asyncio.run(self.init_services())
-					return
+			if nodelogin_event.is_set() is False:
+				self.attempt_init()
+				time.sleep(10)
+			else:
+				time.sleep(0.5)
+				asyncio.run(self.enable_services())
+				time.sleep(0.5)
+				asyncio.run(self.init_services())
+				return
 
 	def init_clients(self):
 
@@ -337,7 +333,8 @@ class TasteBot():
 		customer.ChatKey = contact["compressedKey"]  
 		customer.EmojiHash = contact["emojiHash"]
 		
-		customers.append(customer)
+		with customers_lock:
+			customers.append(customer)
 		logger.info(f"New customer added:{customer.Name} id:{customer.PublicKey} emojiHash: {customer.EmojiHash}")
 
 		try:
@@ -384,30 +381,27 @@ class TasteBot():
 		asyncio.run(self.start_clients())
 
 		while True:
-			with self.run_thread_lock:
-				if customer_add_event.is_set() is True:
-					if self.add_customer_queue.qsize() > 0:
-						contact = self.add_customer_queue.get_nowait()
-						if "msgId" in contact:
-							self.status_client.acceptContactRequest(contact["msgId"])
-						asyncio.run(self.add_customer(contact))
-				try:
-					order = self.add_order_queue.get_nowait()
-					asyncio.run(self.create_order(order))
-					self.add_order_queue.task_done()
-				except queue.Empty:
-					pass
+			if customer_add_event.is_set() is True:
+				if self.add_customer_queue.qsize() > 0:
+					contact = self.add_customer_queue.get_nowait()
+					if "msgId" in contact:
+						self.status_client.acceptContactRequest(contact["msgId"])
+					asyncio.run(self.add_customer(contact))
+			try:
+				order = self.add_order_queue.get_nowait()
+				asyncio.run(self.create_order(order))
+				self.add_order_queue.task_done()
+			except queue.Empty:
+				pass
 
-				time.sleep(0.2)
+			time.sleep(0.2)
 
 	def start(self):
 		self.init_thread = threading.Thread(target=self.init_execute,
 									args=(self.init_nodelogin_event,))
-		self.init_thread_lock = threading.Lock()
 
 		self.run_thread = threading.Thread(target=self.run_execute,
 									args=(self.customer_add_event,))
-		self.run_thread_lock = threading.Lock()	
 
 		self.init_thread.start()
 

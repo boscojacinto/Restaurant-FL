@@ -321,9 +321,10 @@ def build_redis(io: IO, env, args) -> int:
         return 0
 
     try:
-        result = subprocess.run("echo loadmodule ai/libs/falkordb-x64.so >> redis.conf",
-        shell=True, cwd=redis_dir, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as e:
+        redis_conf_path = redis_dir / "redis.conf"
+        with open(redis_conf_path, "a") as f:
+            f.write("loadmodule ai/libs/falkordb-x64.so\n")
+    except OSError as e:
         io.write_line(f"<error>Error updating redis conf:{e}</>")
         return 1
 
